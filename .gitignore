@@ -1,0 +1,51 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Secrets & PKI certificates (không commit private keys)
+*.key
+*.pem
+security/certs/*.crt
+security/certs/*.key
+security/certs/*.csr
+security/certs/*.srl
+
+# Temporary logs & test artifacts
+*.log
+tests/locust/*.csv
+tests/benchmarks/results/
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# IDEs & OS files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
