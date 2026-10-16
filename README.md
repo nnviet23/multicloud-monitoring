@@ -32,7 +32,7 @@ This system uses the open-source **[TeaStore](https://github.com/DescartesResear
 ### Installation
 
 ```bash
-git clone https://github.com/username/multicloud-monitoring.git
+git clone https://github.com/nnviet23/multicloud-monitoring.git
 cd multicloud-monitoring
 ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/01_setup_host.yml --ask-become-pass
 ```
