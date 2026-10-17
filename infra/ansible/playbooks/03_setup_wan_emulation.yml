@@ -4,34 +4,33 @@
   connection: local
   gather_facts: false
   vars:
-    network_name: multi-cloud-wan
     latency: 10ms
     loss: 0.1%
+    spoke_containers:
+      - k3d-aws-k3d-server-0
+      - k3d-aws-k3d-agent-0
+      - k3d-azure-k3d-server-0
+      - k3d-azure-k3d-agent-0
   tasks:
-    - name: Retrieve Docker bridge network ID
-      command: docker network inspect {{ network_name }} -f '{{"{{"}}.Id{{"}}"}}'
-      register: docker_net_id
-      changed_when: false
-
-    - name: Set target bridge interface name
-      set_fact:
-        bridge_iface: "br-{{ docker_net_id.stdout[:12] }}"
-
-    - name: Check bridge network interface existence on host
-      command: ip link show {{ bridge_iface }}
-      register: iface_check
-      changed_when: false
-
-    - name: Apply tc/netem latency and packet loss
+    - name: Apply tc netem latency and packet loss inside spoke containers
       become: true
-      command: tc qdisc replace dev {{ bridge_iface }} root netem delay {{ latency }} loss {{ loss }}
-      when: iface_check.rc == 0
+      command: >
+        docker exec --privileged {{ item }} 
+        tc qdisc replace dev eth0 root netem delay {{ latency }} loss {{ loss }}
+      loop: "{{ spoke_containers }}"
+      register: tc_exec
+      failed_when: false
+      changed_when: tc_exec.rc == 0
 
-    - name: Verify tc qdisc configuration
-      command: tc qdisc show dev {{ bridge_iface }}
+    - name: Verify tc qdisc configuration in spoke containers
+      command: docker exec {{ item }} tc qdisc show dev eth0
+      loop: "{{ spoke_containers }}"
       register: tc_status
+      failed_when: false
       changed_when: false
 
-    - name: Display current queue discipline
+    - name: Display current queue discipline status
       debug:
-        var: tc_status.stdout_lines
+        msg: "{{ item.item }}: {{ item.stdout }}"
+      loop: "{{ tc_status.results }}"
+      when: item.stdout is defined
