@@ -1,0 +1,17 @@
+---
+- name: Teardown and Cleanup Entire Environment
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Delete all existing k3d clusters
+      command: k3d cluster delete --all
+      ignore_errors: true
+
+    - name: Remove multi-cloud-wan Docker network
+      command: docker network rm multi-cloud-wan
+      ignore_errors: true
+
+    - name: Prune unused Docker volumes and networks
+      command: docker volume prune -f
+      changed_when: false

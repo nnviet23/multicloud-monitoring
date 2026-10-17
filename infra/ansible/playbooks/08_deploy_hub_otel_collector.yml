@@ -49,7 +49,7 @@
                 debug:
                   verbosity: basic
 
-              service:
+              service:x
                 pipelines:
                   traces:
                     receivers: [otlp]
