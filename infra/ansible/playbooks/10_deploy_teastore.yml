@@ -153,6 +153,8 @@
                     value: "3306"
                   - name: JAVA_OPTS
                     value: "-javaagent:/otel/opentelemetry-javaagent.jar"
+                  - name: CATALINA_OPTS
+                    value: "-javaagent:/otel/opentelemetry-javaagent.jar"
                   - name: OTEL_SERVICE_NAME
                     value: "teastore-persistence"
                   - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -229,6 +231,8 @@
                   - name: USE_POD_IP
                     value: "true"
                   - name: JAVA_OPTS
+                    value: "-javaagent:/otel/opentelemetry-javaagent.jar"
+                  - name: CATALINA_OPTS
                     value: "-javaagent:/otel/opentelemetry-javaagent.jar"
                   - name: OTEL_SERVICE_NAME
                     value: "teastore-auth"
@@ -307,6 +311,8 @@
                     value: "true"
                   - name: JAVA_OPTS
                     value: "-javaagent:/otel/opentelemetry-javaagent.jar"
+                  - name: CATALINA_OPTS
+                    value: "-javaagent:/otel/opentelemetry-javaagent.jar"
                   - name: OTEL_SERVICE_NAME
                     value: "teastore-image"
                   - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -384,6 +390,8 @@
                     value: "true"
                   - name: JAVA_OPTS
                     value: "-javaagent:/otel/opentelemetry-javaagent.jar"
+                  - name: CATALINA_OPTS
+                    value: "-javaagent:/otel/opentelemetry-javaagent.jar"
                   - name: OTEL_SERVICE_NAME
                     value: "teastore-recommender"
                   - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -460,6 +468,8 @@
                   - name: USE_POD_IP
                     value: "true"
                   - name: JAVA_OPTS
+                    value: "-javaagent:/otel/opentelemetry-javaagent.jar"
+                  - name: CATALINA_OPTS
                     value: "-javaagent:/otel/opentelemetry-javaagent.jar"
                   - name: OTEL_SERVICE_NAME
                     value: "teastore-webui"
