@@ -115,6 +115,7 @@
         --kube-context k3d-hub-k3d
         --namespace monitoring
         --set deploymentMode=SingleBinary
+        --set loki.useTestSchema=true
         --set loki.commonConfig.replication_factor=1
         --set loki.storage.type=filesystem
         --set singleBinary.replicas=1
