@@ -4,7 +4,7 @@
   connection: local
   gather_facts: false
   tasks:
-    - name: Ensure Grafana Datasources ConfigMap exists
+    - name: Apply Grafana Datasources Provisioning ConfigMap
       command: kubectl --context k3d-hub-k3d apply -f -
       args:
         stdin: |
@@ -13,8 +13,6 @@
           metadata:
             name: grafana-datasources
             namespace: monitoring
-            labels:
-              grafana_datasource: "1"
           data:
             datasources.yaml: |
               apiVersion: 1
@@ -55,24 +53,69 @@
                       datasourceUid: loki-ds
                       tags: ['job', 'instance', 'pod', 'namespace']
                       filterByTraceId: true
-                      filterBySpanHash: false
 
-    - name: Deploy Grafana via Helm with Pre-configured Datasources
-      command: >
-        helm upgrade --install grafana grafana/grafana
-        --kube-context k3d-hub-k3d
-        --namespace monitoring
-        --set adminPassword=admin
-        --set persistence.enabled=false
-        --set service.type=LoadBalancer
-        --set service.port=3000
-        --set sidecar.datasources.enabled=true
-        --set sidecar.datasources.label=grafana_datasource
-        --set-string sidecar.datasources.labelValue="1"
-        --set resources.requests.memory=128Mi
-        --set resources.requests.cpu=50m
-        --set resources.limits.memory=256Mi
-      changed_when: false
+    - name: Deploy Grafana via Manifest (Lightweight & Standalone)
+      command: kubectl --context k3d-hub-k3d apply -f -
+      args:
+        stdin: |
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: grafana
+            namespace: monitoring
+            labels:
+              app: grafana
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: grafana
+            template:
+              metadata:
+                labels:
+                  app: grafana
+              spec:
+                containers:
+                - name: grafana
+                  image: grafana/grafana:11.5.0
+                  imagePullPolicy: IfNotPresent
+                  env:
+                  - name: GF_SECURITY_ADMIN_USER
+                    value: "admin"
+                  - name: GF_SECURITY_ADMIN_PASSWORD
+                    value: "admin"
+                  - name: GF_USERS_ALLOW_SIGN_UP
+                    value: "false"
+                  ports:
+                  - containerPort: 3000
+                    name: http
+                  volumeMounts:
+                  - name: datasources
+                    mountPath: /etc/grafana/provisioning/datasources/datasources.yaml
+                    subPath: datasources.yaml
+                  resources:
+                    requests:
+                      cpu: 50m
+                      memory: 128Mi
+                    limits:
+                      memory: 256Mi
+                volumes:
+                - name: datasources
+                  configMap:
+                    name: grafana-datasources
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: grafana
+            namespace: monitoring
+          spec:
+            type: LoadBalancer
+            selector:
+              app: grafana
+            ports:
+            - port: 3000
+              targetPort: 3000
 
     - name: Wait for Grafana deployment to roll out
       command: kubectl --context k3d-hub-k3d -n monitoring rollout status deployment/grafana --timeout=120s
