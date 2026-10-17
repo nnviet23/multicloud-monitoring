@@ -1,0 +1,196 @@
+---
+- name: Deploy OpenTelemetry Collector Agents on Spoke Clusters with mTLS and Optimization
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    spoke_contexts:
+      - name: "aws"
+        context: "k3d-aws-k3d"
+        spoke_id: "aws-k3d"
+      - name: "azure"
+        context: "k3d-azure-k3d"
+        spoke_id: "azure-k3d"
+  tasks:
+    - name: Apply Spoke OpenTelemetry Collector ConfigMap
+      command: kubectl --context {{ item.context }} apply -f -
+      args:
+        stdin: |
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: otel-collector-spoke-config
+            namespace: monitoring
+          data:
+            config.yaml: |
+              receivers:
+                otlp:
+                  protocols:
+                    grpc:
+                      endpoint: 0.0.0.0:4317
+                    http:
+                      endpoint: 0.0.0.0:4318
+
+                filelog:
+                  include:
+                    - /var/log/pods/teastore_*/*/*.log
+                  start_at: beginning
+                  include_file_path: true
+                  operators:
+                    - type: regex_parser
+                      regex: '^(?P<time>[^ ]+) (?P<stream>stdout|stderr) (?P<logtag>[^ ]*) (?P<log>.*)$'
+                      timestamp:
+                        parse_from: attributes.time
+                        layout: '%Y-%m-%dT%H:%M:%S.%L%z'
+                      output: extract_metadata_from_filepath
+                    - type: regex_parser
+                      id: extract_metadata_from_filepath
+                      parse_from: attributes["log.file.path"]
+                      regex: '^/var/log/pods/(?P<namespace>[^_]+)_(?P<pod_name>[^_]+)_[a-f0-9\-]+/(?P<container_name>[^/]+)/.*$'
+
+              processors:
+                memory_limiter:
+                  check_interval: 1s
+                  limit_percentage: 75
+                  spike_limit_percentage: 20
+
+                # Lọc bỏ log mức DEBUG để giảm tải lưu lượng mạng WAN
+                filter/logs:
+                  error_mode: ignore
+                  logs:
+                    log_record:
+                      - 'severity_number < SEVERITY_NUMBER_INFO'
+
+                # Lấy mẫu dấu vết Head-based ở mức 3%
+                probabilistic_sampler:
+                  sampling_percentage: 3
+
+                # Gán nhãn nhận diện nguồn đám mây
+                resource:
+                  attributes:
+                    - key: cloud.provider
+                      value: "{{ item.name }}"
+                      action: insert
+                    - key: spoke_id
+                      value: "{{ item.spoke_id }}"
+                      action: insert
+
+                batch:
+                  send_batch_size: 512
+                  timeout: 1s
+
+              exporters:
+                # Đẩy telemetry về Hub qua mTLS
+                otlp/hub:
+                  endpoint: k3d-hub-k3d-serverlb:4317
+                  tls:
+                    ca_file: /etc/otelcol/certs/ca.crt
+                    cert_file: /etc/otelcol/certs/client.crt
+                    key_file: /etc/otelcol/certs/client.key
+                    insecure_skip_verify: false
+
+                debug:
+                  verbosity: basic
+
+              service:
+                pipelines:
+                  traces:
+                    receivers: [otlp]
+                    processors: [memory_limiter, probabilistic_sampler, resource, batch]
+                    exporters: [otlp/hub, debug]
+                  logs:
+                    receivers: [otlp, filelog]
+                    processors: [memory_limiter, filter/logs, resource, batch]
+                    exporters: [otlp/hub, debug]
+                  metrics:
+                    receivers: [otlp]
+                    processors: [memory_limiter, resource, batch]
+                    exporters: [otlp/hub, debug]
+      loop: "{{ spoke_contexts }}"
+      changed_when: false
+
+    - name: Deploy Spoke OpenTelemetry Collector DaemonSet/Deployment and Service
+      command: kubectl --context {{ item.context }} apply -f -
+      args:
+        stdin: |
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: otel-collector-spoke
+            namespace: monitoring
+            labels:
+              app: otel-collector-spoke
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: otel-collector-spoke
+            template:
+              metadata:
+                labels:
+                  app: otel-collector-spoke
+              spec:
+                containers:
+                - name: otel-collector
+                  image: otel/opentelemetry-collector-contrib:0.114.0
+                  imagePullPolicy: IfNotPresent
+                  args: ["--config=/etc/otelcol/config.yaml"]
+                  volumeMounts:
+                  - name: config
+                    mountPath: /etc/otelcol
+                  - name: certs
+                    mountPath: /etc/otelcol/certs
+                    readOnly: true
+                  - name: varlogpods
+                    mountPath: /var/log/pods
+                    readOnly: true
+                  ports:
+                  - containerPort: 4317
+                    name: otlp-grpc
+                  - containerPort: 4318
+                    name: otlp-http
+                  resources:
+                    requests:
+                      cpu: 50m
+                      memory: 64Mi
+                    limits:
+                      memory: 256Mi
+                volumes:
+                - name: config
+                  configMap:
+                    name: otel-collector-spoke-config
+                - name: certs
+                  secret:
+                    secretName: otel-spoke-certs
+                - name: varlogpods
+                  hostPath:
+                    path: /var/log/pods
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: otel-collector-spoke
+            namespace: monitoring
+          spec:
+            type: ClusterIP
+            selector:
+              app: otel-collector-spoke
+            ports:
+            - name: otlp-grpc
+              port: 4317
+              targetPort: 4317
+            - name: otlp-http
+              port: 4318
+              targetPort: 4318
+      loop: "{{ spoke_contexts }}"
+      changed_when: false
+
+    - name: Wait for Spoke OpenTelemetry Collectors to roll out
+      command: kubectl --context {{ item.context }} -n monitoring rollout status deployment/otel-collector-spoke --timeout=120s
+      loop: "{{ spoke_contexts }}"
+      changed_when: false
+
+    - name: Confirm Spoke Collectors readiness
+      debug:
+        msg: "OTel Collector Agents deployed on {{ item.name }} with mTLS and Optimization enabled successfully."
+      loop: "{{ spoke_contexts }}"
