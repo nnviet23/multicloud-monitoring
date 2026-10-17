@@ -1,5 +1,5 @@
 ---
-- name: Deploy Hub Storage and Visualization Stack
+- name: Deploy MinIO Object Storage and Buckets on Hub
   hosts: localhost
   connection: local
   gather_facts: false
@@ -16,15 +16,11 @@
       args:
         stdin: "{{ hub_ns.stdout }}"
 
-    - name: Pull Chainguard MinIO image locally
-      command: docker pull {{ minio_image }}
-      changed_when: false
-
     - name: Import MinIO image into k3d Hub cluster
       command: k3d image import {{ minio_image }} -c hub-k3d
       changed_when: false
 
-    - name: Deploy MinIO Standalone via Kubernetes Manifest
+    - name: Deploy MinIO Server
       command: kubectl --context k3d-hub-k3d apply -f -
       args:
         stdin: |
@@ -66,10 +62,10 @@
                     name: console
                   resources:
                     requests:
-                      cpu: 100m
-                      memory: 256Mi
+                      cpu: 50m
+                      memory: 128Mi
                     limits:
-                      memory: 1Gi
+                      memory: 384Mi
           ---
           apiVersion: v1
           kind: Service
@@ -88,60 +84,36 @@
               port: 9001
               targetPort: 9001
 
-    - name: Add Grafana Helm repository
-      command: helm repo add grafana https://grafana.github.io/helm-charts
+    - name: Wait for MinIO deployment to be ready
+      command: kubectl --context k3d-hub-k3d -n monitoring rollout status deployment/minio --timeout=90s
       changed_when: false
 
-    - name: Add Prometheus Community Helm repository
-      command: helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-      changed_when: false
-
-    - name: Update Helm repositories
-      command: helm repo update
-      changed_when: false
-
-    - name: Deploy Grafana Tempo on Hub cluster
-      command: >
-        helm upgrade --install tempo grafana/tempo
-        --kube-context k3d-hub-k3d
-        --namespace monitoring
-        --set persistence.enabled=false
-        --set resources.requests.memory=128Mi
-        --set resources.requests.cpu=50m
-
-    - name: Deploy Grafana Loki on Hub cluster
-      command: >
-        helm upgrade --install loki grafana/loki
-        --kube-context k3d-hub-k3d
-        --namespace monitoring
-        --set deploymentMode=SingleBinary
-        --set loki.useTestSchema=true
-        --set loki.commonConfig.replication_factor=1
-        --set loki.storage.type=filesystem
-        --set singleBinary.replicas=1
-        --set read.replicas=0
-        --set write.replicas=0
-        --set backend.replicas=0
-        --set singleBinary.resources.requests.memory=256Mi
-        --set singleBinary.resources.requests.cpu=100m
-
-    - name: Deploy Prometheus on Hub cluster
-      command: >
-        helm upgrade --install prometheus prometheus-community/prometheus
-        --kube-context k3d-hub-k3d
-        --namespace monitoring
-        --set server.persistentVolume.enabled=false
-        --set alertmanager.enabled=false
-        --set server.resources.requests.memory=256Mi
-        --set server.resources.requests.cpu=100m
-
-    - name: Deploy Grafana on Hub cluster
-      command: >
-        helm upgrade --install grafana grafana/grafana
-        --kube-context k3d-hub-k3d
-        --namespace monitoring
-        --set adminPassword=admin
-        --set persistence.enabled=false
-        --set service.type=LoadBalancer
-        --set resources.requests.memory=128Mi
-        --set resources.requests.cpu=50m
+    - name: Provision MinIO Buckets (thanos-metrics, loki-data, tempo-traces)
+      command: kubectl --context k3d-hub-k3d apply -f -
+      args:
+        stdin: |
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: minio-create-buckets
+            namespace: monitoring
+          spec:
+            ttlSecondsAfterFinished: 60
+            template:
+              spec:
+                restartPolicy: OnFailure
+                containers:
+                - name: minio-mc
+                  image: minio/mc:latest
+                  command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    until mc alias set myminio http://minio.monitoring.svc.cluster.local:9000 admin StrongMinioPassword123; do
+                      echo 'Waiting for MinIO...';
+                      sleep 2;
+                    done;
+                    mc mb --ignore-existing myminio/thanos-metrics;
+                    mc mb --ignore-existing myminio/loki-data;
+                    mc mb --ignore-existing myminio/tempo-traces;
+                    echo 'Buckets created successfully!';

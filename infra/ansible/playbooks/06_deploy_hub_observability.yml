@@ -1,0 +1,54 @@
+---
+- name: Deploy Hub Observability Engines (Loki, Tempo, Prometheus)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Add Helm Repositories
+      command: "{{ item }}"
+      loop:
+        - helm repo add grafana https://grafana.github.io/helm-charts
+        - helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+      changed_when: false
+
+    - name: Update Helm Repositories
+      command: helm repo update
+      changed_when: false
+
+    - name: Deploy Grafana Tempo on Hub
+      command: >
+        helm upgrade --install tempo grafana/tempo
+        --kube-context k3d-hub-k3d
+        --namespace monitoring
+        --set persistence.enabled=false
+        --set resources.requests.memory=128Mi
+        --set resources.requests.cpu=50m
+        --set resources.limits.memory=256Mi
+
+    - name: Deploy Grafana Loki on Hub
+      command: >
+        helm upgrade --install loki grafana/loki
+        --kube-context k3d-hub-k3d
+        --namespace monitoring
+        --set deploymentMode=SingleBinary
+        --set loki.useTestSchema=true
+        --set loki.commonConfig.replication_factor=1
+        --set loki.storage.type=filesystem
+        --set singleBinary.replicas=1
+        --set read.replicas=0
+        --set write.replicas=0
+        --set backend.replicas=0
+        --set singleBinary.resources.requests.memory=128Mi
+        --set singleBinary.resources.requests.cpu=50m
+        --set singleBinary.resources.limits.memory=384Mi
+
+    - name: Deploy Prometheus on Hub
+      command: >
+        helm upgrade --install prometheus prometheus-community/prometheus
+        --kube-context k3d-hub-k3d
+        --namespace monitoring
+        --set server.persistentVolume.enabled=false
+        --set alertmanager.enabled=false
+        --set server.resources.requests.memory=128Mi
+        --set server.resources.requests.cpu=50m
+        --set server.resources.limits.memory=256Mi
