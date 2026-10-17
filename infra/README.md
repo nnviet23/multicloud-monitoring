@@ -7,4 +7,5 @@ ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/05_deplo
 ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/06_deploy_hub_observability.yml
 ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/07_generate_mtls_certs.yml
 ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/08_deploy_hub_visualization.yml
+ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/09_deploy_hub_otel_gateway.yml
 ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/

@@ -1,0 +1,164 @@
+---
+- name: Deploy OpenTelemetry Collector Gateway on Hub Cluster
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Apply Hub OpenTelemetry Collector ConfigMap
+      command: kubectl --context k3d-hub-k3d apply -f -
+      args:
+        stdin: |
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: otel-collector-hub-config
+            namespace: monitoring
+          data:
+            config.yaml: |
+              receivers:
+                otlp:
+                  protocols:
+                    grpc:
+                      endpoint: 0.0.0.0:4317
+                      tls:
+                        cert_file: /etc/otelcol/certs/server.crt
+                        key_file: /etc/otelcol/certs/server.key
+                        client_ca_file: /etc/otelcol/certs/ca.crt
+                    http:
+                      endpoint: 0.0.0.0:4318
+                      tls:
+                        cert_file: /etc/otelcol/certs/server.crt
+                        key_file: /etc/otelcol/certs/server.key
+                        client_ca_file: /etc/otelcol/certs/ca.crt
+
+              processors:
+                memory_limiter:
+                  check_interval: 1s
+                  limit_percentage: 75
+                  spike_limit_percentage: 20
+
+                batch:
+                  send_batch_size: 512
+                  timeout: 1s
+
+                transform:
+                  log_statements:
+                    - context: log
+                      statements:
+                        - set(attributes["cluster.role"], "central-hub")
+                        - set(attributes["environment"], "production")
+
+              exporters:
+                otlp/tempo:
+                  endpoint: tempo.monitoring.svc.cluster.local:4317
+                  tls:
+                    insecure: true
+
+                otlphttp/loki:
+                  endpoint: http://loki.monitoring.svc.cluster.local:3100/otlp
+                  headers:
+                    "X-Scope-OrgID": "anonymous"
+                  tls:
+                    insecure: true
+
+                prometheus:
+                  endpoint: 0.0.0.0:8889
+
+                debug:
+                  verbosity: basic
+
+              service:
+                pipelines:
+                  traces:
+                    receivers: [otlp]
+                    processors: [memory_limiter, batch]
+                    exporters: [otlp/tempo, debug]
+                  logs:
+                    receivers: [otlp]
+                    processors: [memory_limiter, transform, batch]
+                    exporters: [otlphttp/loki, debug]
+                  metrics:
+                    receivers: [otlp]
+                    processors: [memory_limiter, batch]
+                    exporters: [prometheus, debug]
+
+    - name: Deploy Hub OpenTelemetry Collector Deployment and Service
+      command: kubectl --context k3d-hub-k3d apply -f -
+      args:
+        stdin: |
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: otel-collector-hub
+            namespace: monitoring
+            labels:
+              app: otel-collector-hub
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: otel-collector-hub
+            template:
+              metadata:
+                labels:
+                  app: otel-collector-hub
+              spec:
+                containers:
+                - name: otel-collector
+                  image: otel/opentelemetry-collector-contrib:0.114.0
+                  imagePullPolicy: IfNotPresent
+                  args: ["--config=/etc/otelcol/config.yaml"]
+                  volumeMounts:
+                  - name: config
+                    mountPath: /etc/otelcol
+                  - name: certs
+                    mountPath: /etc/otelcol/certs
+                    readOnly: true
+                  ports:
+                  - containerPort: 4317
+                    name: otlp-grpc
+                  - containerPort: 4318
+                    name: otlp-http
+                  - containerPort: 8889
+                    name: metrics
+                  resources:
+                    requests:
+                      cpu: 50m
+                      memory: 64Mi
+                    limits:
+                      memory: 256Mi
+                volumes:
+                - name: config
+                  configMap:
+                    name: otel-collector-hub-config
+                - name: certs
+                  secret:
+                    secretName: otel-hub-certs
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: otel-collector-hub
+            namespace: monitoring
+          spec:
+            type: LoadBalancer
+            selector:
+              app: otel-collector-hub
+            ports:
+            - name: otlp-grpc
+              port: 4317
+              targetPort: 4317
+            - name: otlp-http
+              port: 4318
+              targetPort: 4318
+            - name: metrics
+              port: 8889
+              targetPort: 8889
+
+    - name: Wait for Hub OpenTelemetry Collector to roll out
+      command: kubectl --context k3d-hub-k3d -n monitoring rollout status deployment/otel-collector-hub --timeout=120s
+      changed_when: false
+
+    - name: Confirm Hub Collector readiness
+      debug:
+        msg: "Hub OpenTelemetry Collector deployed with mTLS enabled successfully on port 4317/4318."
