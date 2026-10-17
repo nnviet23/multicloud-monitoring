@@ -1,10 +1,11 @@
 ---
-- name: Provision Multi-Cloud k3d Clusters
+- name: Provision Multi-Cloud Simulated Infrastructure
   hosts: localhost
   connection: local
   gather_facts: false
   vars:
     network_name: multi-cloud-wan
+    k3s_image: "rancher/k3s:v1.31.2-k3s1"
     clusters:
       - name: hub-k3d
         port_mappings:
@@ -17,7 +18,8 @@
         port_mappings:
           - "8080:8080@loadbalancer"
       - name: azure-k3d
-        port_mappings: []
+        port_mappings:
+          - "31111:31111@loadbalancer"
   tasks:
     - name: Create Docker bridge network for inter-cluster traffic
       command: >
@@ -37,12 +39,14 @@
       set_fact:
         existing_clusters: "{{ (existing_clusters_raw.stdout | from_json) | map(attribute='name') | list }}"
 
-    - name: Create k3d cluster with disabled Traefik ingress
+    - name: Create k3d clusters with server-only mode (--agents 0)
       command: >
         k3d cluster create {{ item.name }}
+        --image {{ k3s_image }}
         --network {{ network_name }}
-        --agents 1
+        --agents 0
         --k3s-arg "--disable=traefik@server:0"
+        --k3s-arg "--disable=metrics-server@server:0"
         {% for port in item.port_mappings %}
         -p "{{ port }}"
         {% endfor %}

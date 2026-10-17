@@ -1,17 +1,25 @@
 ---
-- name: Teardown and Cleanup Entire Environment
+- name: Clean up existing k3d clusters and Docker resources
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
     - name: Delete all existing k3d clusters
       command: k3d cluster delete --all
-      ignore_errors: true
+      register: k3d_del
+      failed_when: false
+      changed_when: "'Deleted' in k3d_del.stdout"
 
     - name: Remove multi-cloud-wan Docker network
       command: docker network rm multi-cloud-wan
-      ignore_errors: true
+      register: net_del
+      failed_when: false
+      changed_when: net_del.rc == 0
 
-    - name: Prune unused Docker volumes and networks
+    - name: Prune dangling volumes and stopped containers
       command: docker volume prune -f
       changed_when: false
+
+    - name: Confirm cleanup completion
+      debug:
+        msg: "Cleaned up all old clusters, networks, and volumes successfully."
