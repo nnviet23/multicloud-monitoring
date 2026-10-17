@@ -33,6 +33,9 @@
                   url: http://loki-gateway.monitoring.svc.cluster.local
                   jsonData:
                     maxLines: 1000
+                    httpHeaderName1: "X-Scope-OrgID"
+                  secureJsonData:
+                    httpHeaderValue1: "anonymous"
 
                 - name: Tempo
                   type: tempo
