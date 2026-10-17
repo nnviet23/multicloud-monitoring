@@ -12,24 +12,23 @@
       - k3d-azure-k3d-server-0
       - k3d-azure-k3d-agent-0
   tasks:
-    - name: Apply tc netem latency and packet loss inside spoke containers
-      become: true
+    - name: Apply tc netem latency and loss via privileged helper container
       command: >
-        docker exec --privileged {{ item }} 
-        tc qdisc replace dev eth0 root netem delay {{ latency }} loss {{ loss }}
+        docker run --rm --privileged --net=container:{{ item }}
+        alpine sh -c "apk add --no-cache iproute2 >/dev/null 2>&1 && tc qdisc replace dev eth0 root netem delay {{ latency }} loss {{ loss }}"
       loop: "{{ spoke_containers }}"
       register: tc_exec
-      failed_when: false
       changed_when: tc_exec.rc == 0
 
-    - name: Verify tc qdisc configuration in spoke containers
-      command: docker exec {{ item }} tc qdisc show dev eth0
+    - name: Verify tc qdisc status via helper container
+      command: >
+        docker run --rm --privileged --net=container:{{ item }}
+        alpine sh -c "apk add --no-cache iproute2 >/dev/null 2>&1 && tc qdisc show dev eth0"
       loop: "{{ spoke_containers }}"
       register: tc_status
-      failed_when: false
       changed_when: false
 
-    - name: Display current queue discipline status
+    - name: Display current queue discipline
       debug:
         msg: "{{ item.item }}: {{ item.stdout }}"
       loop: "{{ tc_status.results }}"
