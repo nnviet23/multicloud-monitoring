@@ -1,0 +1,34 @@
+---
+- name: Reset Cross-Cloud WAN Network Emulation
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    spoke_containers:
+      - k3d-aws-k3d-server-0
+      - k3d-aws-k3d-agent-0
+      - k3d-azure-k3d-server-0
+      - k3d-azure-k3d-agent-0
+  tasks:
+    - name: Remove tc netem queue discipline from spoke containers
+      become: true
+      command: >
+        docker exec --privileged {{ item }} 
+        tc qdisc del dev eth0 root
+      loop: "{{ spoke_containers }}"
+      register: tc_del
+      failed_when: false
+      changed_when: tc_del.rc == 0
+
+    - name: Verify tc qdisc reset status
+      command: docker exec {{ item }} tc qdisc show dev eth0
+      loop: "{{ spoke_containers }}"
+      register: tc_reset_status
+      failed_when: false
+      changed_when: false
+
+    - name: Display current queue discipline
+      debug:
+        msg: "{{ item.item }}: {{ item.stdout }}"
+      loop: "{{ tc_reset_status.results }}"
+      when: item.stdout is defined
