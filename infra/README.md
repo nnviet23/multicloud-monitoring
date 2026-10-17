@@ -9,4 +9,4 @@ ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/07_gener
 ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/08_deploy_hub_visualization.yml
 ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/09_deploy_hub_otel_gateway.yml
 ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/10_deploy_spoke_otel_agents.yml
-ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/
+ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/11_deploy_teastore_workload.yml

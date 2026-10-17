@@ -93,15 +93,15 @@
                   - name: DB_PORT
                     value: "3306"
                   - name: JAVA_OPTS
-                    value: "-Xms128m -Xmx200m"
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC"
                   - name: CATALINA_OPTS
-                    value: "-Xms128m -Xmx200m"
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC"
                   resources:
                     requests:
                       cpu: 50m
                       memory: 128Mi
                     limits:
-                      memory: 256Mi
+                      memory: 384Mi
           ---
           apiVersion: v1
           kind: Service
@@ -397,11 +397,11 @@
               targetPort: 8080
 
     - name: Wait for TeaStore services on AWS Spoke to be ready
-      command: kubectl --context k3d-aws-k3d -n teastore rollout status deployment/teastore-webui --timeout=180s
+      command: kubectl --context k3d-aws-k3d -n teastore rollout status deployment/teastore-webui --timeout=680s
       changed_when: false
 
     - name: Wait for TeaStore services on Azure Spoke to be ready
-      command: kubectl --context k3d-azure-k3d -n teastore rollout status deployment/teastore-persistence --timeout=180s
+      command: kubectl --context k3d-azure-k3d -n teastore rollout status deployment/teastore-persistence --timeout=680s
       changed_when: false
 
     - name: Confirm TeaStore deployment success
