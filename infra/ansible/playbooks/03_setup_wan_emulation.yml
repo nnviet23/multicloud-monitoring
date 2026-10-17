@@ -1,0 +1,37 @@
+---
+- name: Emulate Cross-Cloud WAN Network Characteristics
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    network_name: multi-cloud-wan
+    latency: 10ms
+    loss: 0.1%
+  tasks:
+    - name: Retrieve Docker bridge network ID
+      command: docker network inspect {{ network_name }} -f '{{"{{"}}.Id{{"}}"}}'
+      register: docker_net_id
+      changed_when: false
+
+    - name: Set target bridge interface name
+      set_fact:
+        bridge_iface: "br-{{ docker_net_id.stdout[:12] }}"
+
+    - name: Check bridge network interface existence on host
+      command: ip link show {{ bridge_iface }}
+      register: iface_check
+      changed_when: false
+
+    - name: Apply tc/netem latency and packet loss
+      become: true
+      command: tc qdisc replace dev {{ bridge_iface }} root netem delay {{ latency }} loss {{ loss }}
+      when: iface_check.rc == 0
+
+    - name: Verify tc qdisc configuration
+      command: tc qdisc show dev {{ bridge_iface }}
+      register: tc_status
+      changed_when: false
+
+    - name: Display current queue discipline
+      debug:
+        var: tc_status.stdout_lines

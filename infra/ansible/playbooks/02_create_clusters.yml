@@ -1,0 +1,59 @@
+---
+- name: Provision Multi-Cloud k3d Clusters
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    network_name: multi-cloud-wan
+    clusters:
+      - name: hub-k3d
+        port_mappings:
+          - "3000:3000@loadbalancer"
+          - "9000:9000@loadbalancer"
+          - "9001:9001@loadbalancer"
+          - "4317:4317@loadbalancer"
+          - "4318:4318@loadbalancer"
+      - name: aws-k3d
+        port_mappings:
+          - "8080:8080@loadbalancer"
+      - name: azure-k3d
+        port_mappings: []
+  tasks:
+    - name: Create Docker bridge network for inter-cluster traffic
+      command: >
+        docker network create --driver bridge
+        --subnet 172.28.0.0/16
+        {{ network_name }}
+      register: net_create
+      failed_when: net_create.rc != 0 and 'already exists' not in net_create.stderr
+      changed_when: net_create.rc == 0
+
+    - name: Check existing k3d clusters
+      command: k3d cluster list -o json
+      register: existing_clusters_raw
+      changed_when: false
+
+    - name: Parse existing cluster names
+      set_fact:
+        existing_clusters: "{{ (existing_clusters_raw.stdout | from_json) | map(attribute='name') | list }}"
+
+    - name: Create k3d cluster with disabled Traefik ingress
+      command: >
+        k3d cluster create {{ item.name }}
+        --network {{ network_name }}
+        --agents 1
+        --k3s-arg "--disable=traefik@server:0"
+        {% for port in item.port_mappings %}
+        -p "{{ port }}"
+        {% endfor %}
+      loop: "{{ clusters }}"
+      when: item.name not in existing_clusters
+
+    - name: List active clusters
+      command: k3d cluster list
+      register: cluster_list
+      changed_when: false
+
+    - name: Display running clusters
+      debug:
+        var: cluster_list.stdout_lines

@@ -1,0 +1,43 @@
+---
+- name: Setup Host Environment
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  tasks:
+    - name: Install prerequisite system packages
+      become: true
+      apt:
+        name:
+          - curl
+          - iproute2
+          - bridge-utils
+          - jq
+          - tar
+        state: present
+        update_cache: true
+
+    - name: Download and install k3d CLI
+      become: true
+      shell: |
+        curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+      args:
+        creates: /usr/local/bin/k3d
+
+    - name: Download and install Helm CLI
+      become: true
+      shell: |
+        curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      args:
+        creates: /usr/local/bin/helm
+
+    - name: Verify installed CLI tools
+      shell: |
+        k3d version
+        helm version --short
+        kubectl version --client --output=yaml
+      register: cli_versions
+      changed_when: false
+
+    - name: Display tool versions
+      debug:
+        var: cli_versions.stdout_lines
