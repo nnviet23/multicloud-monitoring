@@ -158,7 +158,7 @@
                   - name: OTEL_SERVICE_NAME
                     value: "teastore-persistence"
                   - name: OTEL_EXPORTER_OTLP_ENDPOINT
-                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
+                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4318"
                   - name: OTEL_EXPORTER_OTLP_INSECURE
                     value: "true"
                   volumeMounts:
@@ -237,7 +237,7 @@
                   - name: OTEL_SERVICE_NAME
                     value: "teastore-auth"
                   - name: OTEL_EXPORTER_OTLP_ENDPOINT
-                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
+                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4318"
                   - name: OTEL_EXPORTER_OTLP_INSECURE
                     value: "true"
                   volumeMounts:
@@ -316,7 +316,7 @@
                   - name: OTEL_SERVICE_NAME
                     value: "teastore-image"
                   - name: OTEL_EXPORTER_OTLP_ENDPOINT
-                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
+                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4318"
                   - name: OTEL_EXPORTER_OTLP_INSECURE
                     value: "true"
                   volumeMounts:
@@ -395,7 +395,7 @@
                   - name: OTEL_SERVICE_NAME
                     value: "teastore-recommender"
                   - name: OTEL_EXPORTER_OTLP_ENDPOINT
-                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
+                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4318"
                   - name: OTEL_EXPORTER_OTLP_INSECURE
                     value: "true"
                   volumeMounts:
@@ -474,7 +474,7 @@
                   - name: OTEL_SERVICE_NAME
                     value: "teastore-webui"
                   - name: OTEL_EXPORTER_OTLP_ENDPOINT
-                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
+                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4318"
                   - name: OTEL_EXPORTER_OTLP_INSECURE
                     value: "true"
                   volumeMounts:
