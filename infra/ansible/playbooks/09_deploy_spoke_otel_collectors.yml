@@ -1,0 +1,150 @@
+---
+- name: Deploy OpenTelemetry Collectors on Spoke Clusters
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    hub_ip: "172.28.0.2"
+    spoke_contexts:
+      - name: "aws"
+        context: "k3d-aws-k3d"
+      - name: "azure"
+        context: "k3d-azure-k3d"
+  tasks:
+    - name: Ensure monitoring namespace exists on Spoke clusters
+      command: kubectl --context {{ item.context }} create namespace monitoring --dry-run=client -o yaml
+      loop: "{{ spoke_contexts }}"
+      register: spoke_ns
+      changed_when: false
+
+    - name: Apply monitoring namespace on Spoke clusters
+      command: kubectl --context {{ item.item.context }} apply -f -
+      args:
+        stdin: "{{ item.stdout }}"
+      loop: "{{ spoke_ns.results }}"
+      changed_when: false
+
+    - name: Apply Spoke OpenTelemetry Collector ConfigMap
+      command: kubectl --context {{ item.context }} apply -f -
+      args:
+        stdin: |
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: otel-collector-spoke-config
+            namespace: monitoring
+          data:
+            config.yaml: |
+              receivers:
+                otlp:
+                  protocols:
+                    grpc:
+                      endpoint: 0.0.0.0:4317
+                    http:
+                      endpoint: 0.0.0.0:4318
+
+              processors:
+                batch:
+                  timeout: 1s
+                  send_batch_size: 256
+                memory_limiter:
+                  check_interval: 1s
+                  limit_percentage: 75
+                  spike_limit_percentage: 20
+                resource:
+                  attributes:
+                    - key: cloud.provider
+                      value: "{{ item.name }}"
+                      action: insert
+                    - key: cluster.name
+                      value: "{{ item.context }}"
+                      action: insert
+
+              exporters:
+                otlp/hub:
+                  endpoint: {{ hub_ip }}:4317
+                  tls:
+                    insecure: true
+                debug:
+                  verbosity: basic
+
+              service:
+                pipelines:
+                  traces:
+                    receivers: [otlp]
+                    processors: [memory_limiter, resource, batch]
+                    exporters: [otlp/hub, debug]
+                  logs:
+                    receivers: [otlp]
+                    processors: [memory_limiter, resource, batch]
+                    exporters: [otlp/hub, debug]
+                  metrics:
+                    receivers: [otlp]
+                    processors: [memory_limiter, resource, batch]
+                    exporters: [otlp/hub, debug]
+      loop: "{{ spoke_contexts }}"
+      changed_when: false
+
+    - name: Deploy Spoke OpenTelemetry Collector Deployment and Service
+      command: kubectl --context {{ item.context }} apply -f -
+      args:
+        stdin: |
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: otel-collector-spoke
+            namespace: monitoring
+            labels:
+              app: otel-collector-spoke
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: otel-collector-spoke
+            template:
+              metadata:
+                labels:
+                  app: otel-collector-spoke
+              spec:
+                containers:
+                - name: otel-collector
+                  image: otel/opentelemetry-collector-contrib:0.111.0
+                  imagePullPolicy: IfNotPresent
+                  args: ["--config=/etc/otelcol/config.yaml"]
+                  volumeMounts:
+                  - name: config
+                    mountPath: /etc/otelcol
+                  ports:
+                  - containerPort: 4317
+                    name: otlp-grpc
+                  - containerPort: 4318
+                    name: otlp-http
+                  resources:
+                    requests:
+                      cpu: 50m
+                      memory: 64Mi
+                    limits:
+                      memory: 256Mi
+                volumes:
+                - name: config
+                  configMap:
+                    name: otel-collector-spoke-config
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: otel-collector-spoke
+            namespace: monitoring
+          spec:
+            type: ClusterIP
+            selector:
+              app: otel-collector-spoke
+            ports:
+            - name: otlp-grpc
+              port: 4317
+              targetPort: 4317
+            - name: otlp-http
+              port: 4318
+              targetPort: 4318
+      loop: "{{ spoke_contexts }}"
+      changed_when: false
