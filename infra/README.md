@@ -5,4 +5,6 @@ ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/03_reset
 ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/04_emulate_wan_latency.yml
 ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/05_deploy_hub_storage.yml
 ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/06_deploy_hub_observability.yml
+ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/07_generate_mtls_certs.yml
+ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/08_deploy_hub_visualization.yml
 ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/

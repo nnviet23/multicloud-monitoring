@@ -1,0 +1,83 @@
+---
+- name: Deploy Grafana and Auto-Provision Observability Data Sources
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Ensure Grafana Datasources ConfigMap exists
+      command: kubectl --context k3d-hub-k3d apply -f -
+      args:
+        stdin: |
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: grafana-datasources
+            namespace: monitoring
+            labels:
+              grafana_datasource: "1"
+          data:
+            datasources.yaml: |
+              apiVersion: 1
+              datasources:
+                - name: Prometheus
+                  uid: prometheus-ds
+                  type: prometheus
+                  access: proxy
+                  url: http://prometheus-server.monitoring.svc.cluster.local
+                  isDefault: true
+                  jsonData:
+                    timeInterval: 15s
+
+                - name: Loki
+                  uid: loki-ds
+                  type: loki
+                  access: proxy
+                  url: http://loki.monitoring.svc.cluster.local:3100
+                  jsonData:
+                    maxLines: 1000
+                    httpHeaderName1: "X-Scope-OrgID"
+                    derivedFields:
+                      - datasourceUid: tempo-ds
+                        matcherRegex: "(?:traceID|trace_id)=(\\w+)"
+                        name: TraceID
+                        url: "$${__value.raw}"
+                  secureJsonData:
+                    httpHeaderValue1: "anonymous"
+
+                - name: Tempo
+                  uid: tempo-ds
+                  type: tempo
+                  access: proxy
+                  url: http://tempo.monitoring.svc.cluster.local:3100
+                  jsonData:
+                    httpMethod: GET
+                    tracesToLogsV2:
+                      datasourceUid: loki-ds
+                      tags: ['job', 'instance', 'pod', 'namespace']
+                      filterByTraceId: true
+                      filterBySpanHash: false
+
+    - name: Deploy Grafana via Helm with Pre-configured Datasources
+      command: >
+        helm upgrade --install grafana grafana/grafana
+        --kube-context k3d-hub-k3d
+        --namespace monitoring
+        --set adminPassword=admin
+        --set persistence.enabled=false
+        --set service.type=LoadBalancer
+        --set service.port=3000
+        --set sidecar.datasources.enabled=true
+        --set sidecar.datasources.label=grafana_datasource
+        --set sidecar.datasources.labelValue="1"
+        --set resources.requests.memory=128Mi
+        --set resources.requests.cpu=50m
+        --set resources.limits.memory=256Mi
+      changed_when: false
+
+    - name: Wait for Grafana deployment to roll out
+      command: kubectl --context k3d-hub-k3d -n monitoring rollout status deployment/grafana --timeout=120s
+      changed_when: false
+
+    - name: Verify Grafana Port Accessibility
+      debug:
+        msg: "Grafana is running at http://localhost:3000 (User: admin / Pass: admin)"
