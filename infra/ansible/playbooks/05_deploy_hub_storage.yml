@@ -118,6 +118,9 @@
         --set loki.commonConfig.replication_factor=1
         --set loki.storage.type=filesystem
         --set singleBinary.replicas=1
+        --set read.replicas=0
+        --set write.replicas=0
+        --set backend.replicas=0
         --set singleBinary.resources.requests.memory=256Mi
         --set singleBinary.resources.requests.cpu=100m
 
