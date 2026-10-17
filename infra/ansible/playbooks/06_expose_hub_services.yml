@@ -4,10 +4,12 @@
   connection: local
   gather_facts: false
   tasks:
-    - name: Ensure Grafana service type is LoadBalancer
+    - name: Ensure Grafana service listens on port 3000
       command: >
-        kubectl --context k3d-hub-k3d -n monitoring patch svc grafana -p
-        '{"spec": {"type": "LoadBalancer"}}'
+        kubectl --context k3d-hub-k3d -n monitoring patch svc grafana --type='json' -p='[
+          {"op": "replace", "path": "/spec/type", "value": "LoadBalancer"},
+          {"op": "replace", "path": "/spec/ports/0/port", "value": 3000}
+        ]'
       changed_when: false
 
     - name: Ensure Prometheus service type is ClusterIP
