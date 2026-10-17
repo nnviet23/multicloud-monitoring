@@ -42,6 +42,22 @@
                       endpoint: 0.0.0.0:4317
                     http:
                       endpoint: 0.0.0.0:4318
+                filelog:
+                  include:
+                    - /var/log/pods/teastore_*/*/*.log
+                  start_at: beginning
+                  include_file_path: true
+                  operators:
+                    - type: regex_parser
+                      regex: '^(?P<time>[^ ]+) (?P<stream>stdout|stderr) (?P<logtag>[^ ]*) (?P<log>.*)$'
+                      timestamp:
+                        parse_from: attributes.time
+                        layout: '%Y-%m-%dT%H:%M:%S.%L%z'
+                      output: extract_metadata_from_filepath
+                    - type: regex_parser
+                      id: extract_metadata_from_filepath
+                      parse_from: attributes["log.file.path"]
+                      regex: '^/var/log/pods/(?P<namespace>[^_]+)_(?P<pod_name>[^_]+)_[a-f0-9\-]+/(?P<container_name>[^/]+)/.*$'
 
               processors:
                 batch:
@@ -62,7 +78,7 @@
 
               exporters:
                 otlp/hub:
-                  endpoint: {{ hub_ip }}:4317
+                  endpoint: 172.28.0.3:4317
                   tls:
                     insecure: true
                 debug:
@@ -75,7 +91,7 @@
                     processors: [memory_limiter, resource, batch]
                     exporters: [otlp/hub, debug]
                   logs:
-                    receivers: [otlp]
+                    receivers: [otlp, filelog]
                     processors: [memory_limiter, resource, batch]
                     exporters: [otlp/hub, debug]
                   metrics:
@@ -114,6 +130,9 @@
                   volumeMounts:
                   - name: config
                     mountPath: /etc/otelcol
+                  - name: varlogpods
+                    mountPath: /var/log/pods
+                    readOnly: true
                   ports:
                   - containerPort: 4317
                     name: otlp-grpc
@@ -129,6 +148,9 @@
                 - name: config
                   configMap:
                     name: otel-collector-spoke-config
+                - name: varlogpods
+                  hostPath:
+                    path: /var/log/pods
           ---
           apiVersion: v1
           kind: Service

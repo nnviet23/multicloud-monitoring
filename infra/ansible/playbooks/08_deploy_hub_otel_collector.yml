@@ -40,9 +40,8 @@
 
                 loki:
                   endpoint: http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push
-                  default_labels_enabled:
-                    exporter: true
-                    job: true
+                  headers:
+                    "X-Scope-OrgID": "anonymous"
 
                 prometheus:
                   endpoint: 0.0.0.0:8889
