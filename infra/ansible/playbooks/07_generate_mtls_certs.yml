@@ -1,0 +1,158 @@
+---
+- name: Generate mTLS Certificates and Distribute as Kubernetes Secrets
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    cert_dir: "{{ playbook_dir }}/certs"
+    spoke_contexts:
+      - k3d-aws-k3d
+      - k3d-azure-k3d
+  tasks:
+    - name: Ensure local certs directory exists
+      file:
+        path: "{{ cert_dir }}"
+        state: directory
+        mode: '0700'
+
+    - name: Generate Root CA private key
+      command: >
+        openssl genrsa -out {{ cert_dir }}/ca.key 4096
+      args:
+        creates: "{{ cert_dir }}/ca.key"
+
+    - name: Generate Root CA certificate
+      command: >
+        openssl req -x509 -new -nodes -key {{ cert_dir }}/ca.key
+        -sha256 -days 365 -out {{ cert_dir }}/ca.crt
+        -subj "/C=VN/ST=HCM/O=MultiCloud-Monitoring/CN=RootCA"
+      args:
+        creates: "{{ cert_dir }}/ca.crt"
+
+    - name: Generate Hub Server private key
+      command: >
+        openssl genrsa -out {{ cert_dir }}/server.key 2048
+      args:
+        creates: "{{ cert_dir }}/server.key"
+
+    - name: Create OpenSSL config for Hub Server SAN (Subject Alternative Names)
+      copy:
+        dest: "{{ cert_dir }}/server_ext.cnf"
+        content: |
+          [req]
+          req_extensions = v3_req
+          distinguished_name = req_distinguished_name
+          [req_distinguished_name]
+          [v3_req]
+          basicConstraints = CA:FALSE
+          keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+          extendedKeyUsage = serverAuth
+          subjectAltName = @alt_names
+          [alt_names]
+          DNS.1 = otel-collector-hub
+          DNS.2 = otel-collector-hub.monitoring.svc.cluster.local
+          DNS.3 = k3d-hub-k3d-serverlb
+          DNS.4 = localhost
+          IP.1 = 127.0.0.1
+          IP.2 = 172.28.0.2
+          IP.3 = 172.28.0.3
+          IP.4 = 172.28.0.4
+
+    - name: Generate Hub Server CSR
+      command: >
+        openssl req -new -key {{ cert_dir }}/server.key
+        -out {{ cert_dir }}/server.csr
+        -subj "/C=VN/ST=HCM/O=MultiCloud-Monitoring/CN=otel-collector-hub"
+        -config {{ cert_dir }}/server_ext.cnf
+      args:
+        creates: "{{ cert_dir }}/server.csr"
+
+    - name: Sign Hub Server certificate with Root CA
+      command: >
+        openssl x509 -req -in {{ cert_dir }}/server.csr
+        -CA {{ cert_dir }}/ca.crt -CAkey {{ cert_dir }}/ca.key -CAcreateserial
+        -out {{ cert_dir }}/server.crt -days 365 -sha256
+        -extfile {{ cert_dir }}/server_ext.cnf -extensions v3_req
+      args:
+        creates: "{{ cert_dir }}/server.crt"
+
+    - name: Generate Spoke Client private key
+      command: >
+        openssl genrsa -out {{ cert_dir }}/client.key 2048
+      args:
+        creates: "{{ cert_dir }}/client.key"
+
+    - name: Generate Spoke Client CSR
+      command: >
+        openssl req -new -key {{ cert_dir }}/client.key
+        -out {{ cert_dir }}/client.csr
+        -subj "/C=VN/ST=HCM/O=MultiCloud-Monitoring/CN=otel-collector-spoke"
+      args:
+        creates: "{{ cert_dir }}/client.csr"
+
+    - name: Create OpenSSL config for Client extension
+      copy:
+        dest: "{{ cert_dir }}/client_ext.cnf"
+        content: |
+          basicConstraints = CA:FALSE
+          keyUsage = digitalSignature, keyEncipherment
+          extendedKeyUsage = clientAuth
+
+    - name: Sign Spoke Client certificate with Root CA
+      command: >
+        openssl x509 -req -in {{ cert_dir }}/client.csr
+        -CA {{ cert_dir }}/ca.crt -CAkey {{ cert_dir }}/ca.key -CAcreateserial
+        -out {{ cert_dir }}/client.crt -days 365 -sha256
+        -extfile {{ cert_dir }}/client_ext.cnf
+      args:
+        creates: "{{ cert_dir }}/client.crt"
+
+    - name: Create Hub mTLS Secret in monitoring namespace
+      command: >
+        kubectl --context k3d-hub-k3d -n monitoring create secret generic otel-hub-certs
+        --from-file=ca.crt={{ cert_dir }}/ca.crt
+        --from-file=server.crt={{ cert_dir }}/server.crt
+        --from-file=server.key={{ cert_dir }}/server.key
+        --dry-run=client -o yaml
+      register: hub_secret_yaml
+      changed_when: false
+
+    - name: Apply Hub mTLS Secret
+      command: kubectl --context k3d-hub-k3d apply -f -
+      args:
+        stdin: "{{ hub_secret_yaml.stdout }}"
+
+    - name: Ensure monitoring namespace exists on Spoke clusters
+      command: kubectl --context {{ item }} create namespace monitoring --dry-run=client -o yaml
+      loop: "{{ spoke_contexts }}"
+      register: spoke_ns
+      changed_when: false
+
+    - name: Apply monitoring namespace on Spoke clusters
+      command: kubectl --context {{ item.item }} apply -f -
+      args:
+        stdin: "{{ item.stdout }}"
+      loop: "{{ spoke_ns.results }}"
+      changed_when: false
+
+    - name: Create Spoke mTLS Secret in monitoring namespace
+      command: >
+        kubectl --context {{ item }} -n monitoring create secret generic otel-spoke-certs
+        --from-file=ca.crt={{ cert_dir }}/ca.crt
+        --from-file=client.crt={{ cert_dir }}/client.crt
+        --from-file=client.key={{ cert_dir }}/client.key
+        --dry-run=client -o yaml
+      loop: "{{ spoke_contexts }}"
+      register: spoke_secrets_yaml
+      changed_when: false
+
+    - name: Apply Spoke mTLS Secret on Spoke clusters
+      command: kubectl --context {{ item.item }} apply -f -
+      args:
+        stdin: "{{ item.stdout }}"
+      loop: "{{ spoke_secrets_yaml.results }}"
+      changed_when: false
+
+    - name: Verify Secret creation
+      debug:
+        msg: "mTLS certificates generated and injected into Hub and Spokes successfully."
