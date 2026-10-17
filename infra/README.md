@@ -10,3 +10,7 @@ ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/03_reset
 
 docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' k3d-hub-k3d-server-0
 docker exec k3d-aws-k3d-server-0 ping -c 4 172.28.0.3
+
+
+ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/05_deploy_hub_storage.yml
+ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/06_expose_hub_services.yml
