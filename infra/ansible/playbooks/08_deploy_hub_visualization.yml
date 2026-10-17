@@ -68,7 +68,7 @@
         --set service.port=3000
         --set sidecar.datasources.enabled=true
         --set sidecar.datasources.label=grafana_datasource
-        --set sidecar.datasources.labelValue="1"
+        --set-string sidecar.datasources.labelValue="1"
         --set resources.requests.memory=128Mi
         --set resources.requests.cpu=50m
         --set resources.limits.memory=256Mi
