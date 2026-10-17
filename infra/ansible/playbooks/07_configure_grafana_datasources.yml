@@ -13,8 +13,6 @@
           metadata:
             name: grafana-datasources
             namespace: monitoring
-            labels:
-              grafana_datasource: "1"
           data:
             datasources.yaml: |
               apiVersion: 1
@@ -43,11 +41,12 @@
                       datasourceUid: 'Loki'
                       filterByTraceId: true
 
-    - name: Link ConfigMap to Grafana deployment sidecar
+    - name: Mount Data Sources ConfigMap into Grafana Deployment
       command: >
-        helm upgrade --install grafana grafana/grafana
-        --kube-context k3d-hub-k3d
-        --namespace monitoring
-        --reuse-values
-        --set sidecar.datasources.enabled=true
-        --set sidecar.datasources.label=grafana_datasource
+        kubectl --context k3d-hub-k3d -n monitoring patch deployment grafana -p
+        '{"spec": {"template": {"spec": {"volumes": [{"name": "sc-datasources-volume", "configMap": {"name": "grafana-datasources"}}], "containers": [{"name": "grafana", "volumeMounts": [{"name": "sc-datasources-volume", "mountPath": "/etc/grafana/provisioning/datasources/datasources.yaml", "subPath": "datasources.yaml"}]}]}}}}'
+      changed_when: false
+
+    - name: Restart Grafana to reload provisioning
+      command: kubectl --context k3d-hub-k3d -n monitoring rollout restart deployment grafana
+      changed_when: false
