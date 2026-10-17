@@ -4,7 +4,7 @@
   connection: local
   gather_facts: false
   vars:
-    hub_ip: "172.28.0.2"
+    hub_ip: "172.28.0.3"
     spoke_contexts:
       - name: "aws"
         context: "k3d-aws-k3d"
