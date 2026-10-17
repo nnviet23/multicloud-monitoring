@@ -1,0 +1,79 @@
+---
+- name: Deploy Hub Storage and Visualization Stack
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Ensure monitoring namespace exists on Hub
+      command: kubectl --context k3d-hub-k3d create namespace monitoring --dry-run=client -o yaml
+      register: hub_ns
+      changed_when: false
+
+    - name: Apply monitoring namespace on Hub
+      command: kubectl --context k3d-hub-k3d apply -f -
+      args:
+        stdin: "{{ hub_ns.stdout }}"
+
+    - name: Add Grafana Helm repository
+      command: helm repo add grafana https://grafana.github.io/helm-charts
+      changed_when: false
+
+    - name: Add Prometheus Community Helm repository
+      command: helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+      changed_when: false
+
+    - name: Add MinIO Helm repository
+      command: helm repo add minio https://charts.min.io/
+      changed_when: false
+
+    - name: Update Helm repositories
+      command: helm repo update
+      changed_when: false
+
+    - name: Deploy MinIO on Hub cluster
+      command: >
+        helm upgrade --install minio minio/minio
+        --kube-context k3d-hub-k3d
+        --namespace monitoring
+        --set rootUser=admin
+        --set rootPassword=StrongMinioPassword123
+        --set mode=standalone
+        --set replicas=1
+        --set persistence.enabled=false
+        --set defaultBuckets="thanos-metrics\,loki-data\,tempo-traces"
+        --set service.type=ClusterIP
+        --set consoleService.type=ClusterIP
+
+    - name: Deploy Grafana Tempo on Hub cluster
+      command: >
+        helm upgrade --install tempo grafana/tempo
+        --kube-context k3d-hub-k3d
+        --namespace monitoring
+        --set persistence.enabled=false
+
+    - name: Deploy Grafana Loki on Hub cluster
+      command: >
+        helm upgrade --install loki grafana/loki
+        --kube-context k3d-hub-k3d
+        --namespace monitoring
+        --set deploymentMode=SingleBinary
+        --set loki.commonConfig.replication_factor=1
+        --set loki.storage.type=filesystem
+        --set singleBinary.replicas=1
+
+    - name: Deploy Prometheus on Hub cluster
+      command: >
+        helm upgrade --install prometheus prometheus-community/prometheus
+        --kube-context k3d-hub-k3d
+        --namespace monitoring
+        --set server.persistentVolume.enabled=false
+        --set alertmanager.enabled=false
+
+    - name: Deploy Grafana on Hub cluster
+      command: >
+        helm upgrade --install grafana grafana/grafana
+        --kube-context k3d-hub-k3d
+        --namespace monitoring
+        --set adminPassword=admin
+        --set persistence.enabled=false
+        --set service.type=ClusterIP

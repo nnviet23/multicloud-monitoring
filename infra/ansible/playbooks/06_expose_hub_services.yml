@@ -1,0 +1,23 @@
+---
+- name: Expose Hub Services to Loadbalancer Ports
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Patch Grafana service to match Loadbalancer port 3000
+      command: >
+        kubectl --context k3d-hub-k3d -n monitoring patch svc grafana -p
+        '{"spec": {"type": "LoadBalancer", "ports": [{"port": 3000, "targetPort": 3000}]}}'
+      changed_when: false
+
+    - name: Expose MinIO API to Loadbalancer port 9000
+      command: >
+        kubectl --context k3d-hub-k3d -n monitoring patch svc minio -p
+        '{"spec": {"type": "LoadBalancer", "ports": [{"name": "s3", "port": 9000, "targetPort": 9000}]}}'
+      changed_when: false
+
+    - name: Expose MinIO Console to Loadbalancer port 9001
+      command: >
+        kubectl --context k3d-hub-k3d -n monitoring patch svc minio-console -p
+        '{"spec": {"type": "LoadBalancer", "ports": [{"name": "console", "port": 9001, "targetPort": 9001}]}}'
+      changed_when: false
