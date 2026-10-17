@@ -4,49 +4,62 @@
   connection: local
   gather_facts: false
   tasks:
-    - name: Apply Grafana Data Sources ConfigMap
-      command: kubectl --context k3d-hub-k3d apply -f -
-      args:
-        stdin: |
-          apiVersion: v1
-          kind: ConfigMap
-          metadata:
-            name: grafana-datasources
-            namespace: monitoring
-          data:
-            datasources.yaml: |
-              apiVersion: 1
-              datasources:
-                - name: Prometheus
-                  type: prometheus
-                  access: proxy
-                  url: http://prometheus-server.monitoring.svc.cluster.local
-                  isDefault: true
-                  jsonData:
-                    timeInterval: 15s
+    - name: Wait for Grafana port to be responsive
+      wait_for:
+        host: 127.0.0.1
+        port: 3000
+        timeout: 60
 
-                - name: Loki
-                  type: loki
-                  access: proxy
-                  url: http://loki-gateway.monitoring.svc.cluster.local
-                  jsonData:
-                    maxLines: 1000
+    - name: Create or Update Prometheus Data Source
+      uri:
+        url: "http://127.0.0.1:3000/api/datasources"
+        method: POST
+        url_username: admin
+        url_password: admin
+        force_basic_auth: true
+        status_code: [200, 409]
+        body_format: json
+        body:
+          name: "Prometheus"
+          type: "prometheus"
+          access: "proxy"
+          url: "http://prometheus-server.monitoring.svc.cluster.local"
+          isDefault: true
+          jsonData:
+            timeInterval: "15s"
 
-                - name: Tempo
-                  type: tempo
-                  access: proxy
-                  url: http://tempo.monitoring.svc.cluster.local:3100
-                  jsonData:
-                    tracesToLogs:
-                      datasourceUid: 'Loki'
-                      filterByTraceId: true
+    - name: Create or Update Loki Data Source
+      uri:
+        url: "http://127.0.0.1:3000/api/datasources"
+        method: POST
+        url_username: admin
+        url_password: admin
+        force_basic_auth: true
+        status_code: [200, 409]
+        body_format: json
+        body:
+          name: "Loki"
+          type: "loki"
+          access: "proxy"
+          url: "http://loki-gateway.monitoring.svc.cluster.local"
+          jsonData:
+            maxLines: 1000
 
-    - name: Mount Data Sources ConfigMap into Grafana Deployment
-      command: >
-        kubectl --context k3d-hub-k3d -n monitoring patch deployment grafana -p
-        '{"spec": {"template": {"spec": {"volumes": [{"name": "sc-datasources-volume", "configMap": {"name": "grafana-datasources"}}], "containers": [{"name": "grafana", "volumeMounts": [{"name": "sc-datasources-volume", "mountPath": "/etc/grafana/provisioning/datasources/datasources.yaml", "subPath": "datasources.yaml"}]}]}}}}'
-      changed_when: false
-
-    - name: Restart Grafana to reload provisioning
-      command: kubectl --context k3d-hub-k3d -n monitoring rollout restart deployment grafana
-      changed_when: false
+    - name: Create or Update Tempo Data Source
+      uri:
+        url: "http://127.0.0.1:3000/api/datasources"
+        method: POST
+        url_username: admin
+        url_password: admin
+        force_basic_auth: true
+        status_code: [200, 409]
+        body_format: json
+        body:
+          name: "Tempo"
+          type: "tempo"
+          access: "proxy"
+          url: "http://tempo.monitoring.svc.cluster.local:3100"
+          jsonData:
+            tracesToLogs:
+              datasourceUid: "Loki"
+              filterByTraceId: true
