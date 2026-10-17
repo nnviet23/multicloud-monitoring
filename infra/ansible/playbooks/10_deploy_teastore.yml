@@ -1,55 +1,44 @@
 ---
-- name: Deploy Distributed TeaStore Application Across Spoke Clusters
+- name: Deploy Complete 7 TeaStore Microservices on AWS Cluster
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    # ---------------------------------------------
-    # 1. AWS Cluster: WebUI, Auth, Cart
-    # ---------------------------------------------
     - name: Ensure teastore namespace exists on AWS cluster
       command: kubectl --context k3d-aws-k3d create namespace teastore --dry-run=client -o yaml
-      register: teastore_aws_ns
+      register: teastore_ns
       changed_when: false
 
-    - name: Apply teastore namespace on AWS cluster
+    - name: Apply teastore namespace
       command: kubectl --context k3d-aws-k3d apply -f -
       args:
-        stdin: "{{ teastore_aws_ns.stdout }}"
+        stdin: "{{ teastore_ns.stdout }}"
 
-    - name: Deploy TeaStore Frontend Services on AWS cluster
+    - name: Deploy TeaStore Full Stack (7 microservices)
       command: kubectl --context k3d-aws-k3d apply -f -
       args:
         stdin: |
+          # 1. DATABASE (teastore-db)
           apiVersion: apps/v1
           kind: Deployment
           metadata:
-            name: teastore-webui
+            name: teastore-db
             namespace: teastore
           spec:
             replicas: 1
             selector:
               matchLabels:
-                app: teastore-webui
+                app: teastore-db
             template:
               metadata:
                 labels:
-                  app: teastore-webui
+                  app: teastore-db
               spec:
                 containers:
-                - name: teastore-webui
-                  image: descartesresearch/teastore-webui:latest
+                - name: teastore-db
+                  image: descartesresearch/teastore-db:latest
                   ports:
-                  - containerPort: 8080
-                  env:
-                  - name: HOST_NAME
-                    value: "teastore-webui"
-                  - name: OTEL_SERVICE_NAME
-                    value: "teastore-webui"
-                  - name: OTEL_EXPORTER_OTLP_ENDPOINT
-                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
-                  - name: OTEL_EXPORTER_OTLP_INSECURE
-                    value: "true"
+                  - containerPort: 3306
                   resources:
                     requests:
                       cpu: 100m
@@ -58,78 +47,61 @@
           apiVersion: v1
           kind: Service
           metadata:
-            name: teastore-webui
-            namespace: teastore
-          spec:
-            type: LoadBalancer
-            selector:
-              app: teastore-webui
-            ports:
-            - port: 8080
-              targetPort: 8080
-          ---
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: teastore-auth
-            namespace: teastore
-          spec:
-            replicas: 1
-            selector:
-              matchLabels:
-                app: teastore-auth
-            template:
-              metadata:
-                labels:
-                  app: teastore-auth
-              spec:
-                containers:
-                - name: teastore-auth
-                  image: descartesresearch/teastore-auth:latest
-                  ports:
-                  - containerPort: 8080
-                  env:
-                  - name: HOST_NAME
-                    value: "teastore-auth"
-                  - name: OTEL_SERVICE_NAME
-                    value: "teastore-auth"
-                  - name: OTEL_EXPORTER_OTLP_ENDPOINT
-                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
-                  resources:
-                    requests:
-                      cpu: 100m
-                      memory: 256Mi
-          ---
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: teastore-auth
+            name: teastore-db
             namespace: teastore
           spec:
             type: ClusterIP
             selector:
-              app: teastore-auth
+              app: teastore-db
+            ports:
+            - port: 3306
+              targetPort: 3306
+          ---
+          # 2. REGISTRY (teastore-registry)
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: teastore-registry
+            namespace: teastore
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: teastore-registry
+            template:
+              metadata:
+                labels:
+                  app: teastore-registry
+              spec:
+                containers:
+                - name: teastore-registry
+                  image: descartesresearch/teastore-registry:latest
+                  ports:
+                  - containerPort: 8080
+                  env:
+                  - name: SERVICE_PORT
+                    value: "8080"
+                  - name: HOST_NAME
+                    value: "teastore-registry"
+                  resources:
+                    requests:
+                      cpu: 100m
+                      memory: 256Mi
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: teastore-registry
+            namespace: teastore
+          spec:
+            type: ClusterIP
+            selector:
+              app: teastore-registry
             ports:
             - port: 8080
               targetPort: 8080
-
-    # ---------------------------------------------
-    # 2. AZURE Cluster: Persistence, Registry, Recommender
-    # ---------------------------------------------
-    - name: Ensure teastore namespace exists on Azure cluster
-      command: kubectl --context k3d-azure-k3d create namespace teastore --dry-run=client -o yaml
-      register: teastore_azure_ns
-      changed_when: false
-
-    - name: Apply teastore namespace on Azure cluster
-      command: kubectl --context k3d-azure-k3d apply -f -
-      args:
-        stdin: "{{ teastore_azure_ns.stdout }}"
-
-    - name: Deploy TeaStore Backend Services on Azure cluster
-      command: kubectl --context k3d-azure-k3d apply -f -
-      args:
-        stdin: |
+          ---
+          # 3. PERSISTENCE (teastore-persistence)
           apiVersion: apps/v1
           kind: Deployment
           metadata:
@@ -151,8 +123,18 @@
                   ports:
                   - containerPort: 8080
                   env:
-                  - name: HOST_NAME
-                    value: "teastore-persistence"
+                  - name: SERVICE_PORT
+                    value: "8080"
+                  - name: REGISTRY_PORT
+                    value: "8080"
+                  - name: REGISTRY_HOST
+                    value: "teastore-registry.teastore.svc.cluster.local"
+                  - name: USE_POD_IP
+                    value: "true"
+                  - name: DB_HOST
+                    value: "teastore-db.teastore.svc.cluster.local"
+                  - name: DB_PORT
+                    value: "3306"
                   - name: OTEL_SERVICE_NAME
                     value: "teastore-persistence"
                   - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -171,6 +153,214 @@
             type: ClusterIP
             selector:
               app: teastore-persistence
+            ports:
+            - port: 8080
+              targetPort: 8080
+          ---
+          # 4. AUTH (teastore-auth)
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: teastore-auth
+            namespace: teastore
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: teastore-auth
+            template:
+              metadata:
+                labels:
+                  app: teastore-auth
+              spec:
+                containers:
+                - name: teastore-auth
+                  image: descartesresearch/teastore-auth:latest
+                  ports:
+                  - containerPort: 8080
+                  env:
+                  - name: SERVICE_PORT
+                    value: "8080"
+                  - name: REGISTRY_PORT
+                    value: "8080"
+                  - name: REGISTRY_HOST
+                    value: "teastore-registry.teastore.svc.cluster.local"
+                  - name: USE_POD_IP
+                    value: "true"
+                  - name: OTEL_SERVICE_NAME
+                    value: "teastore-auth"
+                  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
+                  resources:
+                    requests:
+                      cpu: 100m
+                      memory: 256Mi
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: teastore-auth
+            namespace: teastore
+          spec:
+            type: ClusterIP
+            selector:
+              app: teastore-auth
+            ports:
+            - port: 8080
+              targetPort: 8080
+          ---
+          # 5. IMAGE (teastore-image)
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: teastore-image
+            namespace: teastore
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: teastore-image
+            template:
+              metadata:
+                labels:
+                  app: teastore-image
+              spec:
+                containers:
+                - name: teastore-image
+                  image: descartesresearch/teastore-image:latest
+                  ports:
+                  - containerPort: 8080
+                  env:
+                  - name: SERVICE_PORT
+                    value: "8080"
+                  - name: REGISTRY_PORT
+                    value: "8080"
+                  - name: REGISTRY_HOST
+                    value: "teastore-registry.teastore.svc.cluster.local"
+                  - name: USE_POD_IP
+                    value: "true"
+                  - name: OTEL_SERVICE_NAME
+                    value: "teastore-image"
+                  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
+                  resources:
+                    requests:
+                      cpu: 100m
+                      memory: 256Mi
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: teastore-image
+            namespace: teastore
+          spec:
+            type: ClusterIP
+            selector:
+              app: teastore-image
+            ports:
+            - port: 8080
+              targetPort: 8080
+          ---
+          # 6. RECOMMENDER (teastore-recommender)
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: teastore-recommender
+            namespace: teastore
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: teastore-recommender
+            template:
+              metadata:
+                labels:
+                  app: teastore-recommender
+              spec:
+                containers:
+                - name: teastore-recommender
+                  image: descartesresearch/teastore-recommender:latest
+                  ports:
+                  - containerPort: 8080
+                  env:
+                  - name: SERVICE_PORT
+                    value: "8080"
+                  - name: REGISTRY_PORT
+                    value: "8080"
+                  - name: REGISTRY_HOST
+                    value: "teastore-registry.teastore.svc.cluster.local"
+                  - name: USE_POD_IP
+                    value: "true"
+                  - name: OTEL_SERVICE_NAME
+                    value: "teastore-recommender"
+                  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
+                  resources:
+                    requests:
+                      cpu: 100m
+                      memory: 256Mi
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: teastore-recommender
+            namespace: teastore
+          spec:
+            type: ClusterIP
+            selector:
+              app: teastore-recommender
+            ports:
+            - port: 8080
+              targetPort: 8080
+          ---
+          # 7. WEBUI (teastore-webui)
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: teastore-webui
+            namespace: teastore
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: teastore-webui
+            template:
+              metadata:
+                labels:
+                  app: teastore-webui
+              spec:
+                containers:
+                - name: teastore-webui
+                  image: descartesresearch/teastore-webui:latest
+                  ports:
+                  - containerPort: 8080
+                  env:
+                  - name: SERVICE_PORT
+                    value: "8080"
+                  - name: REGISTRY_PORT
+                    value: "8080"
+                  - name: REGISTRY_HOST
+                    value: "teastore-registry.teastore.svc.cluster.local"
+                  - name: USE_POD_IP
+                    value: "true"
+                  - name: OTEL_SERVICE_NAME
+                    value: "teastore-webui"
+                  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
+                  resources:
+                    requests:
+                      cpu: 100m
+                      memory: 256Mi
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: teastore-webui
+            namespace: teastore
+          spec:
+            type: ClusterIP
+            selector:
+              app: teastore-webui
             ports:
             - port: 8080
               targetPort: 8080
