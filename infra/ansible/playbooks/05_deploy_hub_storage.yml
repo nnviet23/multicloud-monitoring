@@ -3,6 +3,8 @@
   hosts: localhost
   connection: local
   gather_facts: false
+  vars:
+    minio_image: "cgr.dev/chainguard/minio:latest"
   tasks:
     - name: Ensure monitoring namespace exists on Hub
       command: kubectl --context k3d-hub-k3d create namespace monitoring --dry-run=client -o yaml
@@ -14,6 +16,78 @@
       args:
         stdin: "{{ hub_ns.stdout }}"
 
+    - name: Pull Chainguard MinIO image locally
+      command: docker pull {{ minio_image }}
+      changed_when: false
+
+    - name: Import MinIO image into k3d Hub cluster
+      command: k3d image import {{ minio_image }} -c hub-k3d
+      changed_when: false
+
+    - name: Deploy MinIO Standalone via Kubernetes Manifest
+      command: kubectl --context k3d-hub-k3d apply -f -
+      args:
+        stdin: |
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: minio
+            namespace: monitoring
+            labels:
+              app: minio
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: minio
+            template:
+              metadata:
+                labels:
+                  app: minio
+              spec:
+                containers:
+                - name: minio
+                  image: {{ minio_image }}
+                  imagePullPolicy: IfNotPresent
+                  args:
+                  - server
+                  - /data
+                  - --console-address
+                  - :9001
+                  env:
+                  - name: MINIO_ROOT_USER
+                    value: "admin"
+                  - name: MINIO_ROOT_PASSWORD
+                    value: "StrongMinioPassword123"
+                  ports:
+                  - containerPort: 9000
+                    name: api
+                  - containerPort: 9001
+                    name: console
+                  resources:
+                    requests:
+                      cpu: 100m
+                      memory: 256Mi
+                    limits:
+                      memory: 1Gi
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: minio
+            namespace: monitoring
+          spec:
+            type: LoadBalancer
+            selector:
+              app: minio
+            ports:
+            - name: api
+              port: 9000
+              targetPort: 9000
+            - name: console
+              port: 9001
+              targetPort: 9001
+
     - name: Add Grafana Helm repository
       command: helm repo add grafana https://grafana.github.io/helm-charts
       changed_when: false
@@ -22,30 +96,9 @@
       command: helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
       changed_when: false
 
-    - name: Add MinIO Helm repository
-      command: helm repo add minio https://charts.min.io/
-      changed_when: false
-
     - name: Update Helm repositories
       command: helm repo update
       changed_when: false
-
-    - name: Deploy MinIO on Hub cluster
-      command: >
-        helm upgrade --install minio minio/minio
-        --kube-context k3d-hub-k3d
-        --namespace monitoring
-        --set rootUser=admin
-        --set rootPassword=StrongMinioPassword123
-        --set mode=standalone
-        --set replicas=1
-        --set persistence.enabled=false
-        --set resources.requests.memory=256Mi
-        --set resources.requests.cpu=100m
-        --set resources.limits.memory=1Gi
-        --set makeBucketJob.enabled=false
-        --set service.type=ClusterIP
-        --set consoleService.type=ClusterIP
 
     - name: Deploy Grafana Tempo on Hub cluster
       command: >
@@ -53,6 +106,8 @@
         --kube-context k3d-hub-k3d
         --namespace monitoring
         --set persistence.enabled=false
+        --set resources.requests.memory=128Mi
+        --set resources.requests.cpu=50m
 
     - name: Deploy Grafana Loki on Hub cluster
       command: >
@@ -63,6 +118,8 @@
         --set loki.commonConfig.replication_factor=1
         --set loki.storage.type=filesystem
         --set singleBinary.replicas=1
+        --set singleBinary.resources.requests.memory=256Mi
+        --set singleBinary.resources.requests.cpu=100m
 
     - name: Deploy Prometheus on Hub cluster
       command: >
@@ -71,6 +128,8 @@
         --namespace monitoring
         --set server.persistentVolume.enabled=false
         --set alertmanager.enabled=false
+        --set server.resources.requests.memory=256Mi
+        --set server.resources.requests.cpu=100m
 
     - name: Deploy Grafana on Hub cluster
       command: >
@@ -79,4 +138,6 @@
         --namespace monitoring
         --set adminPassword=admin
         --set persistence.enabled=false
-        --set service.type=ClusterIP
+        --set service.type=LoadBalancer
+        --set resources.requests.memory=128Mi
+        --set resources.requests.cpu=50m
