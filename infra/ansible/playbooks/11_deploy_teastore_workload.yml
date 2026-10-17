@@ -160,12 +160,16 @@
                     value: "8080"
                   - name: HOST_NAME
                     value: "teastore-registry"
+                  - name: JAVA_OPTS
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC"
+                  - name: CATALINA_OPTS
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC"
                   resources:
                     requests:
                       cpu: 50m
                       memory: 128Mi
                     limits:
-                      memory: 256Mi
+                      memory: 320Mi
           ---
           apiVersion: v1
           kind: Service
@@ -211,15 +215,15 @@
                   - name: USE_POD_IP
                     value: "true"
                   - name: JAVA_OPTS
-                    value: "-Xms128m -Xmx200m"
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC"
                   - name: CATALINA_OPTS
-                    value: "-Xms128m -Xmx200m"
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC"
                   resources:
                     requests:
                       cpu: 50m
                       memory: 128Mi
                     limits:
-                      memory: 256Mi
+                      memory: 320Mi
           ---
           apiVersion: v1
           kind: Service
@@ -265,15 +269,15 @@
                   - name: USE_POD_IP
                     value: "true"
                   - name: JAVA_OPTS
-                    value: "-Xms128m -Xmx200m"
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC"
                   - name: CATALINA_OPTS
-                    value: "-Xms128m -Xmx200m"
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC"
                   resources:
                     requests:
                       cpu: 50m
                       memory: 128Mi
                     limits:
-                      memory: 256Mi
+                      memory: 320Mi
           ---
           apiVersion: v1
           kind: Service
@@ -319,15 +323,15 @@
                   - name: USE_POD_IP
                     value: "true"
                   - name: JAVA_OPTS
-                    value: "-Xms128m -Xmx200m"
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC"
                   - name: CATALINA_OPTS
-                    value: "-Xms128m -Xmx200m"
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC"
                   resources:
                     requests:
                       cpu: 50m
                       memory: 128Mi
                     limits:
-                      memory: 256Mi
+                      memory: 384Mi
           ---
           apiVersion: v1
           kind: Service
@@ -342,7 +346,7 @@
             - port: 8080
               targetPort: 8080
           ---
-          # 5. WEBUI SERVICE (Frontend - kết nối sang Azure Persistence qua WAN)
+          # 5. WEBUI SERVICE
           apiVersion: apps/v1
           kind: Deployment
           metadata:
@@ -373,15 +377,15 @@
                   - name: USE_POD_IP
                     value: "true"
                   - name: JAVA_OPTS
-                    value: "-Xms128m -Xmx200m"
+                    value: "-Xms96m -Xmx192m -XX:+UseSerialGC"
                   - name: CATALINA_OPTS
-                    value: "-Xms128m -Xmx200m"
+                    value: "-Xms96m -Xmx192m -XX:+UseSerialGC"
                   resources:
                     requests:
                       cpu: 50m
                       memory: 128Mi
                     limits:
-                      memory: 256Mi
+                      memory: 384Mi
           ---
           apiVersion: v1
           kind: Service
