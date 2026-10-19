@@ -16,6 +16,10 @@
       args:
         stdin: "{{ hub_ns.stdout }}"
 
+    - name: Pull MinIO image on Docker host before importing
+      command: docker pull {{ minio_image }}
+      changed_when: false
+
     - name: Import MinIO image into k3d Hub cluster
       command: k3d image import {{ minio_image }} -c hub-k3d
       changed_when: false

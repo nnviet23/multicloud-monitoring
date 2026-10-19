@@ -61,3 +61,15 @@
     - name: Display running clusters
       debug:
         var: cluster_list.stdout_lines
+
+    - name: Assign static IP addresses to cluster server nodes on multi-cloud-wan
+      command: >
+        bash -c "
+        docker network disconnect multi-cloud-wan {{ item.container }} 2>/dev/null || true &&
+        docker network connect --ip {{ item.ip }} multi-cloud-wan {{ item.container }}
+        "
+      loop:
+        - { container: "k3d-hub-k3d-server-0", ip: "172.28.0.10" }
+        - { container: "k3d-aws-k3d-server-0", ip: "172.28.0.20" }
+        - { container: "k3d-azure-k3d-server-0", ip: "172.28.0.30" }
+      changed_when: false

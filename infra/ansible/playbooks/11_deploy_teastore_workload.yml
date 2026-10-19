@@ -5,7 +5,7 @@
   gather_facts: false
   tasks:
     # ---------------------------------------------------------
-    # 1. SETUP AZURE SPOKE (DATA SERVICES)
+    # 1. SETUP AZURE SPOKE (DATA SERVICES - 172.28.0.30)
     # ---------------------------------------------------------
     - name: Ensure teastore namespace exists on Azure cluster
       command: kubectl --context k3d-azure-k3d create namespace teastore --dry-run=client -o yaml
@@ -85,17 +85,21 @@
                   - containerPort: 8080
                   env:
                   - name: SERVICE_PORT
-                    value: "8080"
+                    value: "31111"
                   - name: HOST_NAME
-                    value: "k3d-azure-k3d-serverlb"
+                    value: "172.28.0.30"
+                  - name: REGISTRY_HOST
+                    value: "172.28.0.20"
+                  - name: REGISTRY_PORT
+                    value: "31112"
                   - name: DB_HOST
                     value: "teastore-db.teastore.svc.cluster.local"
                   - name: DB_PORT
                     value: "3306"
                   - name: JAVA_OPTS
-                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC"
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
                   - name: CATALINA_OPTS
-                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC"
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
                   resources:
                     requests:
                       cpu: 50m
@@ -118,7 +122,7 @@
               nodePort: 31111
 
     # ---------------------------------------------------------
-    # 2. SETUP AWS SPOKE (COMPUTE & WEB SERVICES)
+    # 2. SETUP AWS SPOKE (COMPUTE & WEB SERVICES - 172.28.0.20)
     # ---------------------------------------------------------
     - name: Ensure teastore namespace exists on AWS cluster
       command: kubectl --context k3d-aws-k3d create namespace teastore --dry-run=client -o yaml
@@ -161,9 +165,9 @@
                   - name: HOST_NAME
                     value: "teastore-registry"
                   - name: JAVA_OPTS
-                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC"
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
                   - name: CATALINA_OPTS
-                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC"
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
                   resources:
                     requests:
                       cpu: 50m
@@ -177,12 +181,13 @@
             name: teastore-registry
             namespace: teastore
           spec:
-            type: ClusterIP
+            type: NodePort
             selector:
               app: teastore-registry
             ports:
             - port: 8080
               targetPort: 8080
+              nodePort: 31112
           ---
           # 2. AUTH SERVICE
           apiVersion: apps/v1
@@ -215,9 +220,9 @@
                   - name: USE_POD_IP
                     value: "true"
                   - name: JAVA_OPTS
-                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC"
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
                   - name: CATALINA_OPTS
-                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC"
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
                   resources:
                     requests:
                       cpu: 50m
@@ -269,15 +274,15 @@
                   - name: USE_POD_IP
                     value: "true"
                   - name: JAVA_OPTS
-                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC"
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
                   - name: CATALINA_OPTS
-                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC"
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
                   resources:
                     requests:
                       cpu: 50m
                       memory: 128Mi
                     limits:
-                      memory: 320Mi
+                      memory: 384Mi
           ---
           apiVersion: v1
           kind: Service
@@ -323,9 +328,9 @@
                   - name: USE_POD_IP
                     value: "true"
                   - name: JAVA_OPTS
-                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC"
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
                   - name: CATALINA_OPTS
-                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC"
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
                   resources:
                     requests:
                       cpu: 50m
@@ -377,9 +382,9 @@
                   - name: USE_POD_IP
                     value: "true"
                   - name: JAVA_OPTS
-                    value: "-Xms96m -Xmx192m -XX:+UseSerialGC"
+                    value: "-Xms96m -Xmx192m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
                   - name: CATALINA_OPTS
-                    value: "-Xms96m -Xmx192m -XX:+UseSerialGC"
+                    value: "-Xms96m -Xmx192m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
                   resources:
                     requests:
                       cpu: 50m
@@ -400,14 +405,14 @@
             - port: 8080
               targetPort: 8080
 
-    - name: Wait for TeaStore services on AWS Spoke to be ready
-      command: kubectl --context k3d-aws-k3d -n teastore rollout status deployment/teastore-webui --timeout=680s
-      changed_when: false
-
     - name: Wait for TeaStore services on Azure Spoke to be ready
       command: kubectl --context k3d-azure-k3d -n teastore rollout status deployment/teastore-persistence --timeout=680s
       changed_when: false
 
+    - name: Wait for TeaStore services on AWS Spoke to be ready
+      command: kubectl --context k3d-aws-k3d -n teastore rollout status deployment/teastore-webui --timeout=680s
+      changed_when: false
+
     - name: Confirm TeaStore deployment success
       debug:
-        msg: "TeaStore microservices distributed across AWS & Azure successfully! Access WebUI at: http://localhost:8080/tools.descartes.teastore.webui/"
+        msg: "TeaStore microservices distributed across AWS & Azure successfully!"

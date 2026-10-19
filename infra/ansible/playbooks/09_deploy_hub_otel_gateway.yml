@@ -141,19 +141,24 @@
             name: otel-collector-hub
             namespace: monitoring
           spec:
-            type: LoadBalancer
+            type: NodePort
             selector:
               app: otel-collector-hub
             ports:
             - name: otlp-grpc
               port: 4317
               targetPort: 4317
+              nodePort: 30317
             - name: otlp-http
               port: 4318
               targetPort: 4318
+              nodePort: 30318
             - name: metrics
               port: 8889
               targetPort: 8889
+            - name: telemetry
+              port: 8888
+              targetPort: 8888
 
     - name: Wait for Hub OpenTelemetry Collector to roll out
       command: kubectl --context k3d-hub-k3d -n monitoring rollout status deployment/otel-collector-hub --timeout=120s

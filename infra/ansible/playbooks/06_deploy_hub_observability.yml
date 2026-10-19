@@ -1,5 +1,5 @@
 ---
-- name: Deploy Hub Observability Engines (Loki, Tempo, Prometheus)
+- name: Deploy Hub Observability Engines (Loki, Tempo, Prometheus) Connected to MinIO
   hosts: localhost
   connection: local
   gather_facts: false
@@ -7,48 +7,162 @@
     - name: Add Helm Repositories
       command: "{{ item }}"
       loop:
-        - helm repo add grafana https://grafana.github.io/helm-charts
-        - helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+        - helm repo add --force-update grafana https://grafana.github.io/helm-charts
+        - helm repo add --force-updateprometheus-community https://prometheus-community.github.io/helm-charts
       changed_when: false
 
     - name: Update Helm Repositories
       command: helm repo update
       changed_when: false
 
-    - name: Deploy Grafana Tempo on Hub
+    - name: Deploy Grafana Tempo on Hub (Backed by MinIO S3)
       command: >
         helm upgrade --install tempo grafana/tempo
         --kube-context k3d-hub-k3d
         --namespace monitoring
         --set persistence.enabled=false
-        --set resources.requests.memory=128Mi
-        --set resources.requests.cpu=50m
-        --set resources.limits.memory=256Mi
+        --set tempo.storage.trace.backend=s3
+        --set tempo.storage.trace.s3.bucket=tempo-traces
+        --set tempo.storage.trace.s3.endpoint=minio.monitoring.svc.cluster.local:9000
+        --set tempo.storage.trace.s3.access_key=admin
+        --set tempo.storage.trace.s3.secret_key=StrongMinioPassword123
+        --set tempo.storage.trace.s3.insecure=true
+        --set tempo.compactor.compaction.compaction_cycle=1m
+        --set tempo.resources.requests.memory=128Mi
+        --set tempo.resources.requests.cpu=50m
+        --set tempo.resources.limits.memory=256Mi
+
+    - name: Create Loki Values file for MinIO S3 Storage
+      copy:
+        dest: /tmp/loki-values.yaml
+        content: |
+          deploymentMode: SingleBinary
+          loki:
+            auth_enabled: false
+            commonConfig:
+              replication_factor: 1
+            ingester:
+              chunk_idle_period: 1m
+              max_chunk_age: 2m
+            schemaConfig:
+              configs:
+                - from: "2024-01-01"
+                  store: tsdb
+                  object_store: s3
+                  schema: v13
+                  index:
+                    prefix: loki_index_
+                    period: 24h
+            storage:
+              type: s3
+              bucketNames:
+                chunks: loki-data
+                ruler: loki-data
+                admin: loki-data
+              s3:
+                endpoint: http://minio.monitoring.svc.cluster.local:9000
+                accessKeyId: admin
+                secretAccessKey: StrongMinioPassword123
+                s3ForcePathStyle: true
+                insecure: true
+          singleBinary:
+            replicas: 1
+            resources:
+              requests:
+                cpu: 50m
+                memory: 128Mi
+              limits:
+                memory: 384Mi
+          chunksCache:
+            enabled: false
+          resultsCache:
+            enabled: false
+          read:
+            replicas: 0
+          write:
+            replicas: 0
+          backend:
+            replicas: 0
 
     - name: Deploy Grafana Loki on Hub
       command: >
         helm upgrade --install loki grafana/loki
         --kube-context k3d-hub-k3d
         --namespace monitoring
-        --set deploymentMode=SingleBinary
-        --set loki.useTestSchema=true
-        --set loki.commonConfig.replication_factor=1
-        --set loki.storage.type=filesystem
-        --set singleBinary.replicas=1
-        --set read.replicas=0
-        --set write.replicas=0
-        --set backend.replicas=0
-        --set singleBinary.resources.requests.memory=128Mi
-        --set singleBinary.resources.requests.cpu=50m
-        --set singleBinary.resources.limits.memory=384Mi
+        -f /tmp/loki-values.yaml
+
+    - name: Create Prometheus Values file (Scrape OTel Collector Hub & Fast TSDB Blocks)
+      copy:
+        dest: /tmp/prometheus-values.yaml
+        content: |
+          alertmanager:
+            enabled: false
+          kube-state-metrics:
+            enabled: false
+          prometheus-node-exporter:
+            enabled: false
+          prometheus-pushgateway:
+            enabled: false
+          server:
+            persistentVolume:
+              enabled: false
+            extraArgs:
+              storage.tsdb.min-block-duration: 2m
+              storage.tsdb.max-block-duration: 2m
+              web.enable-lifecycle: ""
+            extraVolumeMounts:
+              - name: thanos-objstore-secret
+                mountPath: /etc/thanos
+                readOnly: true
+            extraVolumes:
+              - name: thanos-objstore-secret
+                secret:
+                  secretName: thanos-objstore-secret
+            sidecarContainers:
+              - name: thanos-sidecar
+                image: quay.io/thanos/thanos:v0.36.1
+                args:
+                  - sidecar
+                  - --tsdb.path=/data
+                  - --prometheus.url=http://127.0.0.1:9090
+                  - --objstore.config-file=/etc/thanos/objstore.yml
+                  - --shipper.upload-compacted
+                resources:
+                  requests:
+                    cpu: 20m
+                    memory: 64Mi
+                  limits:
+                    memory: 128Mi
+          extraScrapeConfigs: |
+            - job_name: 'otel-collector-hub'
+              scrape_interval: 10s
+              static_configs:
+                - targets: ['otel-collector-hub.monitoring.svc.cluster.local:8889']
+                - targets: ['otel-collector-hub.monitoring.svc.cluster.local:8888']
 
     - name: Deploy Prometheus on Hub
       command: >
         helm upgrade --install prometheus prometheus-community/prometheus
         --kube-context k3d-hub-k3d
         --namespace monitoring
-        --set server.persistentVolume.enabled=false
-        --set alertmanager.enabled=false
-        --set server.resources.requests.memory=128Mi
-        --set server.resources.requests.cpu=50m
-        --set server.resources.limits.memory=256Mi
+        -f /tmp/prometheus-values.yaml
+
+    - name: Create Thanos Object Storage Secret for Prometheus
+      command: kubectl --context k3d-hub-k3d apply -f -
+      args:
+        stdin: |
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: thanos-objstore-secret
+            namespace: monitoring
+          type: Opaque
+          stringData:
+            objstore.yml: |
+              type: S3
+              config:
+                bucket: "thanos-metrics"
+                endpoint: "minio.monitoring.svc.cluster.local:9000"
+                access_key: "admin"
+                secret_key: "StrongMinioPassword123"
+                insecure: true

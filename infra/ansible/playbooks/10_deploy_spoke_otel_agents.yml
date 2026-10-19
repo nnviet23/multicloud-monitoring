@@ -61,9 +61,9 @@
                     log_record:
                       - 'severity_number < SEVERITY_NUMBER_INFO'
 
-                # Lấy mẫu dấu vết Head-based ở mức 3%
+                # Lấy mẫu dấu vết Head-based ở mức 100%
                 probabilistic_sampler:
-                  sampling_percentage: 3
+                  sampling_percentage: 100
 
                 # Gán nhãn nhận diện nguồn đám mây
                 resource:
@@ -80,9 +80,9 @@
                   timeout: 1s
 
               exporters:
-                # Đẩy telemetry về Hub qua mTLS
+                # Đẩy telemetry về Hub qua mTLS trên IP tĩnh
                 otlp/hub:
-                  endpoint: k3d-hub-k3d-serverlb:4317
+                  endpoint: 172.28.0.10:30317
                   tls:
                     ca_file: /etc/otelcol/certs/ca.crt
                     cert_file: /etc/otelcol/certs/client.crt
