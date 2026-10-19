@@ -4,11 +4,19 @@
   connection: local
   gather_facts: false
   tasks:
-    - name: Delete all existing k3d clusters
+    - name: Attempt graceful deletion of all k3d clusters
       command: k3d cluster delete --all
       register: k3d_del
       failed_when: false
-      changed_when: "'Deleted' in k3d_del.stdout"
+      changed_when: false
+
+    - name: Force remove all lingering k3d containers
+      shell: |
+        CONTAINERS=$(docker ps -a -q --filter "name=k3d-")
+        if [ -n "$CONTAINERS" ]; then
+          docker rm -f $CONTAINERS
+        fi
+      changed_when: false
 
     - name: Remove multi-cloud-wan Docker network
       command: docker network rm multi-cloud-wan
@@ -16,10 +24,23 @@
       failed_when: false
       changed_when: net_del.rc == 0
 
-    - name: Prune dangling volumes and stopped containers
+    - name: Prune dangling volumes
       command: docker volume prune -f
       changed_when: false
 
+    - name: Clean up generated mTLS certificates directory
+      file:
+        path: "{{ playbook_dir }}/certs"
+        state: absent
+
+    - name: Clean up temporary Helm values files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/loki-values.yaml
+        - /tmp/prometheus-values.yaml
+
     - name: Confirm cleanup completion
       debug:
-        msg: "Cleaned up all old clusters, networks, and volumes successfully."
+        msg: "Cleaned up all k3d clusters, Docker containers, networks, volumes, and temporary certificates successfully."
