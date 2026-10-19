@@ -121,3 +121,23 @@
                     mc mb --ignore-existing myminio/loki-data;
                     mc mb --ignore-existing myminio/tempo-traces;
                     echo 'Buckets created successfully!';
+                    
+    - name: Restart k3d servers and loadbalancers to refresh network state and DNS cache
+      command: >
+        docker restart
+        k3d-hub-k3d-server-0 k3d-hub-k3d-serverlb
+        k3d-aws-k3d-server-0 k3d-aws-k3d-serverlb
+        k3d-azure-k3d-server-0 k3d-azure-k3d-serverlb
+      changed_when: false
+
+    - name: Wait for Kubernetes API servers to be responsive
+      command: kubectl --context {{ item }} get nodes
+      register: api_check
+      until: api_check.rc == 0
+      retries: 15
+      delay: 3
+      loop:
+        - k3d-hub-k3d
+        - k3d-aws-k3d
+        - k3d-azure-k3d
+      changed_when: false
