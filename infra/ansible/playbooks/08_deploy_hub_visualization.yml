@@ -33,20 +33,17 @@
                   url: http://loki.monitoring.svc.cluster.local:3100
                   jsonData:
                     maxLines: 1000
-                    httpHeaderName1: "X-Scope-OrgID"
                     derivedFields:
                       - datasourceUid: tempo-ds
                         matcherRegex: "(?:traceID|trace_id)=(\\w+)"
                         name: TraceID
                         url: "$${__value.raw}"
-                  secureJsonData:
-                    httpHeaderValue1: "anonymous"
 
                 - name: Tempo
                   uid: tempo-ds
                   type: tempo
                   access: proxy
-                  url: http://tempo.monitoring.svc.cluster.local:3100
+                  url: http://tempo.monitoring.svc.cluster.local:3200
                   jsonData:
                     httpMethod: GET
                     tracesToLogsV2:

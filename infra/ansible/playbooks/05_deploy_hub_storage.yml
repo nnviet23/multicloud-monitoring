@@ -93,51 +93,7 @@
       changed_when: false
 
     - name: Provision MinIO Buckets (thanos-metrics, loki-data, tempo-traces)
-      command: kubectl --context k3d-hub-k3d apply -f -
-      args:
-        stdin: |
-          apiVersion: batch/v1
-          kind: Job
-          metadata:
-            name: minio-create-buckets
-            namespace: monitoring
-          spec:
-            ttlSecondsAfterFinished: 60
-            template:
-              spec:
-                restartPolicy: OnFailure
-                containers:
-                - name: minio-mc
-                  image: minio/mc:latest
-                  command:
-                  - /bin/sh
-                  - -c
-                  - |
-                    until mc alias set myminio http://minio.monitoring.svc.cluster.local:9000 admin StrongMinioPassword123; do
-                      echo 'Waiting for MinIO...';
-                      sleep 2;
-                    done;
-                    mc mb --ignore-existing myminio/thanos-metrics;
-                    mc mb --ignore-existing myminio/loki-data;
-                    mc mb --ignore-existing myminio/tempo-traces;
-                    echo 'Buckets created successfully!';
-                    
-    - name: Restart k3d servers and loadbalancers to refresh network state and DNS cache
       command: >
-        docker restart
-        k3d-hub-k3d-server-0 k3d-hub-k3d-serverlb
-        k3d-aws-k3d-server-0 k3d-aws-k3d-serverlb
-        k3d-azure-k3d-server-0 k3d-azure-k3d-serverlb
-      changed_when: false
-
-    - name: Wait for Kubernetes API servers to be responsive
-      command: kubectl --context {{ item }} get nodes
-      register: api_check
-      until: api_check.rc == 0
-      retries: 15
-      delay: 3
-      loop:
-        - k3d-hub-k3d
-        - k3d-aws-k3d
-        - k3d-azure-k3d
+        kubectl --context k3d-hub-k3d -n monitoring exec deploy/minio --
+        mkdir -p /data/thanos-metrics /data/loki-data /data/tempo-traces
       changed_when: false

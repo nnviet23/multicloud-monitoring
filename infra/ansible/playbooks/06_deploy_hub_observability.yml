@@ -91,7 +91,7 @@
         --namespace monitoring
         -f /tmp/loki-values.yaml
 
-    - name: Create Prometheus Values file (Scrape OTel Collector Hub & Fast TSDB Blocks)
+    - name: Create Prometheus Values file (Scrape OTel Collector Hub & Thanos Sidecar)
       copy:
         dest: /tmp/prometheus-values.yaml
         content: |
@@ -109,7 +109,6 @@
             extraArgs:
               storage.tsdb.min-block-duration: 2m
               storage.tsdb.max-block-duration: 2m
-              web.enable-lifecycle: ""
             extraVolumeMounts:
               - name: thanos-objstore-secret
                 mountPath: /etc/thanos
@@ -139,20 +138,19 @@
                     memory: 64Mi
                   limits:
                     memory: 128Mi
+            resources:
+              requests:
+                cpu: 50m
+                memory: 128Mi
+              limits:
+                memory: 384Mi
           extraScrapeConfigs: |
             - job_name: 'otel-collector-hub'
               scrape_interval: 10s
               static_configs:
                 - targets: ['otel-collector-hub.monitoring.svc.cluster.local:8889']
                 - targets: ['otel-collector-hub.monitoring.svc.cluster.local:8888']
-
-    - name: Deploy Prometheus on Hub
-      command: >
-        helm upgrade --install prometheus prometheus-community/prometheus
-        --kube-context k3d-hub-k3d
-        --namespace monitoring
-        -f /tmp/prometheus-values.yaml
-
+    
     - name: Create Thanos Object Storage Secret for Prometheus
       command: kubectl --context k3d-hub-k3d apply -f -
       args:
@@ -172,3 +170,12 @@
                 access_key: "admin"
                 secret_key: "StrongMinioPassword123"
                 insecure: true
+
+    - name: Deploy Prometheus on Hub
+      command: >
+        helm upgrade --install prometheus prometheus-community/prometheus
+        --kube-context k3d-hub-k3d
+        --namespace monitoring
+        -f /tmp/prometheus-values.yaml
+
+    
