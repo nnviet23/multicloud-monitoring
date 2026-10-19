@@ -8,7 +8,7 @@
       command: "{{ item }}"
       loop:
         - helm repo add --force-update grafana https://grafana.github.io/helm-charts
-        - helm repo add --force-updateprometheus-community https://prometheus-community.github.io/helm-charts
+        - helm repo add --force-update prometheus-community https://prometheus-community.github.io/helm-charts
       changed_when: false
 
     - name: Update Helm Repositories
