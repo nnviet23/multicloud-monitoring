@@ -87,9 +87,9 @@
                   - name: SERVICE_PORT
                     value: "31111"
                   - name: HOST_NAME
-                    value: "172.28.0.30"
+                    value: "k3d-azure-k3d-server-0"
                   - name: REGISTRY_HOST
-                    value: "172.28.0.20"
+                    value: "k3d-aws-k3d-server-0"
                   - name: REGISTRY_PORT
                     value: "31112"
                   - name: DB_HOST
