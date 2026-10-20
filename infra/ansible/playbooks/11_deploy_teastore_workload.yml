@@ -6,6 +6,17 @@
   vars:
     otel_agent_image: "ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java:2.10.0"
   tasks:
+    - name: Pull OpenTelemetry Java Agent image on host
+      command: docker pull {{ otel_agent_image }}
+      changed_when: false
+
+    - name: Import OpenTelemetry Java Agent image into AWS and Azure Spoke clusters
+      command: k3d image import {{ otel_agent_image }} -c {{ item }}
+      loop:
+        - aws-k3d
+        - azure-k3d
+      changed_when: false
+
     # ---------------------------------------------------------
     # 1. SETUP AZURE SPOKE (DATA SERVICES)
     # ---------------------------------------------------------
@@ -83,6 +94,7 @@
                 initContainers:
                 - name: opentelemetry-auto-instrumentation
                   image: {{ otel_agent_image }}
+                  imagePullPolicy: IfNotPresent
                   command: ["cp", "/javaagent.jar", "/otel-auto-instrumentation/javaagent.jar"]
                   volumeMounts:
                   - name: otel-auto-instrumentation
@@ -108,13 +120,17 @@
                   - name: JAVA_OPTS
                     value: "-Xms96m -Xmx192m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
                   - name: CATALINA_OPTS
-                    value: "-Xms96m -Xmx192m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true -javaagent:/otel-auto-instrumentation/javaagent.jar"
+                    value: "-Xms96m -Xmx192m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: JAVA_TOOL_OPTIONS
+                    value: "-javaagent:/otel-auto-instrumentation/javaagent.jar -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
                   - name: OTEL_SERVICE_NAME
                     value: "teastore-persistence"
                   - name: OTEL_EXPORTER_OTLP_ENDPOINT
                     value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
                   - name: OTEL_EXPORTER_OTLP_PROTOCOL
                     value: "grpc"
+                  - name: OTEL_TRACES_EXPORTER
+                    value: "otlp"
                   - name: OTEL_METRICS_EXPORTER
                     value: "otlp"
                   - name: OTEL_LOGS_EXPORTER
@@ -127,7 +143,7 @@
                       cpu: 50m
                       memory: 192Mi
                     limits:
-                      memory: 448Mi
+                      memory: 480Mi
                 volumes:
                 - name: otel-auto-instrumentation
                   emptyDir: {}
@@ -179,6 +195,14 @@
                 labels:
                   app: teastore-registry
               spec:
+                initContainers:
+                - name: opentelemetry-auto-instrumentation
+                  image: {{ otel_agent_image }}
+                  imagePullPolicy: IfNotPresent
+                  command: ["cp", "/javaagent.jar", "/otel-auto-instrumentation/javaagent.jar"]
+                  volumeMounts:
+                  - name: otel-auto-instrumentation
+                    mountPath: /otel-auto-instrumentation
                 containers:
                 - name: teastore-registry
                   image: descartesresearch/teastore-registry:latest
@@ -193,12 +217,32 @@
                     value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
                   - name: CATALINA_OPTS
                     value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: JAVA_TOOL_OPTIONS
+                    value: "-javaagent:/otel-auto-instrumentation/javaagent.jar -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: OTEL_SERVICE_NAME
+                    value: "teastore-registry"
+                  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
+                  - name: OTEL_EXPORTER_OTLP_PROTOCOL
+                    value: "grpc"
+                  - name: OTEL_TRACES_EXPORTER
+                    value: "otlp"
+                  - name: OTEL_METRICS_EXPORTER
+                    value: "otlp"
+                  - name: OTEL_LOGS_EXPORTER
+                    value: "otlp"
+                  volumeMounts:
+                  - name: otel-auto-instrumentation
+                    mountPath: /otel-auto-instrumentation
                   resources:
                     requests:
                       cpu: 50m
-                      memory: 128Mi
+                      memory: 192Mi
                     limits:
-                      memory: 320Mi
+                      memory: 448Mi
+                volumes:
+                - name: otel-auto-instrumentation
+                  emptyDir: {}
           ---
           apiVersion: v1
           kind: Service
@@ -233,6 +277,7 @@
                 initContainers:
                 - name: opentelemetry-auto-instrumentation
                   image: {{ otel_agent_image }}
+                  imagePullPolicy: IfNotPresent
                   command: ["cp", "/javaagent.jar", "/otel-auto-instrumentation/javaagent.jar"]
                   volumeMounts:
                   - name: otel-auto-instrumentation
@@ -254,13 +299,17 @@
                   - name: JAVA_OPTS
                     value: "-Xms96m -Xmx192m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
                   - name: CATALINA_OPTS
-                    value: "-Xms96m -Xmx192m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true -javaagent:/otel-auto-instrumentation/javaagent.jar"
+                    value: "-Xms96m -Xmx192m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: JAVA_TOOL_OPTIONS
+                    value: "-javaagent:/otel-auto-instrumentation/javaagent.jar -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
                   - name: OTEL_SERVICE_NAME
                     value: "teastore-auth"
                   - name: OTEL_EXPORTER_OTLP_ENDPOINT
                     value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
                   - name: OTEL_EXPORTER_OTLP_PROTOCOL
                     value: "grpc"
+                  - name: OTEL_TRACES_EXPORTER
+                    value: "otlp"
                   - name: OTEL_METRICS_EXPORTER
                     value: "otlp"
                   - name: OTEL_LOGS_EXPORTER
@@ -307,6 +356,14 @@
                 labels:
                   app: teastore-image
               spec:
+                initContainers:
+                - name: opentelemetry-auto-instrumentation
+                  image: {{ otel_agent_image }}
+                  imagePullPolicy: IfNotPresent
+                  command: ["cp", "/javaagent.jar", "/otel-auto-instrumentation/javaagent.jar"]
+                  volumeMounts:
+                  - name: otel-auto-instrumentation
+                    mountPath: /otel-auto-instrumentation
                 containers:
                 - name: teastore-image
                   image: descartesresearch/teastore-image:latest
@@ -325,12 +382,32 @@
                     value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
                   - name: CATALINA_OPTS
                     value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: JAVA_TOOL_OPTIONS
+                    value: "-javaagent:/otel-auto-instrumentation/javaagent.jar -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: OTEL_SERVICE_NAME
+                    value: "teastore-image"
+                  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
+                  - name: OTEL_EXPORTER_OTLP_PROTOCOL
+                    value: "grpc"
+                  - name: OTEL_TRACES_EXPORTER
+                    value: "otlp"
+                  - name: OTEL_METRICS_EXPORTER
+                    value: "otlp"
+                  - name: OTEL_LOGS_EXPORTER
+                    value: "otlp"
+                  volumeMounts:
+                  - name: otel-auto-instrumentation
+                    mountPath: /otel-auto-instrumentation
                   resources:
                     requests:
                       cpu: 50m
-                      memory: 128Mi
+                      memory: 192Mi
                     limits:
-                      memory: 384Mi
+                      memory: 448Mi
+                volumes:
+                - name: otel-auto-instrumentation
+                  emptyDir: {}
           ---
           apiVersion: v1
           kind: Service
@@ -361,6 +438,14 @@
                 labels:
                   app: teastore-recommender
               spec:
+                initContainers:
+                - name: opentelemetry-auto-instrumentation
+                  image: {{ otel_agent_image }}
+                  imagePullPolicy: IfNotPresent
+                  command: ["cp", "/javaagent.jar", "/otel-auto-instrumentation/javaagent.jar"]
+                  volumeMounts:
+                  - name: otel-auto-instrumentation
+                    mountPath: /otel-auto-instrumentation
                 containers:
                 - name: teastore-recommender
                   image: descartesresearch/teastore-recommender:latest
@@ -379,12 +464,32 @@
                     value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
                   - name: CATALINA_OPTS
                     value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: JAVA_TOOL_OPTIONS
+                    value: "-javaagent:/otel-auto-instrumentation/javaagent.jar -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: OTEL_SERVICE_NAME
+                    value: "teastore-recommender"
+                  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
+                  - name: OTEL_EXPORTER_OTLP_PROTOCOL
+                    value: "grpc"
+                  - name: OTEL_TRACES_EXPORTER
+                    value: "otlp"
+                  - name: OTEL_METRICS_EXPORTER
+                    value: "otlp"
+                  - name: OTEL_LOGS_EXPORTER
+                    value: "otlp"
+                  volumeMounts:
+                  - name: otel-auto-instrumentation
+                    mountPath: /otel-auto-instrumentation
                   resources:
                     requests:
                       cpu: 50m
-                      memory: 128Mi
+                      memory: 192Mi
                     limits:
-                      memory: 384Mi
+                      memory: 448Mi
+                volumes:
+                - name: otel-auto-instrumentation
+                  emptyDir: {}
           ---
           apiVersion: v1
           kind: Service
@@ -418,6 +523,7 @@
                 initContainers:
                 - name: opentelemetry-auto-instrumentation
                   image: {{ otel_agent_image }}
+                  imagePullPolicy: IfNotPresent
                   command: ["cp", "/javaagent.jar", "/otel-auto-instrumentation/javaagent.jar"]
                   volumeMounts:
                   - name: otel-auto-instrumentation
@@ -439,13 +545,17 @@
                   - name: JAVA_OPTS
                     value: "-Xms96m -Xmx220m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
                   - name: CATALINA_OPTS
-                    value: "-Xms96m -Xmx220m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true -javaagent:/otel-auto-instrumentation/javaagent.jar"
+                    value: "-Xms96m -Xmx220m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: JAVA_TOOL_OPTIONS
+                    value: "-javaagent:/otel-auto-instrumentation/javaagent.jar -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
                   - name: OTEL_SERVICE_NAME
                     value: "teastore-webui"
                   - name: OTEL_EXPORTER_OTLP_ENDPOINT
                     value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
                   - name: OTEL_EXPORTER_OTLP_PROTOCOL
                     value: "grpc"
+                  - name: OTEL_TRACES_EXPORTER
+                    value: "otlp"
                   - name: OTEL_METRICS_EXPORTER
                     value: "otlp"
                   - name: OTEL_LOGS_EXPORTER
@@ -484,6 +594,622 @@
       command: kubectl --context k3d-aws-k3d -n teastore rollout status deployment/teastore-webui --timeout=680s
       changed_when: false
 
+    - name: Generate initial HTTP traffic to TeaStore WebUI so Traces & Traced Logs appear immediately
+      shell: |
+        for i in 1 2 3 4 5; do
+          curl -s -o /dev/null http://localhost:8080/tools.descartes.teastore.webui/ || true
+          curl -s -o /dev/null http://localhost:8080/tools.descartes.teastore.webui/status || true
+          sleep 2
+        done
+      changed_when: false
+
     - name: Confirm TeaStore deployment success
       debug:
-        msg: "TeaStore microservices distributed across AWS & Azure successfully!"
+        msg: "TeaStore microservices distributed across AWS & Azure with OTel Java Agent enabled successfully!"---
+- name: Deploy Distributed TeaStore Benchmark Across Simulated Clouds (AWS Compute & Azure Data)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    otel_agent_image: "ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java:2.10.0"
+  tasks:
+    - name: Pull OpenTelemetry Java Agent image on host
+      command: docker pull {{ otel_agent_image }}
+      changed_when: false
+
+    - name: Import OpenTelemetry Java Agent image into AWS and Azure Spoke clusters
+      command: k3d image import {{ otel_agent_image }} -c {{ item }}
+      loop:
+        - aws-k3d
+        - azure-k3d
+      changed_when: false
+
+    # ---------------------------------------------------------
+    # 1. SETUP AZURE SPOKE (DATA SERVICES)
+    # ---------------------------------------------------------
+    - name: Ensure teastore namespace exists on Azure cluster
+      command: kubectl --context k3d-azure-k3d create namespace teastore --dry-run=client -o yaml
+      register: teastore_ns_azure
+      changed_when: false
+
+    - name: Apply teastore namespace on Azure
+      command: kubectl --context k3d-azure-k3d apply -f -
+      args:
+        stdin: "{{ teastore_ns_azure.stdout }}"
+
+    - name: Deploy TeaStore Data Services (DB + Persistence) on Azure Spoke
+      command: kubectl --context k3d-azure-k3d apply -f -
+      args:
+        stdin: |
+          # 1. DATABASE (teastore-db)
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: teastore-db
+            namespace: teastore
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: teastore-db
+            template:
+              metadata:
+                labels:
+                  app: teastore-db
+              spec:
+                containers:
+                - name: teastore-db
+                  image: descartesresearch/teastore-db:latest
+                  ports:
+                  - containerPort: 3306
+                  resources:
+                    requests:
+                      cpu: 50m
+                      memory: 128Mi
+                    limits:
+                      memory: 384Mi
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: teastore-db
+            namespace: teastore
+          spec:
+            type: ClusterIP
+            selector:
+              app: teastore-db
+            ports:
+            - port: 3306
+              targetPort: 3306
+          ---
+          # 2. PERSISTENCE SERVICE (teastore-persistence)
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: teastore-persistence
+            namespace: teastore
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: teastore-persistence
+            template:
+              metadata:
+                labels:
+                  app: teastore-persistence
+              spec:
+                initContainers:
+                - name: opentelemetry-auto-instrumentation
+                  image: {{ otel_agent_image }}
+                  imagePullPolicy: IfNotPresent
+                  command: ["cp", "/javaagent.jar", "/otel-auto-instrumentation/javaagent.jar"]
+                  volumeMounts:
+                  - name: otel-auto-instrumentation
+                    mountPath: /otel-auto-instrumentation
+                containers:
+                - name: teastore-persistence
+                  image: descartesresearch/teastore-persistence:latest
+                  ports:
+                  - containerPort: 8080
+                  env:
+                  - name: SERVICE_PORT
+                    value: "31111"
+                  - name: HOST_NAME
+                    value: "k3d-azure-k3d-server-0"
+                  - name: REGISTRY_HOST
+                    value: "k3d-aws-k3d-server-0"
+                  - name: REGISTRY_PORT
+                    value: "31112"
+                  - name: DB_HOST
+                    value: "teastore-db.teastore.svc.cluster.local"
+                  - name: DB_PORT
+                    value: "3306"
+                  - name: JAVA_OPTS
+                    value: "-Xms96m -Xmx192m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: CATALINA_OPTS
+                    value: "-Xms96m -Xmx192m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: JAVA_TOOL_OPTIONS
+                    value: "-javaagent:/otel-auto-instrumentation/javaagent.jar -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: OTEL_SERVICE_NAME
+                    value: "teastore-persistence"
+                  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
+                  - name: OTEL_EXPORTER_OTLP_PROTOCOL
+                    value: "grpc"
+                  - name: OTEL_TRACES_EXPORTER
+                    value: "otlp"
+                  - name: OTEL_METRICS_EXPORTER
+                    value: "otlp"
+                  - name: OTEL_LOGS_EXPORTER
+                    value: "otlp"
+                  volumeMounts:
+                  - name: otel-auto-instrumentation
+                    mountPath: /otel-auto-instrumentation
+                  resources:
+                    requests:
+                      cpu: 50m
+                      memory: 192Mi
+                    limits:
+                      memory: 480Mi
+                volumes:
+                - name: otel-auto-instrumentation
+                  emptyDir: {}
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: teastore-persistence
+            namespace: teastore
+          spec:
+            type: NodePort
+            selector:
+              app: teastore-persistence
+            ports:
+            - port: 8080
+              targetPort: 8080
+              nodePort: 31111
+
+    # ---------------------------------------------------------
+    # 2. SETUP AWS SPOKE (COMPUTE & WEB SERVICES)
+    # ---------------------------------------------------------
+    - name: Ensure teastore namespace exists on AWS cluster
+      command: kubectl --context k3d-aws-k3d create namespace teastore --dry-run=client -o yaml
+      register: teastore_ns_aws
+      changed_when: false
+
+    - name: Apply teastore namespace on AWS
+      command: kubectl --context k3d-aws-k3d apply -f -
+      args:
+        stdin: "{{ teastore_ns_aws.stdout }}"
+
+    - name: Deploy TeaStore Compute Services on AWS Spoke
+      command: kubectl --context k3d-aws-k3d apply -f -
+      args:
+        stdin: |
+          # 1. REGISTRY SERVICE
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: teastore-registry
+            namespace: teastore
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: teastore-registry
+            template:
+              metadata:
+                labels:
+                  app: teastore-registry
+              spec:
+                initContainers:
+                - name: opentelemetry-auto-instrumentation
+                  image: {{ otel_agent_image }}
+                  imagePullPolicy: IfNotPresent
+                  command: ["cp", "/javaagent.jar", "/otel-auto-instrumentation/javaagent.jar"]
+                  volumeMounts:
+                  - name: otel-auto-instrumentation
+                    mountPath: /otel-auto-instrumentation
+                containers:
+                - name: teastore-registry
+                  image: descartesresearch/teastore-registry:latest
+                  ports:
+                  - containerPort: 8080
+                  env:
+                  - name: SERVICE_PORT
+                    value: "8080"
+                  - name: HOST_NAME
+                    value: "teastore-registry"
+                  - name: JAVA_OPTS
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: CATALINA_OPTS
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: JAVA_TOOL_OPTIONS
+                    value: "-javaagent:/otel-auto-instrumentation/javaagent.jar -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: OTEL_SERVICE_NAME
+                    value: "teastore-registry"
+                  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
+                  - name: OTEL_EXPORTER_OTLP_PROTOCOL
+                    value: "grpc"
+                  - name: OTEL_TRACES_EXPORTER
+                    value: "otlp"
+                  - name: OTEL_METRICS_EXPORTER
+                    value: "otlp"
+                  - name: OTEL_LOGS_EXPORTER
+                    value: "otlp"
+                  volumeMounts:
+                  - name: otel-auto-instrumentation
+                    mountPath: /otel-auto-instrumentation
+                  resources:
+                    requests:
+                      cpu: 50m
+                      memory: 192Mi
+                    limits:
+                      memory: 448Mi
+                volumes:
+                - name: otel-auto-instrumentation
+                  emptyDir: {}
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: teastore-registry
+            namespace: teastore
+          spec:
+            type: NodePort
+            selector:
+              app: teastore-registry
+            ports:
+            - port: 8080
+              targetPort: 8080
+              nodePort: 31112
+          ---
+          # 2. AUTH SERVICE
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: teastore-auth
+            namespace: teastore
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: teastore-auth
+            template:
+              metadata:
+                labels:
+                  app: teastore-auth
+              spec:
+                initContainers:
+                - name: opentelemetry-auto-instrumentation
+                  image: {{ otel_agent_image }}
+                  imagePullPolicy: IfNotPresent
+                  command: ["cp", "/javaagent.jar", "/otel-auto-instrumentation/javaagent.jar"]
+                  volumeMounts:
+                  - name: otel-auto-instrumentation
+                    mountPath: /otel-auto-instrumentation
+                containers:
+                - name: teastore-auth
+                  image: descartesresearch/teastore-auth:latest
+                  ports:
+                  - containerPort: 8080
+                  env:
+                  - name: SERVICE_PORT
+                    value: "8080"
+                  - name: REGISTRY_HOST
+                    value: "teastore-registry.teastore.svc.cluster.local"
+                  - name: REGISTRY_PORT
+                    value: "8080"
+                  - name: USE_POD_IP
+                    value: "true"
+                  - name: JAVA_OPTS
+                    value: "-Xms96m -Xmx192m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: CATALINA_OPTS
+                    value: "-Xms96m -Xmx192m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: JAVA_TOOL_OPTIONS
+                    value: "-javaagent:/otel-auto-instrumentation/javaagent.jar -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: OTEL_SERVICE_NAME
+                    value: "teastore-auth"
+                  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
+                  - name: OTEL_EXPORTER_OTLP_PROTOCOL
+                    value: "grpc"
+                  - name: OTEL_TRACES_EXPORTER
+                    value: "otlp"
+                  - name: OTEL_METRICS_EXPORTER
+                    value: "otlp"
+                  - name: OTEL_LOGS_EXPORTER
+                    value: "otlp"
+                  volumeMounts:
+                  - name: otel-auto-instrumentation
+                    mountPath: /otel-auto-instrumentation
+                  resources:
+                    requests:
+                      cpu: 50m
+                      memory: 192Mi
+                    limits:
+                      memory: 448Mi
+                volumes:
+                - name: otel-auto-instrumentation
+                  emptyDir: {}
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: teastore-auth
+            namespace: teastore
+          spec:
+            type: ClusterIP
+            selector:
+              app: teastore-auth
+            ports:
+            - port: 8080
+              targetPort: 8080
+          ---
+          # 3. IMAGE SERVICE
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: teastore-image
+            namespace: teastore
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: teastore-image
+            template:
+              metadata:
+                labels:
+                  app: teastore-image
+              spec:
+                initContainers:
+                - name: opentelemetry-auto-instrumentation
+                  image: {{ otel_agent_image }}
+                  imagePullPolicy: IfNotPresent
+                  command: ["cp", "/javaagent.jar", "/otel-auto-instrumentation/javaagent.jar"]
+                  volumeMounts:
+                  - name: otel-auto-instrumentation
+                    mountPath: /otel-auto-instrumentation
+                containers:
+                - name: teastore-image
+                  image: descartesresearch/teastore-image:latest
+                  ports:
+                  - containerPort: 8080
+                  env:
+                  - name: SERVICE_PORT
+                    value: "8080"
+                  - name: REGISTRY_HOST
+                    value: "teastore-registry.teastore.svc.cluster.local"
+                  - name: REGISTRY_PORT
+                    value: "8080"
+                  - name: USE_POD_IP
+                    value: "true"
+                  - name: JAVA_OPTS
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: CATALINA_OPTS
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: JAVA_TOOL_OPTIONS
+                    value: "-javaagent:/otel-auto-instrumentation/javaagent.jar -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: OTEL_SERVICE_NAME
+                    value: "teastore-image"
+                  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
+                  - name: OTEL_EXPORTER_OTLP_PROTOCOL
+                    value: "grpc"
+                  - name: OTEL_TRACES_EXPORTER
+                    value: "otlp"
+                  - name: OTEL_METRICS_EXPORTER
+                    value: "otlp"
+                  - name: OTEL_LOGS_EXPORTER
+                    value: "otlp"
+                  volumeMounts:
+                  - name: otel-auto-instrumentation
+                    mountPath: /otel-auto-instrumentation
+                  resources:
+                    requests:
+                      cpu: 50m
+                      memory: 192Mi
+                    limits:
+                      memory: 448Mi
+                volumes:
+                - name: otel-auto-instrumentation
+                  emptyDir: {}
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: teastore-image
+            namespace: teastore
+          spec:
+            type: ClusterIP
+            selector:
+              app: teastore-image
+            ports:
+            - port: 8080
+              targetPort: 8080
+          ---
+          # 4. RECOMMENDER SERVICE
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: teastore-recommender
+            namespace: teastore
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: teastore-recommender
+            template:
+              metadata:
+                labels:
+                  app: teastore-recommender
+              spec:
+                initContainers:
+                - name: opentelemetry-auto-instrumentation
+                  image: {{ otel_agent_image }}
+                  imagePullPolicy: IfNotPresent
+                  command: ["cp", "/javaagent.jar", "/otel-auto-instrumentation/javaagent.jar"]
+                  volumeMounts:
+                  - name: otel-auto-instrumentation
+                    mountPath: /otel-auto-instrumentation
+                containers:
+                - name: teastore-recommender
+                  image: descartesresearch/teastore-recommender:latest
+                  ports:
+                  - containerPort: 8080
+                  env:
+                  - name: SERVICE_PORT
+                    value: "8080"
+                  - name: REGISTRY_HOST
+                    value: "teastore-registry.teastore.svc.cluster.local"
+                  - name: REGISTRY_PORT
+                    value: "8080"
+                  - name: USE_POD_IP
+                    value: "true"
+                  - name: JAVA_OPTS
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: CATALINA_OPTS
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: JAVA_TOOL_OPTIONS
+                    value: "-javaagent:/otel-auto-instrumentation/javaagent.jar -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: OTEL_SERVICE_NAME
+                    value: "teastore-recommender"
+                  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
+                  - name: OTEL_EXPORTER_OTLP_PROTOCOL
+                    value: "grpc"
+                  - name: OTEL_TRACES_EXPORTER
+                    value: "otlp"
+                  - name: OTEL_METRICS_EXPORTER
+                    value: "otlp"
+                  - name: OTEL_LOGS_EXPORTER
+                    value: "otlp"
+                  volumeMounts:
+                  - name: otel-auto-instrumentation
+                    mountPath: /otel-auto-instrumentation
+                  resources:
+                    requests:
+                      cpu: 50m
+                      memory: 192Mi
+                    limits:
+                      memory: 448Mi
+                volumes:
+                - name: otel-auto-instrumentation
+                  emptyDir: {}
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: teastore-recommender
+            namespace: teastore
+          spec:
+            type: ClusterIP
+            selector:
+              app: teastore-recommender
+            ports:
+            - port: 8080
+              targetPort: 8080
+          ---
+          # 5. WEBUI SERVICE
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: teastore-webui
+            namespace: teastore
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: teastore-webui
+            template:
+              metadata:
+                labels:
+                  app: teastore-webui
+              spec:
+                initContainers:
+                - name: opentelemetry-auto-instrumentation
+                  image: {{ otel_agent_image }}
+                  imagePullPolicy: IfNotPresent
+                  command: ["cp", "/javaagent.jar", "/otel-auto-instrumentation/javaagent.jar"]
+                  volumeMounts:
+                  - name: otel-auto-instrumentation
+                    mountPath: /otel-auto-instrumentation
+                containers:
+                - name: teastore-webui
+                  image: descartesresearch/teastore-webui:latest
+                  ports:
+                  - containerPort: 8080
+                  env:
+                  - name: SERVICE_PORT
+                    value: "8080"
+                  - name: REGISTRY_HOST
+                    value: "teastore-registry.teastore.svc.cluster.local"
+                  - name: REGISTRY_PORT
+                    value: "8080"
+                  - name: USE_POD_IP
+                    value: "true"
+                  - name: JAVA_OPTS
+                    value: "-Xms96m -Xmx220m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: CATALINA_OPTS
+                    value: "-Xms96m -Xmx220m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: JAVA_TOOL_OPTIONS
+                    value: "-javaagent:/otel-auto-instrumentation/javaagent.jar -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: OTEL_SERVICE_NAME
+                    value: "teastore-webui"
+                  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
+                  - name: OTEL_EXPORTER_OTLP_PROTOCOL
+                    value: "grpc"
+                  - name: OTEL_TRACES_EXPORTER
+                    value: "otlp"
+                  - name: OTEL_METRICS_EXPORTER
+                    value: "otlp"
+                  - name: OTEL_LOGS_EXPORTER
+                    value: "otlp"
+                  volumeMounts:
+                  - name: otel-auto-instrumentation
+                    mountPath: /otel-auto-instrumentation
+                  resources:
+                    requests:
+                      cpu: 50m
+                      memory: 192Mi
+                    limits:
+                      memory: 480Mi
+                volumes:
+                - name: otel-auto-instrumentation
+                  emptyDir: {}
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: teastore-webui
+            namespace: teastore
+          spec:
+            type: LoadBalancer
+            selector:
+              app: teastore-webui
+            ports:
+            - port: 8080
+              targetPort: 8080
+
+    - name: Wait for TeaStore services on Azure Spoke to be ready
+      command: kubectl --context k3d-azure-k3d -n teastore rollout status deployment/teastore-persistence --timeout=680s
+      changed_when: false
+
+    - name: Wait for TeaStore services on AWS Spoke to be ready
+      command: kubectl --context k3d-aws-k3d -n teastore rollout status deployment/teastore-webui --timeout=680s
+      changed_when: false
+
+    - name: Generate initial HTTP traffic to TeaStore WebUI so Traces & Traced Logs appear immediately
+      shell: |
+        for i in 1 2 3 4 5; do
+          curl -s -o /dev/null http://localhost:8080/tools.descartes.teastore.webui/ || true
+          curl -s -o /dev/null http://localhost:8080/tools.descartes.teastore.webui/status || true
+          sleep 2
+        done
+      changed_when: false
+
+    - name: Confirm TeaStore deployment success
+      debug:
+        msg: "TeaStore microservices distributed across AWS & Azure with OTel Java Agent enabled successfully!"

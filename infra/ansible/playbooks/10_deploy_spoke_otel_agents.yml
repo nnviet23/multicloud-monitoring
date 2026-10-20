@@ -46,9 +46,6 @@
                   operators:
                     - type: regex_parser
                       regex: '^(?P<time>[^ ]+) (?P<stream>stdout|stderr) (?P<logtag>[^ ]*) (?P<log>.*)$'
-                      timestamp:
-                        parse_from: attributes.time
-                        layout: '%Y-%m-%dT%H:%M:%S.%L%z'
                       output: extract_metadata_from_filepath
                     - type: regex_parser
                       id: extract_metadata_from_filepath
@@ -66,17 +63,24 @@
                   limit_percentage: 75
                   spike_limit_percentage: 20
 
-                # Chuyển container_name và pod_name lên thành Resource Attributes để Loki hiển thị đúng service_name
+                # Nhóm log theo container_name và đưa lên Resource Attributes
+                groupbyattrs:
+                  keys:
+                    - container_name
+                    - pod_name
+                    - namespace
+
+                # Ánh xạ container_name thành service.name chuẩn cho Loki
                 transform/logs:
                   error_mode: ignore
                   log_statements:
-                    - context: log
+                    - context: resource
                       statements:
-                        - set(resource.attributes["service.name"], attributes["container_name"]) where attributes["container_name"] != nil
-                        - set(resource.attributes["k8s.pod.name"], attributes["pod_name"]) where attributes["pod_name"] != nil
-                        - set(resource.attributes["k8s.namespace.name"], attributes["namespace"]) where attributes["namespace"] != nil
+                        - set(attributes["service.name"], attributes["container_name"]) where attributes["service.name"] == nil and attributes["container_name"] != nil
+                        - set(attributes["k8s.pod.name"], attributes["pod_name"]) where attributes["pod_name"] != nil
+                        - set(attributes["k8s.namespace.name"], attributes["namespace"]) where attributes["namespace"] != nil
 
-                # Chỉ lọc bỏ log nếu có gắn nhãn DEBUG rõ ràng (không xóa nhầm log có severity = 0)
+                # Chỉ lọc bỏ log mức DEBUG/TRACE (severity 1..8)
                 filter/logs:
                   error_mode: ignore
                   logs:
@@ -122,7 +126,7 @@
                     exporters: [otlp/hub, debug]
                   logs:
                     receivers: [otlp, filelog]
-                    processors: [memory_limiter, transform/logs, filter/logs, resource, batch]
+                    processors: [memory_limiter, groupbyattrs, transform/logs, filter/logs, resource, batch]
                     exporters: [otlp/hub, debug]
                   metrics:
                     receivers: [otlp, hostmetrics]
@@ -130,3 +134,94 @@
                     exporters: [otlp/hub, debug]
       loop: "{{ spoke_contexts }}"
       changed_when: false
+
+    - name: Deploy Spoke OpenTelemetry Collector Deployment and Service
+      command: kubectl --context {{ item.context }} apply -f -
+      args:
+        stdin: |
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: otel-collector-spoke
+            namespace: monitoring
+            labels:
+              app: otel-collector-spoke
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: otel-collector-spoke
+            template:
+              metadata:
+                labels:
+                  app: otel-collector-spoke
+              spec:
+                containers:
+                - name: otel-collector
+                  image: otel/opentelemetry-collector-contrib:0.114.0
+                  imagePullPolicy: IfNotPresent
+                  args: ["--config=/etc/otelcol/config.yaml"]
+                  volumeMounts:
+                  - name: config
+                    mountPath: /etc/otelcol
+                  - name: certs
+                    mountPath: /etc/otelcol/certs
+                    readOnly: true
+                  - name: varlogpods
+                    mountPath: /var/log/pods
+                    readOnly: true
+                  ports:
+                  - containerPort: 4317
+                    name: otlp-grpc
+                  - containerPort: 4318
+                    name: otlp-http
+                  resources:
+                    requests:
+                      cpu: 50m
+                      memory: 64Mi
+                    limits:
+                      memory: 256Mi
+                volumes:
+                - name: config
+                  configMap:
+                    name: otel-collector-spoke-config
+                - name: certs
+                  secret:
+                    secretName: otel-spoke-certs
+                - name: varlogpods
+                  hostPath:
+                    path: /var/log/pods
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: otel-collector-spoke
+            namespace: monitoring
+          spec:
+            type: ClusterIP
+            selector:
+              app: otel-collector-spoke
+            ports:
+            - name: otlp-grpc
+              port: 4317
+              targetPort: 4317
+            - name: otlp-http
+              port: 4318
+              targetPort: 4318
+      loop: "{{ spoke_contexts }}"
+      changed_when: false
+
+    - name: Restart Spoke OpenTelemetry Collectors to pick up latest ConfigMap
+      command: kubectl --context {{ item.context }} -n monitoring rollout restart deployment/otel-collector-spoke
+      loop: "{{ spoke_contexts }}"
+      changed_when: false
+
+    - name: Wait for Spoke OpenTelemetry Collectors to roll out
+      command: kubectl --context {{ item.context }} -n monitoring rollout status deployment/otel-collector-spoke --timeout=300s
+      loop: "{{ spoke_contexts }}"
+      changed_when: false
+
+    - name: Confirm Spoke Collectors readiness
+      debug:
+        msg: "OTel Collector Agents deployed on {{ item.name }} with mTLS and Optimization enabled successfully."
+      loop: "{{ spoke_contexts }}"

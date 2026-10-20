@@ -42,11 +42,14 @@
                   timeout: 1s
 
                 transform:
+                  error_mode: ignore
                   log_statements:
                     - context: log
                       statements:
                         - set(attributes["cluster.role"], "central-hub")
                         - set(attributes["environment"], "production")
+                        - set(resource.attributes["service.name"], attributes["container_name"]) where attributes["container_name"] != nil
+                        - set(body, Concat([body, " trace_id=", trace_id.string, " span_id=", span_id.string], "")) where IsString(body) and trace_id.string != "" and trace_id.string != "00000000000000000000000000000000"
 
               exporters:
                 otlp/tempo:
@@ -157,6 +160,10 @@
             - name: telemetry
               port: 8888
               targetPort: 8888
+
+    - name: Restart Hub OpenTelemetry Collector to pick up latest ConfigMap
+      command: kubectl --context k3d-hub-k3d -n monitoring rollout restart deployment/otel-collector-hub
+      changed_when: false
 
     - name: Wait for Hub OpenTelemetry Collector to roll out
       command: kubectl --context k3d-hub-k3d -n monitoring rollout status deployment/otel-collector-hub --timeout=120s
