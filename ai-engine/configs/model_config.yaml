@@ -1,0 +1,67 @@
+# Configuration for Multi-Cloud Observability Anomaly Detection Models
+# Architecture: GRU Autoencoder + Isolation Forest Baseline
+
+data:
+  raw_csv_path: "ai-engine/data/raw/normal_baseline_4h.csv"
+  processed_dir: "ai-engine/data/processed"
+  
+  # 14 Golden Features selected from EDA
+  features:
+    - throughput_qps
+    - latency_p95
+    - app_cpu_pct
+    - max_pod_cpu_pct
+    - app_ram_pct
+    - max_pod_ram_pct
+    - jvm_threads_live
+    - jvm_gc_pause_rate
+    - webui_cpu_pct
+    - webui_ram_pct
+    - persistence_cpu_pct
+    - persistence_ram_pct
+    - image_cpu_pct
+    - wan_network_io_kbs
+
+  # Alert guard features (checked by fast rule engine)
+  guard_features:
+    - error_rate_5xx
+    - wan_network_errors
+
+  # Sliding Window Parameters
+  # window_size = 12 samples (12 * 10s = 2 minutes sequence window)
+  window_size: 12
+  stride: 1
+  val_split: 0.2
+  random_seed: 42
+
+model:
+  type: "GRUAutoencoder"
+  input_dim: 14
+  hidden_dim: 64
+  latent_dim: 16
+  num_layers: 2
+  dropout: 0.1
+
+training:
+  batch_size: 32
+  learning_rate: 0.002
+  weight_decay: 0.00001
+  epochs: 50
+  early_stopping_patience: 10
+  save_dir: "ai-engine/models/saved"
+  checkpoint_name: "gru_autoencoder.pt"
+
+baseline:
+  isolation_forest:
+    n_estimators: 150
+    contamination: 0.01
+    random_state: 42
+    save_path: "ai-engine/models/saved/isolation_forest.joblib"
+
+thresholding:
+  # Anomaly threshold percentiles on normal validation reconstruction error
+  threshold_percentile: 99.0
+  dual_window:
+    short_window: 3   # 30 seconds
+    long_window: 18   # 3 minutes
+

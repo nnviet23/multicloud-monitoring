@@ -60,6 +60,7 @@
                       cpu: 50m
                       memory: 128Mi
                     limits:
+                      cpu: 1000m
                       memory: 384Mi
           ---
           apiVersion: v1
@@ -133,6 +134,8 @@
                     value: "otlp"
                   - name: OTEL_METRICS_EXPORTER
                     value: "otlp"
+                  - name: OTEL_METRIC_EXPORT_INTERVAL
+                    value: "10000"
                   - name: OTEL_LOGS_EXPORTER
                     value: "otlp"
                   volumeMounts:
@@ -143,7 +146,8 @@
                       cpu: 50m
                       memory: 192Mi
                     limits:
-                      memory: 480Mi
+                      cpu: 1000m
+                      memory: 640Mi
                 volumes:
                 - name: otel-auto-instrumentation
                   emptyDir: {}
@@ -229,6 +233,8 @@
                     value: "otlp"
                   - name: OTEL_METRICS_EXPORTER
                     value: "otlp"
+                  - name: OTEL_METRIC_EXPORT_INTERVAL
+                    value: "10000"
                   - name: OTEL_LOGS_EXPORTER
                     value: "otlp"
                   volumeMounts:
@@ -239,7 +245,8 @@
                       cpu: 50m
                       memory: 192Mi
                     limits:
-                      memory: 448Mi
+                      cpu: 1000m
+                      memory: 640Mi
                 volumes:
                 - name: otel-auto-instrumentation
                   emptyDir: {}
@@ -312,6 +319,8 @@
                     value: "otlp"
                   - name: OTEL_METRICS_EXPORTER
                     value: "otlp"
+                  - name: OTEL_METRIC_EXPORT_INTERVAL
+                    value: "10000"
                   - name: OTEL_LOGS_EXPORTER
                     value: "otlp"
                   volumeMounts:
@@ -322,7 +331,8 @@
                       cpu: 50m
                       memory: 192Mi
                     limits:
-                      memory: 448Mi
+                      cpu: 1000m
+                      memory: 640Mi
                 volumes:
                 - name: otel-auto-instrumentation
                   emptyDir: {}
@@ -394,6 +404,8 @@
                     value: "otlp"
                   - name: OTEL_METRICS_EXPORTER
                     value: "otlp"
+                  - name: OTEL_METRIC_EXPORT_INTERVAL
+                    value: "10000"
                   - name: OTEL_LOGS_EXPORTER
                     value: "otlp"
                   volumeMounts:
@@ -404,7 +416,8 @@
                       cpu: 50m
                       memory: 192Mi
                     limits:
-                      memory: 448Mi
+                      cpu: 1000m
+                      memory: 640Mi
                 volumes:
                 - name: otel-auto-instrumentation
                   emptyDir: {}
@@ -476,6 +489,8 @@
                     value: "otlp"
                   - name: OTEL_METRICS_EXPORTER
                     value: "otlp"
+                  - name: OTEL_METRIC_EXPORT_INTERVAL
+                    value: "10000"
                   - name: OTEL_LOGS_EXPORTER
                     value: "otlp"
                   volumeMounts:
@@ -486,7 +501,8 @@
                       cpu: 50m
                       memory: 192Mi
                     limits:
-                      memory: 448Mi
+                      cpu: 1000m
+                      memory: 640Mi
                 volumes:
                 - name: otel-auto-instrumentation
                   emptyDir: {}
@@ -558,6 +574,8 @@
                     value: "otlp"
                   - name: OTEL_METRICS_EXPORTER
                     value: "otlp"
+                  - name: OTEL_METRIC_EXPORT_INTERVAL
+                    value: "10000"
                   - name: OTEL_LOGS_EXPORTER
                     value: "otlp"
                   volumeMounts:
@@ -568,7 +586,8 @@
                       cpu: 50m
                       memory: 192Mi
                     limits:
-                      memory: 480Mi
+                      cpu: 1000m
+                      memory: 768Mi
                 volumes:
                 - name: otel-auto-instrumentation
                   emptyDir: {}

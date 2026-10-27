@@ -1,14 +1,25 @@
+# =============================================================================
+# 1. PYTHON & VIRTUAL ENVIRONMENTS
+# =============================================================================
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+.Python
 .env
-.venv
-env/
+.env.*
+!.env.example
+.venv/
 venv/
+env/
 ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
-# Distribution / packaging
+# Distribution / Packaging
 build/
 develop-eggs/
 dist/
@@ -25,27 +36,102 @@ wheels/
 .installed.cfg
 *.egg
 
-# Secrets & PKI certificates (không commit private keys)
+# =============================================================================
+# 2. AI ENGINE - DATASETS, TENSORS & MODEL ARTIFACTS
+# =============================================================================
+# Raw telemetry CSV dumps (re-generated via collector.py)
+data/raw/*
+!data/raw/.gitkeep
+ai-engine/data/raw/*.csv
+ai-engine/data/raw/*.parquet
+!ai-engine/data/raw/.gitkeep
+
+# Processed 3D NumPy tensors (re-generated via preprocess.py)
+data/processed/*
+!data/processed/.gitkeep
+ai-engine/data/processed/*.npy
+ai-engine/data/processed/*.npz
+!ai-engine/data/processed/.gitkeep
+
+# Trained model binary weights & scalers (re-generated via train.py)
+# Note: Lightweight reports (*.md, *.png, threshold_config.json) are kept for documentation
+ai-engine/models/saved/*.pt
+ai-engine/models/saved/*.pth
+ai-engine/models/saved/*.onnx
+ai-engine/models/saved/*.joblib
+ai-engine/models/saved/*.pkl
+!ai-engine/models/saved/.gitkeep
+
+# PyTorch / TensorBoard / MLflow logs
+runs/
+mlruns/
+lightning_logs/
+
+# =============================================================================
+# 3. MULTI-CLOUD INFRASTRUCTURE (K8s, K3d, Ansible, Terraform)
+# =============================================================================
+# Kubernetes configs (never commit cluster credentials)
+kubeconfig*
+*.kubeconfig
+.kube/
+
+# Ansible retry & temporary files
+*.retry
+infra/ansible/*.retry
+infra/ansible/.cache/
+
+# Terraform / OpenTofu state & provider caches
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+
+# =============================================================================
+# 4. SECRETS, PKI & mTLS CERTIFICATES
+# =============================================================================
 *.key
 *.pem
+*.crt
+*.csr
+*.srl
+*.p12
+*.pfx
+certs/
 security/certs/*.crt
 security/certs/*.key
 security/certs/*.csr
 security/certs/*.srl
 
-# Temporary logs & test artifacts
+# =============================================================================
+# 5. LOGS, LOAD TESTING & BENCHMARK ARTIFACTS
+# =============================================================================
 *.log
+logs/
+tmp/
+temp/
 tests/locust/*.csv
+tests/locust/*.html
 tests/benchmarks/results/
-data/raw/*
-data/processed/*
-!data/raw/.gitkeep
-!data/processed/.gitkeep
+ai-engine/inference/*_summary.json
+ai-engine/inference/test_runs/
 
-# IDEs & OS files
+# =============================================================================
+# 6. IDEs, EDITORS & OS FILES
+# =============================================================================
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
 .DS_Store
 Thumbs.db
+
+# Scratch / Local notes
+test.md
+
+test.md

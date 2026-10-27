@@ -28,9 +28,10 @@
         --set tempo.storage.trace.s3.secret_key=StrongMinioPassword123
         --set tempo.storage.trace.s3.insecure=true
         --set tempo.compactor.compaction.compaction_cycle=1m
+        --set tempo.memBallastSizeMbs=0
         --set tempo.resources.requests.memory=128Mi
         --set tempo.resources.requests.cpu=50m
-        --set tempo.resources.limits.memory=256Mi
+        --set tempo.resources.limits.memory=512Mi
 
     - name: Create Loki Values file for MinIO S3 Storage
       copy:

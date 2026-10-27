@@ -1,0 +1,49 @@
+{
+  "raw_samples": 1440,
+  "features": [
+    "throughput_qps",
+    "latency_p95",
+    "app_cpu_pct",
+    "max_pod_cpu_pct",
+    "app_ram_pct",
+    "max_pod_ram_pct",
+    "jvm_threads_live",
+    "jvm_gc_pause_rate",
+    "webui_cpu_pct",
+    "webui_ram_pct",
+    "persistence_cpu_pct",
+    "persistence_ram_pct",
+    "image_cpu_pct",
+    "wan_network_io_kbs"
+  ],
+  "n_features": 14,
+  "window_size": 12,
+  "window_duration_seconds": 120,
+  "train_windows_shape": [
+    3327,
+    12,
+    14
+  ],
+  "val_windows_shape": [
+    288,
+    12,
+    14
+  ],
+  "scaler_path": "ai-engine/models/saved/robust_scaler.joblib",
+  "physical_scale_floors": {
+    "throughput_qps": 60.0,
+    "latency_p95": 0.045,
+    "app_cpu_pct": 12.0,
+    "max_pod_cpu_pct": 25.0,
+    "app_ram_pct": 12.0,
+    "max_pod_ram_pct": 15.0,
+    "jvm_threads_live": 6.0,
+    "jvm_gc_pause_rate": 0.025,
+    "webui_cpu_pct": 22.0,
+    "webui_ram_pct": 18.0,
+    "persistence_cpu_pct": 8.0,
+    "persistence_ram_pct": 18.0,
+    "image_cpu_pct": 10.0,
+    "wan_network_io_kbs": 70.0
+  }
+}
