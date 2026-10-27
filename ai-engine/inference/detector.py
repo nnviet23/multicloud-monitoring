@@ -413,10 +413,10 @@ def main():
                 guard_reasons.append("Cross-cloud WAN packet drop")
             if consecutive_probe_failures >= 2:
                 guard_triggered = True
-                guard_reasons.append(f"WebUI HTTP Probe Unreachable/Timeout ({consecutive_probe_failures}x consecutive)")
-            elif not probe_ok and qps > 2.0 and webui_qps < 0.2:
-                guard_triggered = True
-                guard_reasons.append("WebUI throughput collapsed to 0 while backend active (Hung WebUI)")
+                if not probe_ok and qps > 2.0 and webui_qps < 0.2:
+                    guard_reasons.append("WebUI throughput collapsed to 0 while backend active (Hung WebUI)")
+                else:
+                    guard_reasons.append(f"WebUI HTTP Probe Unreachable/Timeout ({consecutive_probe_failures}x consecutive)")
 
             verdict = "HEALTHY"
             top_causes = []
