@@ -1,6 +1,6 @@
 # Multi-Cloud Observability AI Engine: Anomaly Detection & RCA
 
-Module AI thông minh phục vụ giám sát độ tin cậy hệ thống đa đám mây (Multi-Cloud Reliability & Observability), phát hiện bất thường chuỗi thời gian đa biến (Multivariate Time-Series Anomaly Detection) và tự động khoanh vùng nguyên nhân gốc rễ (Root Cause Analysis - RCA) trên hệ thống phân tán microservices TeaStore trải rộng trên 3 cụm Kubernetes (`hub-k3d`, `aws-k3d`, `azure-k3d`).
+Module AI thông minh phục vụ giám sát độ tin cậy hệ thống đa đám mây (Multi-Cloud Reliability & Observability), phát hiện bất thường chuỗi thời gian đa biến (Multivariate Time-Series Anomaly Detection) và tự động khoanh vùng nguyên nhân gốc rễ (Root Cause Analysis - RCA) trên hệ thống phân tán microservices TeaStore trải rộng trên 4 cụm Kubernetes (`hub-k3d`, `aws-k3d`, `azure-k3d`, `gcp-k3d`).
 
 ---
 
@@ -8,12 +8,14 @@ Module AI thông minh phục vụ giám sát độ tin cậy hệ thống đa đ
 
 ```mermaid
 flowchart TD
-    subgraph MultiCloudClusters["3 Kubernetes Clusters (k3d)"]
-        AWS["AWS-k3d (WebUI, Image, Auth, Recommender)"]
-        AZURE["Azure-k3d (Persistence DB, MariaDB)"]
+    subgraph MultiCloudClusters["4 Kubernetes Clusters (k3d)"]
+        AWS["AWS-k3d (Edge Gateway, WebUI, Image, Registry)"]
+        AZURE["Azure-k3d (IAM Auth, Persistence, MariaDB)"]
+        GCP["GCP-k3d (AI/ML Recommender)"]
         HUB["Hub-k3d (OTel Gateway, Prometheus, Tempo, Loki)"]
-        AWS -->|Cross-Cloud Telemetry| HUB
-        AZURE -->|Cross-Cloud Telemetry| HUB
+        AWS -->|mTLS OTLP Telemetry| HUB
+        AZURE -->|mTLS OTLP Telemetry| HUB
+        GCP -->|mTLS OTLP Telemetry| HUB
     end
 
     subgraph DataIngestion["Telemetry Ingestion & Preprocessing"]
@@ -192,3 +194,4 @@ ai-engine/
     ├── train.py                    # Pipeline tự động huấn luyện & hiệu chuẩn ngưỡng
     └── training_report.md          # Báo cáo kỹ thuật chi tiết kết quả huấn luyện
 ```
+

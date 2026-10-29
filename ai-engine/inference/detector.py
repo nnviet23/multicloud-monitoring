@@ -60,9 +60,28 @@ METRIC_QUERIES = {
     "persistence_cpu_pct": 'clamp_max(avg(jvm_cpu_recent_utilization_ratio{service_name="teastore-persistence"} * jvm_cpu_count{service_name="teastore-persistence"}) * 100, 100) or vector(0)',
     "persistence_ram_pct": 'avg(sum by (service_name, host_name) (jvm_memory_used_bytes{service_name="teastore-persistence", jvm_memory_type="heap"}) / sum by (service_name, host_name) (jvm_memory_limit_bytes{service_name="teastore-persistence", jvm_memory_type="heap"})) * 100 or vector(0)',
     "image_cpu_pct": 'clamp_max(avg(jvm_cpu_recent_utilization_ratio{service_name="teastore-image"} * jvm_cpu_count{service_name="teastore-image"}) * 100, 100) or vector(0)',
+    "auth_cpu_pct": 'clamp_max(avg(jvm_cpu_recent_utilization_ratio{service_name="teastore-auth"} * jvm_cpu_count{service_name="teastore-auth"}) * 100, 100) or vector(0)',
+    "auth_ram_pct": 'avg(sum by (service_name, host_name) (jvm_memory_used_bytes{service_name="teastore-auth", jvm_memory_type="heap"}) / sum by (service_name, host_name) (jvm_memory_limit_bytes{service_name="teastore-auth", jvm_memory_type="heap"})) * 100 or vector(0)',
+    "recommender_cpu_pct": 'clamp_max(avg(jvm_cpu_recent_utilization_ratio{service_name="teastore-recommender"} * jvm_cpu_count{service_name="teastore-recommender"}) * 100, 100) or vector(0)',
+    "recommender_ram_pct": 'avg(sum by (service_name, host_name) (jvm_memory_used_bytes{service_name="teastore-recommender", jvm_memory_type="heap"}) / sum by (service_name, host_name) (jvm_memory_limit_bytes{service_name="teastore-recommender", jvm_memory_type="heap"})) * 100 or vector(0)',
     "wan_network_io_kbs": 'sum(rate(system_network_io_bytes_total[1m])) / 1024 or vector(0)',
     "wan_network_errors": 'sum(rate(system_network_errors_total[1m])) or vector(0)',
     "webui_qps": 'sum(rate(http_server_request_duration_seconds_count{service_name="teastore-webui"}[1m])) or vector(0)',
+}
+
+# Multi-Cloud Topology Mapping (AWS Storefront/Edge, Azure IAM/Data, GCP AI Recommender)
+FEATURE_CLOUD_MAP = {
+    "webui_cpu_pct": "AWS:teastore-webui",
+    "webui_ram_pct": "AWS:teastore-webui",
+    "image_cpu_pct": "AWS:teastore-image",
+    "persistence_cpu_pct": "Azure:teastore-persistence",
+    "persistence_ram_pct": "Azure:teastore-persistence",
+    "auth_cpu_pct": "Azure:teastore-auth",
+    "auth_ram_pct": "Azure:teastore-auth",
+    "recommender_cpu_pct": "GCP:teastore-recommender",
+    "recommender_ram_pct": "GCP:teastore-recommender",
+    "wan_network_io_kbs": "Multi-Cloud-WAN",
+    "wan_network_errors": "Multi-Cloud-WAN",
 }
 
 # Saturation metrics where being LOWER than median is healthy (not an error)
@@ -456,7 +475,18 @@ def main():
                     feature_ratios.append((fname, f_err, ratio))
 
                 feature_ratios.sort(key=lambda x: x[2], reverse=True)
-                top_causes = [f"{name} (lệch x{ratio:.1f})" for name, _, ratio in feature_ratios[:3] if ratio > 1.0]
+                top_causes = []
+                for name, _, ratio in feature_ratios[:3]:
+                    if ratio > 1.0:
+                        cloud_tag = FEATURE_CLOUD_MAP.get(name, "Global")
+                        top_causes.append(f"[{cloud_tag}] {name} (lệch x{ratio:.1f})")
+
+                # Auxiliary Multi-Cloud Spoke saturation checks (Azure IAM Auth & GCP AI Recommender)
+                if current_metrics.get("recommender_cpu_pct", 0.0) > 85.0:
+                    top_causes.append(f"[GCP:teastore-recommender] recommender_cpu_pct ({current_metrics['recommender_cpu_pct']:.1f}%)")
+                if current_metrics.get("auth_cpu_pct", 0.0) > 85.0:
+                    top_causes.append(f"[Azure:teastore-auth] auth_cpu_pct ({current_metrics['auth_cpu_pct']:.1f}%)")
+
                 if guard_triggered and not top_causes:
                     top_causes = list(guard_reasons)
 

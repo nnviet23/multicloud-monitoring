@@ -15,10 +15,12 @@ Multicloud Monitoring resolves cross-cloud telemetry fragmentation, high WAN egr
 
 ## Benchmark Application
 
-This system uses the open-source **[TeaStore](https://github.com/DescartesResearch/TeaStore)** microservices testbed as its primary validation workload:
-- Compute services (`WebUI`, `Auth`, `ImageProvider`, `Recommender`) run on Spoke 1 (`aws-k3d`).
-- Data persistence services (`Persistence`, `MySQL`) execute on Spoke 2 (`azure-k3d`).
-- Cross-cluster traffic is routed through emulated WAN bridges (`tc/netem`) with a 10 ms RTT delay and 0.1% packet loss.
+This system uses the open-source **[TeaStore](https://github.com/DescartesResearch/TeaStore)** microservices testbed partitioned across 3 functional cloud clusters and 1 central observability hub:
+- **Spoke 1 — AWS (`aws-k3d` — Edge Gateway, Storefront & Media)**: `nginx-api-gateway` (Edge Reverse Proxy & Rate Limiter), `teastore-webui`, `teastore-image`, and `teastore-registry`.
+- **Spoke 2 — Azure (`azure-k3d` — Enterprise IAM & Core Transactional Data)**: `teastore-auth` (Identity & Session Authentication), `teastore-persistence`, and `teastore-db` (MariaDB).
+- **Spoke 3 — GCP (`gcp-k3d` — AI / ML Recommendation Platform)**: `teastore-recommender` (Machine Learning Order & Product Recommendation Engine).
+- **Central Hub (`hub-k3d` — Unified Observability & AIOps Plane)**: `otel-collector-hub` (mTLS), `Prometheus`, `Tempo`, `Loki`, `MinIO`, `Grafana`, and the **AI Anomaly Detection & RCA Engine**.
+- Cross-cluster traffic is routed through emulated WAN bridges (`tc/netem` on `multi-cloud-wan`) with a 10 ms RTT delay and 0.1% packet loss.
 
 ## Getting Started
 

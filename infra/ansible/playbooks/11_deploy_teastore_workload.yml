@@ -1,36 +1,144 @@
 ---
-- name: Deploy Distributed TeaStore Benchmark Across Simulated Clouds (AWS Compute & Azure Data)
+- name: Deploy Distributed TeaStore Microservices Across 3 Simulated Clouds (AWS Edge/Storefront, Azure IAM/Data, GCP AI Recommender)
   hosts: localhost
   connection: local
   gather_facts: false
   vars:
     otel_agent_image: "ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java:2.10.0"
+    spoke_clusters:
+      - name: aws-k3d
+        context: k3d-aws-k3d
+      - name: azure-k3d
+        context: k3d-azure-k3d
+      - name: gcp-k3d
+        context: k3d-gcp-k3d
   tasks:
     - name: Pull OpenTelemetry Java Agent image on host
       command: docker pull {{ otel_agent_image }}
       changed_when: false
 
-    - name: Import OpenTelemetry Java Agent image into AWS and Azure Spoke clusters
-      command: k3d image import {{ otel_agent_image }} -c {{ item }}
-      loop:
-        - aws-k3d
-        - azure-k3d
+    - name: Import OpenTelemetry Java Agent image into AWS, Azure, and GCP Spoke clusters
+      command: k3d image import {{ otel_agent_image }} -c {{ item.name }}
+      loop: "{{ spoke_clusters }}"
       changed_when: false
 
-    # ---------------------------------------------------------
-    # 1. SETUP AZURE SPOKE (DATA SERVICES)
-    # ---------------------------------------------------------
-    - name: Ensure teastore namespace exists on Azure cluster
-      command: kubectl --context k3d-azure-k3d create namespace teastore --dry-run=client -o yaml
-      register: teastore_ns_azure
+    - name: Ensure teastore namespace exists on all Spoke clusters (AWS, Azure, GCP)
+      command: kubectl --context {{ item.context }} create namespace teastore --dry-run=client -o yaml
+      loop: "{{ spoke_clusters }}"
+      register: teastore_ns_spokes
       changed_when: false
 
-    - name: Apply teastore namespace on Azure
-      command: kubectl --context k3d-azure-k3d apply -f -
+    - name: Apply teastore namespace on all Spoke clusters
+      command: kubectl --context {{ item.item.context }} apply -f -
       args:
-        stdin: "{{ teastore_ns_azure.stdout }}"
+        stdin: "{{ item.stdout }}"
+      loop: "{{ teastore_ns_spokes.results }}"
+      changed_when: false
 
-    - name: Deploy TeaStore Data Services (DB + Persistence) on Azure Spoke
+    # ---------------------------------------------------------
+    # 1. SETUP AWS SPOKE (SERVICE REGISTRY, STOREFRONT, MEDIA & EDGE API GATEWAY)
+    # ---------------------------------------------------------
+    - name: Remove legacy Auth and Recommender resources from AWS Spoke (migrated to Azure and GCP)
+      command: >
+        kubectl --context k3d-aws-k3d -n teastore delete
+        deployment/teastore-auth service/teastore-auth
+        deployment/teastore-recommender service/teastore-recommender
+        --ignore-not-found=true
+      changed_when: false
+
+    - name: Deploy TeaStore Service Registry on AWS Spoke first
+      command: kubectl --context k3d-aws-k3d apply -f -
+      args:
+        stdin: |
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: teastore-registry
+            namespace: teastore
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: teastore-registry
+            template:
+              metadata:
+                labels:
+                  app: teastore-registry
+              spec:
+                initContainers:
+                - name: opentelemetry-auto-instrumentation
+                  image: {{ otel_agent_image }}
+                  imagePullPolicy: IfNotPresent
+                  command: ["cp", "/javaagent.jar", "/otel-auto-instrumentation/javaagent.jar"]
+                  volumeMounts:
+                  - name: otel-auto-instrumentation
+                    mountPath: /otel-auto-instrumentation
+                containers:
+                - name: teastore-registry
+                  image: descartesresearch/teastore-registry:latest
+                  ports:
+                  - containerPort: 8080
+                  env:
+                  - name: SERVICE_PORT
+                    value: "8080"
+                  - name: HOST_NAME
+                    value: "teastore-registry"
+                  - name: JAVA_OPTS
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: CATALINA_OPTS
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: JAVA_TOOL_OPTIONS
+                    value: "-javaagent:/otel-auto-instrumentation/javaagent.jar -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: OTEL_SERVICE_NAME
+                    value: "teastore-registry"
+                  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
+                  - name: OTEL_EXPORTER_OTLP_PROTOCOL
+                    value: "grpc"
+                  - name: OTEL_TRACES_EXPORTER
+                    value: "otlp"
+                  - name: OTEL_METRICS_EXPORTER
+                    value: "otlp"
+                  - name: OTEL_METRIC_EXPORT_INTERVAL
+                    value: "10000"
+                  - name: OTEL_LOGS_EXPORTER
+                    value: "otlp"
+                  volumeMounts:
+                  - name: otel-auto-instrumentation
+                    mountPath: /otel-auto-instrumentation
+                  resources:
+                    requests:
+                      cpu: 50m
+                      memory: 192Mi
+                    limits:
+                      cpu: 1000m
+                      memory: 640Mi
+                volumes:
+                - name: otel-auto-instrumentation
+                  emptyDir: {}
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: teastore-registry
+            namespace: teastore
+          spec:
+            type: NodePort
+            selector:
+              app: teastore-registry
+            ports:
+            - port: 8080
+              targetPort: 8080
+              nodePort: 31112
+
+    - name: Wait for TeaStore Registry on AWS Spoke to be ready before registering cross-cloud services
+      command: kubectl --context k3d-aws-k3d -n teastore rollout status deployment/teastore-registry --timeout=300s
+      changed_when: false
+
+    # ---------------------------------------------------------
+    # 2. SETUP AZURE SPOKE (ENTERPRISE IAM AUTH & CORE TRANSACTIONAL DATA)
+    # ---------------------------------------------------------
+    - name: Deploy TeaStore Identity (Auth) and Data Services (DB + Persistence) on Azure Spoke
       command: kubectl --context k3d-azure-k3d apply -f -
       args:
         stdin: |
@@ -165,107 +273,8 @@
             - port: 8080
               targetPort: 8080
               nodePort: 31111
-
-    # ---------------------------------------------------------
-    # 2. SETUP AWS SPOKE (COMPUTE & WEB SERVICES)
-    # ---------------------------------------------------------
-    - name: Ensure teastore namespace exists on AWS cluster
-      command: kubectl --context k3d-aws-k3d create namespace teastore --dry-run=client -o yaml
-      register: teastore_ns_aws
-      changed_when: false
-
-    - name: Apply teastore namespace on AWS
-      command: kubectl --context k3d-aws-k3d apply -f -
-      args:
-        stdin: "{{ teastore_ns_aws.stdout }}"
-
-    - name: Deploy TeaStore Compute Services on AWS Spoke
-      command: kubectl --context k3d-aws-k3d apply -f -
-      args:
-        stdin: |
-          # 1. REGISTRY SERVICE
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: teastore-registry
-            namespace: teastore
-          spec:
-            replicas: 1
-            selector:
-              matchLabels:
-                app: teastore-registry
-            template:
-              metadata:
-                labels:
-                  app: teastore-registry
-              spec:
-                initContainers:
-                - name: opentelemetry-auto-instrumentation
-                  image: {{ otel_agent_image }}
-                  imagePullPolicy: IfNotPresent
-                  command: ["cp", "/javaagent.jar", "/otel-auto-instrumentation/javaagent.jar"]
-                  volumeMounts:
-                  - name: otel-auto-instrumentation
-                    mountPath: /otel-auto-instrumentation
-                containers:
-                - name: teastore-registry
-                  image: descartesresearch/teastore-registry:latest
-                  ports:
-                  - containerPort: 8080
-                  env:
-                  - name: SERVICE_PORT
-                    value: "8080"
-                  - name: HOST_NAME
-                    value: "teastore-registry"
-                  - name: JAVA_OPTS
-                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
-                  - name: CATALINA_OPTS
-                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
-                  - name: JAVA_TOOL_OPTIONS
-                    value: "-javaagent:/otel-auto-instrumentation/javaagent.jar -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
-                  - name: OTEL_SERVICE_NAME
-                    value: "teastore-registry"
-                  - name: OTEL_EXPORTER_OTLP_ENDPOINT
-                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
-                  - name: OTEL_EXPORTER_OTLP_PROTOCOL
-                    value: "grpc"
-                  - name: OTEL_TRACES_EXPORTER
-                    value: "otlp"
-                  - name: OTEL_METRICS_EXPORTER
-                    value: "otlp"
-                  - name: OTEL_METRIC_EXPORT_INTERVAL
-                    value: "10000"
-                  - name: OTEL_LOGS_EXPORTER
-                    value: "otlp"
-                  volumeMounts:
-                  - name: otel-auto-instrumentation
-                    mountPath: /otel-auto-instrumentation
-                  resources:
-                    requests:
-                      cpu: 50m
-                      memory: 192Mi
-                    limits:
-                      cpu: 1000m
-                      memory: 640Mi
-                volumes:
-                - name: otel-auto-instrumentation
-                  emptyDir: {}
           ---
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: teastore-registry
-            namespace: teastore
-          spec:
-            type: NodePort
-            selector:
-              app: teastore-registry
-            ports:
-            - port: 8080
-              targetPort: 8080
-              nodePort: 31112
-          ---
-          # 2. AUTH SERVICE
+          # 3. ENTERPRISE IDENTITY & AUTH SERVICE (teastore-auth on Azure)
           apiVersion: apps/v1
           kind: Deployment
           metadata:
@@ -296,13 +305,13 @@
                   - containerPort: 8080
                   env:
                   - name: SERVICE_PORT
-                    value: "8080"
+                    value: "31114"
+                  - name: HOST_NAME
+                    value: "k3d-azure-k3d-server-0"
                   - name: REGISTRY_HOST
-                    value: "teastore-registry.teastore.svc.cluster.local"
+                    value: "k3d-aws-k3d-server-0"
                   - name: REGISTRY_PORT
-                    value: "8080"
-                  - name: USE_POD_IP
-                    value: "true"
+                    value: "31112"
                   - name: JAVA_OPTS
                     value: "-Xms96m -Xmx192m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
                   - name: CATALINA_OPTS
@@ -343,14 +352,114 @@
             name: teastore-auth
             namespace: teastore
           spec:
-            type: ClusterIP
+            type: NodePort
             selector:
               app: teastore-auth
             ports:
             - port: 8080
               targetPort: 8080
+              nodePort: 31114
+
+    # ---------------------------------------------------------
+    # 3. SETUP GCP SPOKE (AI / ML RECOMMENDATION ENGINE)
+    # ---------------------------------------------------------
+    - name: Deploy TeaStore AI/ML Recommendation Service (teastore-recommender) on GCP Spoke
+      command: kubectl --context k3d-gcp-k3d apply -f -
+      args:
+        stdin: |
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: teastore-recommender
+            namespace: teastore
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: teastore-recommender
+            template:
+              metadata:
+                labels:
+                  app: teastore-recommender
+              spec:
+                initContainers:
+                - name: opentelemetry-auto-instrumentation
+                  image: {{ otel_agent_image }}
+                  imagePullPolicy: IfNotPresent
+                  command: ["cp", "/javaagent.jar", "/otel-auto-instrumentation/javaagent.jar"]
+                  volumeMounts:
+                  - name: otel-auto-instrumentation
+                    mountPath: /otel-auto-instrumentation
+                containers:
+                - name: teastore-recommender
+                  image: descartesresearch/teastore-recommender:latest
+                  ports:
+                  - containerPort: 8080
+                  env:
+                  - name: SERVICE_PORT
+                    value: "31113"
+                  - name: HOST_NAME
+                    value: "k3d-gcp-k3d-server-0"
+                  - name: REGISTRY_HOST
+                    value: "k3d-aws-k3d-server-0"
+                  - name: REGISTRY_PORT
+                    value: "31112"
+                  - name: JAVA_OPTS
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: CATALINA_OPTS
+                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: JAVA_TOOL_OPTIONS
+                    value: "-javaagent:/otel-auto-instrumentation/javaagent.jar -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
+                  - name: OTEL_SERVICE_NAME
+                    value: "teastore-recommender"
+                  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
+                  - name: OTEL_EXPORTER_OTLP_PROTOCOL
+                    value: "grpc"
+                  - name: OTEL_TRACES_EXPORTER
+                    value: "otlp"
+                  - name: OTEL_METRICS_EXPORTER
+                    value: "otlp"
+                  - name: OTEL_METRIC_EXPORT_INTERVAL
+                    value: "10000"
+                  - name: OTEL_LOGS_EXPORTER
+                    value: "otlp"
+                  volumeMounts:
+                  - name: otel-auto-instrumentation
+                    mountPath: /otel-auto-instrumentation
+                  resources:
+                    requests:
+                      cpu: 50m
+                      memory: 192Mi
+                    limits:
+                      cpu: 1000m
+                      memory: 640Mi
+                volumes:
+                - name: otel-auto-instrumentation
+                  emptyDir: {}
           ---
-          # 3. IMAGE SERVICE
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: teastore-recommender
+            namespace: teastore
+          spec:
+            type: NodePort
+            selector:
+              app: teastore-recommender
+            ports:
+            - port: 8080
+              targetPort: 8080
+              nodePort: 31113
+
+    # ---------------------------------------------------------
+    # 4. SETUP AWS SPOKE STOREFRONT, MEDIA & NGINX EDGE API GATEWAY
+    # ---------------------------------------------------------
+    - name: Deploy TeaStore Storefront (Image, WebUI) and Nginx Edge API Gateway on AWS Spoke
+      command: kubectl --context k3d-aws-k3d apply -f -
+      args:
+        stdin: |
+          # 1. IMAGE & MEDIA CACHE SERVICE (teastore-image)
           apiVersion: apps/v1
           kind: Deployment
           metadata:
@@ -435,92 +544,7 @@
             - port: 8080
               targetPort: 8080
           ---
-          # 4. RECOMMENDER SERVICE
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: teastore-recommender
-            namespace: teastore
-          spec:
-            replicas: 1
-            selector:
-              matchLabels:
-                app: teastore-recommender
-            template:
-              metadata:
-                labels:
-                  app: teastore-recommender
-              spec:
-                initContainers:
-                - name: opentelemetry-auto-instrumentation
-                  image: {{ otel_agent_image }}
-                  imagePullPolicy: IfNotPresent
-                  command: ["cp", "/javaagent.jar", "/otel-auto-instrumentation/javaagent.jar"]
-                  volumeMounts:
-                  - name: otel-auto-instrumentation
-                    mountPath: /otel-auto-instrumentation
-                containers:
-                - name: teastore-recommender
-                  image: descartesresearch/teastore-recommender:latest
-                  ports:
-                  - containerPort: 8080
-                  env:
-                  - name: SERVICE_PORT
-                    value: "8080"
-                  - name: REGISTRY_HOST
-                    value: "teastore-registry.teastore.svc.cluster.local"
-                  - name: REGISTRY_PORT
-                    value: "8080"
-                  - name: USE_POD_IP
-                    value: "true"
-                  - name: JAVA_OPTS
-                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
-                  - name: CATALINA_OPTS
-                    value: "-Xms96m -Xmx160m -XX:+UseSerialGC -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
-                  - name: JAVA_TOOL_OPTIONS
-                    value: "-javaagent:/otel-auto-instrumentation/javaagent.jar -Dkieker.monitoring.skipDefaultAOPConfiguration=true"
-                  - name: OTEL_SERVICE_NAME
-                    value: "teastore-recommender"
-                  - name: OTEL_EXPORTER_OTLP_ENDPOINT
-                    value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
-                  - name: OTEL_EXPORTER_OTLP_PROTOCOL
-                    value: "grpc"
-                  - name: OTEL_TRACES_EXPORTER
-                    value: "otlp"
-                  - name: OTEL_METRICS_EXPORTER
-                    value: "otlp"
-                  - name: OTEL_METRIC_EXPORT_INTERVAL
-                    value: "10000"
-                  - name: OTEL_LOGS_EXPORTER
-                    value: "otlp"
-                  volumeMounts:
-                  - name: otel-auto-instrumentation
-                    mountPath: /otel-auto-instrumentation
-                  resources:
-                    requests:
-                      cpu: 50m
-                      memory: 192Mi
-                    limits:
-                      cpu: 1000m
-                      memory: 640Mi
-                volumes:
-                - name: otel-auto-instrumentation
-                  emptyDir: {}
-          ---
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: teastore-recommender
-            namespace: teastore
-          spec:
-            type: ClusterIP
-            selector:
-              app: teastore-recommender
-            ports:
-            - port: 8080
-              targetPort: 8080
-          ---
-          # 5. WEBUI SERVICE
+          # 2. WEB STOREFRONT SERVICE (teastore-webui)
           apiVersion: apps/v1
           kind: Deployment
           metadata:
@@ -598,30 +622,147 @@
             name: teastore-webui
             namespace: teastore
           spec:
-            type: LoadBalancer
+            type: ClusterIP
             selector:
               app: teastore-webui
             ports:
             - port: 8080
               targetPort: 8080
+          ---
+          # 3. EDGE API GATEWAY / REVERSE PROXY (nginx-api-gateway)
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: nginx-api-gateway-config
+            namespace: teastore
+          data:
+            nginx.conf: |
+              worker_processes auto;
+              events {
+                worker_connections 1024;
+              }
+              http {
+                include       /etc/nginx/mime.types;
+                default_type  application/octet-stream;
+                sendfile      on;
+                keepalive_timeout 65;
 
-    - name: Wait for TeaStore services on Azure Spoke to be ready
-      command: kubectl --context k3d-azure-k3d -n teastore rollout status deployment/teastore-persistence --timeout=680s
+                # Edge Rate Limiting & Burst Protection
+                limit_req_zone $binary_remote_addr zone=edge_rate_limit:10m rate=120r/s;
+
+                upstream teastore_webui_backend {
+                  server teastore-webui.teastore.svc.cluster.local:8080 max_fails=3 fail_timeout=5s;
+                  keepalive 32;
+                }
+
+                server {
+                  listen 8080;
+                  server_name _;
+
+                  location = /gateway-health {
+                    access_log off;
+                    default_type application/json;
+                    return 200 '{"status":"healthy","gateway":"aws-nginx-api-gateway","cloud":"aws"}';
+                  }
+
+                  location / {
+                    limit_req zone=edge_rate_limit burst=250 nodelay;
+                    proxy_http_version 1.1;
+                    proxy_set_header Connection "";
+                    proxy_set_header Host $http_host;
+                    proxy_set_header X-Real-IP $remote_addr;
+                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                    proxy_set_header X-Edge-Gateway "aws-nginx-api-gateway";
+                    proxy_set_header X-Cloud-Provider "aws";
+                    proxy_connect_timeout 5s;
+                    proxy_send_timeout 30s;
+                    proxy_read_timeout 30s;
+                    proxy_next_upstream error timeout http_502 http_503;
+                    proxy_pass http://teastore_webui_backend;
+                  }
+                }
+              }
+          ---
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: nginx-api-gateway
+            namespace: teastore
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: nginx-api-gateway
+            template:
+              metadata:
+                labels:
+                  app: nginx-api-gateway
+              spec:
+                containers:
+                - name: nginx-api-gateway
+                  image: nginx:1.27-alpine
+                  imagePullPolicy: IfNotPresent
+                  ports:
+                  - containerPort: 8080
+                  volumeMounts:
+                  - name: nginx-config
+                    mountPath: /etc/nginx/nginx.conf
+                    subPath: nginx.conf
+                  resources:
+                    requests:
+                      cpu: 20m
+                      memory: 24Mi
+                    limits:
+                      cpu: 300m
+                      memory: 96Mi
+                volumes:
+                - name: nginx-config
+                  configMap:
+                    name: nginx-api-gateway-config
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: nginx-api-gateway
+            namespace: teastore
+          spec:
+            type: LoadBalancer
+            selector:
+              app: nginx-api-gateway
+            ports:
+            - port: 8080
+              targetPort: 8080
+
+    - name: Wait for TeaStore Data & Identity services on Azure Spoke to be ready
+      command: kubectl --context k3d-azure-k3d -n teastore rollout status deployment/{{ item }} --timeout=680s
+      loop:
+        - teastore-db
+        - teastore-persistence
+        - teastore-auth
       changed_when: false
 
-    - name: Wait for TeaStore services on AWS Spoke to be ready
-      command: kubectl --context k3d-aws-k3d -n teastore rollout status deployment/teastore-webui --timeout=680s
+    - name: Wait for TeaStore AI Recommender service on GCP Spoke to be ready
+      command: kubectl --context k3d-gcp-k3d -n teastore rollout status deployment/teastore-recommender --timeout=680s
       changed_when: false
 
-    - name: Generate initial HTTP traffic to TeaStore WebUI so Traces & Traced Logs appear immediately
+    - name: Wait for TeaStore Storefront & Edge API Gateway on AWS Spoke to be ready
+      command: kubectl --context k3d-aws-k3d -n teastore rollout status deployment/{{ item }} --timeout=680s
+      loop:
+        - teastore-image
+        - teastore-webui
+        - nginx-api-gateway
+      changed_when: false
+
+    - name: Generate initial HTTP traffic through AWS Edge API Gateway so Traces & Logs span AWS, Azure, and GCP
       shell: |
         for i in 1 2 3 4 5; do
+          curl -s -o /dev/null http://localhost:8080/gateway-health || true
           curl -s -o /dev/null http://localhost:8080/tools.descartes.teastore.webui/ || true
           curl -s -o /dev/null http://localhost:8080/tools.descartes.teastore.webui/status || true
           sleep 2
         done
       changed_when: false
 
-    - name: Confirm TeaStore deployment success
+    - name: Confirm Multi-Cloud TeaStore deployment success
       debug:
-        msg: "TeaStore microservices distributed across AWS & Azure with OTel Java Agent enabled successfully!"
+        msg: "TeaStore microservices distributed across AWS (Edge Gateway, WebUI, Image, Registry), Azure (Auth, Persistence, DB), and GCP (AI Recommender) with OTel Java Agent enabled successfully!"

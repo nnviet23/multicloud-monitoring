@@ -17,9 +17,14 @@
       - name: aws-k3d
         port_mappings:
           - "8080:8080@loadbalancer"
+          - "31112:31112@loadbalancer"
       - name: azure-k3d
         port_mappings:
           - "31111:31111@loadbalancer"
+          - "31114:31114@loadbalancer"
+      - name: gcp-k3d
+        port_mappings:
+          - "31113:31113@loadbalancer"
   tasks:
     - name: Create Docker bridge network for inter-cluster traffic
       command: >
@@ -52,6 +57,33 @@
         {% endfor %}
       loop: "{{ clusters }}"
       when: item.name not in existing_clusters
+
+    - name: Ensure reliable external DNS resolvers inside k3d server nodes (Cloudflare WARP / stub resolver compatibility)
+      shell: |
+        for node in k3d-hub-k3d-server-0 k3d-aws-k3d-server-0 k3d-azure-k3d-server-0 k3d-gcp-k3d-server-0; do
+          docker exec "$node" sh -c 'printf "nameserver 8.8.8.8\nnameserver 1.1.1.1\nnameserver 172.28.0.1\noptions ndots:0\n" > /etc/resolv.conf'
+        done
+      changed_when: false
+
+    - name: Synchronize full Multi-Cloud WAN DNS records into CoreDNS NodeHosts across all clusters
+      shell: |
+        set -e
+        NODE_HOSTS="172.28.0.1 host.k3d.internal"
+        while read -r line; do
+          if [ -n "$line" ]; then
+            NODE_HOSTS=$(printf "%s\n%s" "$NODE_HOSTS" "$line")
+          fi
+        done <<EOF
+        $(docker network inspect {{ network_name }} -f '{{ '{{' }}range .Containers{{ '}}' }}{{ '{{' }}.IPv4Address{{ '}}' }} {{ '{{' }}.Name{{ '}}' }}{{ '{{' }}"\n"{{ '}}' }}{{ '{{' }}end{{ '}}' }}' | sed 's|/16||g')
+        EOF
+        PATCH_JSON=$(python3 -c 'import json, sys; print(json.dumps({"data": {"NodeHosts": sys.stdin.read()}}))' <<< "$NODE_HOSTS")
+        for ctx in k3d-hub-k3d k3d-aws-k3d k3d-azure-k3d k3d-gcp-k3d; do
+          kubectl --context "$ctx" -n kube-system patch configmap coredns --type merge -p "$PATCH_JSON"
+          kubectl --context "$ctx" -n kube-system rollout restart deployment/coredns
+        done
+      args:
+        executable: /bin/bash
+      changed_when: false
 
     - name: List active clusters
       command: k3d cluster list

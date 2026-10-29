@@ -11,6 +11,9 @@
       - name: "azure"
         context: "k3d-azure-k3d"
         spoke_id: "azure-k3d"
+      - name: "gcp"
+        context: "k3d-gcp-k3d"
+        spoke_id: "gcp-k3d"
   tasks:
     - name: Apply Spoke OpenTelemetry Collector ConfigMap
       command: kubectl --context {{ item.context }} apply -f -

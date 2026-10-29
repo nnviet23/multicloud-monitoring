@@ -8,3 +8,4 @@ Các báo cáo thử nghiệm liên quan:
 * Báo cáo phân tích dữ liệu vi mô (EDA): [`ai-engine/data/processed/eda_report.md`](../../ai-engine/data/processed/eda_report.md)
 * Báo cáo kết quả huấn luyện mô hình: [`ai-engine/training/training_report.md`](../../ai-engine/training/training_report.md)
 * Biểu đồ đường cong hội tụ: [`ai-engine/data/processed/training_loss.png`](../../ai-engine/data/processed/training_loss.png)
+

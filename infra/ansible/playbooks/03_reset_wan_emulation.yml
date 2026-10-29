@@ -7,6 +7,7 @@
     spoke_containers:
       - k3d-aws-k3d-server-0
       - k3d-azure-k3d-server-0
+      - k3d-gcp-k3d-server-0
   tasks:
     - name: Remove tc netem queue discipline
       command: >

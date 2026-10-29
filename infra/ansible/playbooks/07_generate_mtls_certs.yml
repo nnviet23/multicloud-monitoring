@@ -8,6 +8,7 @@
     spoke_contexts:
       - k3d-aws-k3d
       - k3d-azure-k3d
+      - k3d-gcp-k3d
   tasks:
     - name: Ensure local certs directory exists
       file:
