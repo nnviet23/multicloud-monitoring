@@ -1,91 +1,80 @@
 {
-  "recommended_threshold_p99": 0.35,
-  "gru_val_mse": 0.059150975197553635,
-  "tcn_val_mse": 8.768883708398789e-05,
+  "architecture": "Universal Per-Entity GRU + TCN Autoencoder Ensemble (V3)",
+  "num_features": 8,
+  "features": [
+    "qps",
+    "server_latency_p95",
+    "client_latency_p95",
+    "error_rate_5xx",
+    "max_pod_cpu_pct",
+    "max_pod_ram_pct",
+    "ram_floor_2m_pct",
+    "gc_pause_rate"
+  ],
   "error_distribution": {
-    "mean": 0.029619328677654266,
-    "std": 0.006448001600801945,
-    "p95": 0.04056953638792038,
-    "p99": 0.044559136033058167,
-    "p99_5": 0.04569515585899353,
-    "max": 0.047569043934345245
+    "mean": 0.005842,
+    "std": 0.006538,
+    "p95": 0.015647,
+    "p99": 0.038354,
+    "p99_5": 0.042219,
+    "max": 0.043321
   },
-  "feature_rca_baselines": {
-    "throughput_qps": {
-      "normal_mean_error": 0.007085645571351051,
-      "normal_std_error": 0.00537753663957119,
-      "rca_trigger_threshold": 0.25
-    },
-    "latency_p95": {
-      "normal_mean_error": 0.010733161121606827,
-      "normal_std_error": 0.03212946653366089,
-      "rca_trigger_threshold": 0.26311546564102173
-    },
-    "app_cpu_pct": {
-      "normal_mean_error": 0.000699549971614033,
-      "normal_std_error": 0.0003766419249586761,
-      "rca_trigger_threshold": 0.25
-    },
-    "max_pod_cpu_pct": {
-      "normal_mean_error": 0.001811969792470336,
-      "normal_std_error": 0.0008877067593857646,
-      "rca_trigger_threshold": 0.25
-    },
-    "app_ram_pct": {
-      "normal_mean_error": 0.0360274501144886,
-      "normal_std_error": 0.015084877610206604,
-      "rca_trigger_threshold": 0.25
-    },
-    "max_pod_ram_pct": {
-      "normal_mean_error": 0.08000914007425308,
-      "normal_std_error": 0.03596678748726845,
-      "rca_trigger_threshold": 0.25867825746536255
-    },
-    "jvm_threads_live": {
-      "normal_mean_error": 0.0033383455593138933,
-      "normal_std_error": 0.0024290219880640507,
-      "rca_trigger_threshold": 0.25
-    },
-    "jvm_gc_pause_rate": {
-      "normal_mean_error": 0.004987345077097416,
-      "normal_std_error": 0.0028735168743878603,
-      "rca_trigger_threshold": 0.25
-    },
-    "webui_cpu_pct": {
-      "normal_mean_error": 0.0019680853001773357,
-      "normal_std_error": 0.0008658929727971554,
-      "rca_trigger_threshold": 0.25
-    },
-    "webui_ram_pct": {
-      "normal_mean_error": 0.1433822065591812,
-      "normal_std_error": 0.04736322537064552,
-      "rca_trigger_threshold": 0.40108591318130493
-    },
-    "persistence_cpu_pct": {
-      "normal_mean_error": 0.00249229883775115,
-      "normal_std_error": 0.0014393347082659602,
-      "rca_trigger_threshold": 0.25
-    },
-    "persistence_ram_pct": {
-      "normal_mean_error": 0.06449088454246521,
-      "normal_std_error": 0.025236167013645172,
-      "rca_trigger_threshold": 0.25
-    },
-    "image_cpu_pct": {
-      "normal_mean_error": 0.0010134638287127018,
-      "normal_std_error": 0.0008149364730343223,
-      "rca_trigger_threshold": 0.25
-    },
-    "wan_network_io_kbs": {
-      "normal_mean_error": 0.056631073355674744,
-      "normal_std_error": 0.03485545888543129,
-      "rca_trigger_threshold": 0.25
-    }
-  },
+  "recommended_threshold_p99": 0.35,
   "dual_sliding_window": {
     "short_window": 3,
     "long_window": 18,
-    "likelihood_alert_threshold": 0.995,
     "min_consecutive_breaches": 2
-  }
+  },
+  "feature_rca_baselines": {
+    "qps": {
+      "mean_sq_err": 0.004112,
+      "p95_sq_err": 0.01241,
+      "p99_sq_err": 0.02824,
+      "rca_trigger_threshold": 0.4
+    },
+    "server_latency_p95": {
+      "mean_sq_err": 0.007083,
+      "p95_sq_err": 0.02562,
+      "p99_sq_err": 0.111476,
+      "rca_trigger_threshold": 0.4
+    },
+    "client_latency_p95": {
+      "mean_sq_err": 6.4e-05,
+      "p95_sq_err": 0.000203,
+      "p99_sq_err": 0.000339,
+      "rca_trigger_threshold": 0.4
+    },
+    "error_rate_5xx": {
+      "mean_sq_err": 1.4e-05,
+      "p95_sq_err": 3.7e-05,
+      "p99_sq_err": 5e-05,
+      "rca_trigger_threshold": 0.4
+    },
+    "max_pod_cpu_pct": {
+      "mean_sq_err": 0.002254,
+      "p95_sq_err": 0.00738,
+      "p99_sq_err": 0.011608,
+      "rca_trigger_threshold": 0.4
+    },
+    "max_pod_ram_pct": {
+      "mean_sq_err": 0.020633,
+      "p95_sq_err": 0.046328,
+      "p99_sq_err": 0.105273,
+      "rca_trigger_threshold": 0.4
+    },
+    "ram_floor_2m_pct": {
+      "mean_sq_err": 0.011176,
+      "p95_sq_err": 0.03537,
+      "p99_sq_err": 0.055934,
+      "rca_trigger_threshold": 0.4
+    },
+    "gc_pause_rate": {
+      "mean_sq_err": 0.001398,
+      "p95_sq_err": 0.005848,
+      "p99_sq_err": 0.013158,
+      "rca_trigger_threshold": 0.4
+    }
+  },
+  "isolation_forest_val_normal_pct": 100.0,
+  "training_duration_sec": 100.72
 }

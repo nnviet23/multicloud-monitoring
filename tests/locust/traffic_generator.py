@@ -149,10 +149,10 @@ def user_worker(user_id, base_url, start_time, duration, min_u, max_u, stats, er
             page = random.randint(1, 3)
             status_code, _ = client.request("/category", {"page": page, "category": cat})
         elif action == "product":
-            pid = random.randint(1, 300)
+            pid = random.randint(7, 106)
             status_code, _ = client.request("/product", {"id": pid})
         elif action == "cart_add":
-            pid = random.randint(1, 300)
+            pid = random.randint(7, 106)
             status_code, _ = client.request("/cartAction", {"addToCart": "", "productid": pid}, method="POST")
         elif action == "cart_view":
             status_code, _ = client.request("/cart")

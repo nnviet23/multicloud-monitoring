@@ -59,7 +59,7 @@ class TemporalBlock(nn.Module):
         return self.act_out(out + res)
 
 class TCNAutoencoder(nn.Module):
-    def __init__(self, input_dim=14, hidden_dim=64, latent_dim=16, kernel_size=3, dropout=0.1):
+    def __init__(self, input_dim=8, hidden_dim=64, latent_dim=16, kernel_size=3, dropout=0.1):
         super().__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim

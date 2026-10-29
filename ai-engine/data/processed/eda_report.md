@@ -1,57 +1,21 @@
-# Multi-Cloud Observability Baseline Telemetry Profile (4-Hour Normal Dataset)
+# Multi-Cloud Per-Entity Telemetry EDA Report (V3)
 
-> **Báo cáo phân tích dữ liệu khám phá (EDA - Exploratory Data Analysis)**
-> **Thời gian tạo:** 2026-10-25 20:44:59
+- **Dataset File**: `ai-engine/data/raw/multicloud_entity_baseline.csv`
+- **Total Sampling Cycles**: `111`
+- **Total Entity Rows**: `666`
+- **Discovered Multi-Cloud Entities (6)**: `aws:teastore-image`, `aws:teastore-registry`, `aws:teastore-webui`, `azure:teastore-auth`, `azure:teastore-persistence`, `gcp:teastore-recommender`
 
-## 1. Tổng quan Tập dữ liệu
+## Per-Entity Baseline Statistics (Median / IQR / P95 / P99)
 
-- **Tổng số mẫu**: `1,440` mẫu (Chính xác 4.0 giờ).
-- **Thời gian bắt đầu**: `2026-10-24T08:09:40Z`
-- **Thời gian kết thúc**: `2026-10-24T12:09:30Z`
-- **Chu kỳ lấy mẫu**: `10 giây/mẫu` (Độ liên tục: 100%, không bị gián đoạn hay mất gói).
-- **Workload**: TeaStore Microservices trải rộng trên 2 cụm Kubernetes (`aws-k3d` cho Web/Logic và `azure-k3d` cho Database/Persistence) qua cầu mạng WAN mô phỏng (`10ms` RTT).
-
-## 2. Phân tích Tiến trình 4 Giai đoạn Phụ tải (Hourly Progression)
-
-| Giai đoạn | QPS Trung bình (Min - Max) | Latency P95 TB (Max) | WebUI CPU % (Max) | Cluster RAM % (Max) |
-| :--- | :--- | :--- | :--- | :--- |
-| **Hour 1 (Warmup)** | 84.1 (5.7 - 141.6) | 76.1ms (87.0ms) | 7.3% (55.4%) | 59.9% (73.8%) |
-| **Hour 2 (Normal)** | 142.8 (76.8 - 209.6) | 80.8ms (97.4ms) | 9.3% (16.7%) | 59.7% (70.0%) |
-| **Hour 3 (Peak)** | 216.9 (150.8 - 260.0) | 82.0ms (90.3ms) | 11.8% (16.5%) | 60.0% (72.4%) |
-| **Hour 4 (Cooldown)** | 144.1 (50.3 - 252.0) | 80.3ms (85.8ms) | 7.9% (15.8%) | 60.6% (73.6%) |
-
-## 3. Ma trận Tương quan Giữa các Chỉ số Vàng (Pearson Correlation)
-
-| Chỉ số | Throughput QPS | Latency P95 | WebUI CPU % | Image CPU % | Persistence CPU % | WAN Traffic |
+| Entity (`cloud:service`) | QPS Med (P95) | Server Lat P95 Med (P99) | Client Lat P95 Med (P99) | CPU% Med (P95) | RAM% Med (P95) | 2-Min RAM Floor P99 |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **throughput_qps** | 1.00 | 0.40 | 0.52 | 0.71 | 0.84 | 0.92 |
-| **latency_p95** | 0.40 | 1.00 | -0.05 | 0.26 | 0.35 | 0.38 |
-| **webui_cpu_pct** | 0.52 | -0.05 | 1.00 | 0.61 | 0.63 | 0.47 |
-| **image_cpu_pct** | 0.71 | 0.26 | 0.61 | 1.00 | 0.78 | 0.65 |
-| **persistence_cpu_pct** | 0.84 | 0.35 | 0.63 | 0.78 | 1.00 | 0.76 |
-| **wan_network_io_kbs** | 0.92 | 0.38 | 0.47 | 0.65 | 0.76 | 1.00 |
+| `aws:teastore-image` | 27.8 (41.9) | 4.8ms (4.9ms) | 4.8ms (4.9ms) | 4.6% (13.1%) | 70.6% (83.3%) | 72.1% |
+| `aws:teastore-registry` | 10.6 (13.9) | 4.8ms (4.8ms) | 0.0ms (0.0ms) | 0.7% (1.5%) | 27.9% (35.7%) | 25.9% |
+| `aws:teastore-webui` | 21.0 (31.2) | 357.0ms (426.2ms) | 4.8ms (4.8ms) | 11.8% (17.2%) | 69.7% (91.3%) | 69.1% |
+| `azure:teastore-auth` | 20.1 (29.7) | 4.8ms (4.8ms) | 24.6ms (25.0ms) | 2.5% (4.8%) | 54.6% (70.6%) | 53.5% |
+| `azure:teastore-persistence` | 62.1 (91.2) | 4.8ms (4.8ms) | 24.2ms (25.0ms) | 6.3% (11.6%) | 56.8% (73.9%) | 63.1% |
+| `gcp:teastore-recommender` | 4.4 (6.8) | 4.8ms (4.9ms) | 24.5ms (24.9ms) | 3.3% (8.0%) | 65.5% (86.4%) | 62.9% |
 
-## 4. Đề xuất Kiến trúc Đặc trưng (Feature Engineering) cho Mô hình AI
+## Visual Summary
 
-### A. Nhóm 14 Đặc trưng Cốt lõi (Input Vector $X \in \mathbb{R}^{14}$)
-1. `throughput_qps`: Lưu lượng truy cập hệ thống.
-2. `latency_p95`: Độ trễ phản hồi mức 95th percentile.
-3. `app_cpu_pct`: Mức sử dụng CPU trung bình toàn cụm.
-4. `max_pod_cpu_pct`: Điểm nóng CPU Pod nặng nhất (phát hiện nghẽn cổ chai).
-5. `app_ram_pct`: Mức tiêu thụ Heap RAM trung bình toàn cụm.
-6. `max_pod_ram_pct`: Điểm nóng RAM Pod cao nhất.
-7. `jvm_threads_live`: Số luồng thực thi trong JVM.
-8. `jvm_gc_pause_rate`: Thời gian dừng thu gom rác Garbage Collection.
-9. `webui_cpu_pct`: CPU của Frontend WebUI trên AWS.
-10. `webui_ram_pct`: RAM của Frontend WebUI trên AWS.
-11. `persistence_cpu_pct`: CPU của tầng Persistence/Database trên Azure.
-12. `persistence_ram_pct`: RAM của tầng Persistence/Database trên Azure.
-13. `image_cpu_pct`: CPU của dịch vụ xử lý hình ảnh sản phẩm.
-14. `wan_network_io_kbs`: Lưu lượng truyền tải qua cầu nối WAN giữa AWS và Azure.
-
-### B. Nhóm Chỉ số Canh gác (Guards / Post-check)
-- `error_rate_5xx` và `wan_network_errors`: Luôn bằng 0 trong tập bình thường. Sẽ được dùng trong quy tắc kết hợp (Rule-based post-check) khi có lỗi mạng hoặc sập container.
-
-### C. Nhóm Loại bỏ để Chống Đa cộng tuyến (Multicollinearity)
-- `latency_p50`, `latency_p99`: Loại bỏ vì tương quan quá cao (>0.95) với `latency_p95`.
-- `registry_cpu_pct`, `registry_ram_pct`: Loại bỏ vì Service Registry hầu như không đổi tải.
+![Multi-Cloud Per-Entity EDA Summary](eda_summary.png)

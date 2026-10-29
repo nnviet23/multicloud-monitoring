@@ -24,7 +24,7 @@ import torch
 import torch.nn as nn
 
 class GRUEncoder(nn.Module):
-    def __init__(self, input_dim=14, hidden_dim=64, latent_dim=16, num_layers=2, dropout=0.1):
+    def __init__(self, input_dim=8, hidden_dim=64, latent_dim=16, num_layers=2, dropout=0.1):
         super().__init__()
         self.num_layers = num_layers
         self.hidden_dim = hidden_dim
@@ -46,7 +46,7 @@ class GRUEncoder(nn.Module):
         return z
 
 class GRUDecoder(nn.Module):
-    def __init__(self, latent_dim=16, hidden_dim=64, output_dim=14, num_layers=2, dropout=0.1):
+    def __init__(self, latent_dim=16, hidden_dim=64, output_dim=8, num_layers=2, dropout=0.1):
         super().__init__()
         self.num_layers = num_layers
         self.hidden_dim = hidden_dim
@@ -70,7 +70,7 @@ class GRUDecoder(nn.Module):
         return reconstruction
 
 class GRUAutoencoder(nn.Module):
-    def __init__(self, input_dim=14, hidden_dim=64, latent_dim=16, num_layers=2, dropout=0.1):
+    def __init__(self, input_dim=8, hidden_dim=64, latent_dim=16, num_layers=2, dropout=0.1):
         super().__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim

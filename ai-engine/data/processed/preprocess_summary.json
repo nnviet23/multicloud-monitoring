@@ -1,49 +1,56 @@
 {
-  "raw_samples": 1440,
+  "architecture": "Per-Entity Z-Score Standardized Universal Autoencoder (V3)",
+  "total_raw_entity_rows": 666,
+  "discovered_entities": [
+    "aws:teastore-image",
+    "aws:teastore-registry",
+    "aws:teastore-webui",
+    "azure:teastore-auth",
+    "azure:teastore-persistence",
+    "gcp:teastore-recommender"
+  ],
+  "entity_window_counts": {
+    "aws:teastore-image": 100,
+    "aws:teastore-registry": 100,
+    "aws:teastore-webui": 100,
+    "azure:teastore-auth": 100,
+    "azure:teastore-persistence": 100,
+    "gcp:teastore-recommender": 100
+  },
+  "num_features": 8,
   "features": [
-    "throughput_qps",
-    "latency_p95",
-    "app_cpu_pct",
+    "qps",
+    "server_latency_p95",
+    "client_latency_p95",
+    "error_rate_5xx",
     "max_pod_cpu_pct",
-    "app_ram_pct",
     "max_pod_ram_pct",
-    "jvm_threads_live",
-    "jvm_gc_pause_rate",
-    "webui_cpu_pct",
-    "webui_ram_pct",
-    "persistence_cpu_pct",
-    "persistence_ram_pct",
-    "image_cpu_pct",
-    "wan_network_io_kbs"
+    "ram_floor_2m_pct",
+    "gc_pause_rate"
   ],
-  "n_features": 14,
   "window_size": 12,
-  "window_duration_seconds": 120,
-  "train_windows_shape": [
-    3327,
+  "stride": 1,
+  "base_train_windows": 480,
+  "augmented_train_windows": 2880,
+  "val_windows": 120,
+  "train_shape": [
+    2880,
     12,
-    14
+    8
   ],
-  "val_windows_shape": [
-    288,
+  "val_shape": [
+    120,
     12,
-    14
+    8
   ],
-  "scaler_path": "ai-engine/models/saved/robust_scaler.joblib",
   "physical_scale_floors": {
-    "throughput_qps": 60.0,
-    "latency_p95": 0.045,
-    "app_cpu_pct": 12.0,
-    "max_pod_cpu_pct": 25.0,
-    "app_ram_pct": 12.0,
-    "max_pod_ram_pct": 15.0,
-    "jvm_threads_live": 6.0,
-    "jvm_gc_pause_rate": 0.025,
-    "webui_cpu_pct": 22.0,
-    "webui_ram_pct": 18.0,
-    "persistence_cpu_pct": 8.0,
-    "persistence_ram_pct": 18.0,
-    "image_cpu_pct": 10.0,
-    "wan_network_io_kbs": 70.0
+    "qps": 5.0,
+    "server_latency_p95": 0.035,
+    "client_latency_p95": 0.035,
+    "error_rate_5xx": 0.1,
+    "max_pod_cpu_pct": 12.0,
+    "max_pod_ram_pct": 12.0,
+    "ram_floor_2m_pct": 10.0,
+    "gc_pause_rate": 0.015
   }
 }

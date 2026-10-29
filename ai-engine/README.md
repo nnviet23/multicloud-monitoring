@@ -1,10 +1,10 @@
-# Multi-Cloud Observability AI Engine: Anomaly Detection & RCA
+# Multi-Cloud Observability AI Engine V3: Per-Entity Anomaly Detection & Cross-Cloud Trace RCA
 
-Module AI thông minh phục vụ giám sát độ tin cậy hệ thống đa đám mây (Multi-Cloud Reliability & Observability), phát hiện bất thường chuỗi thời gian đa biến (Multivariate Time-Series Anomaly Detection) và tự động khoanh vùng nguyên nhân gốc rễ (Root Cause Analysis - RCA) trên hệ thống phân tán microservices TeaStore trải rộng trên 4 cụm Kubernetes (`hub-k3d`, `aws-k3d`, `azure-k3d`, `gcp-k3d`).
+Module AI thế hệ V3 phục vụ giám sát độ tin cậy đa đám mây (Multi-Cloud Reliability & Observability), phát hiện bất thường bất biến theo quy mô thực thể (**Per-Entity Z-Score Standardized Universal Autoencoders**) và tự động khoanh vùng nguyên nhân gốc rễ xuyên đám mây (**Tempo Distributed Trace Span Decomposition RCA**) trên hệ thống phân tán microservices TeaStore trải rộng trên 4 cụm Kubernetes (`hub-k3d`, `aws-k3d`, `azure-k3d`, `gcp-k3d`).
 
 ---
 
-## 1. Kiến trúc Tổng thể (System Architecture)
+## 1. Kiến trúc Tổng thể (AI Engine V3 Architecture)
 
 ```mermaid
 flowchart TD
@@ -13,185 +13,162 @@ flowchart TD
         AZURE["Azure-k3d (IAM Auth, Persistence, MariaDB)"]
         GCP["GCP-k3d (AI/ML Recommender)"]
         HUB["Hub-k3d (OTel Gateway, Prometheus, Tempo, Loki)"]
-        AWS -->|mTLS OTLP Telemetry| HUB
-        AZURE -->|mTLS OTLP Telemetry| HUB
-        GCP -->|mTLS OTLP Telemetry| HUB
+        AWS -->|mTLS OTLP Metrics/Traces/Logs| HUB
+        AZURE -->|mTLS OTLP Metrics/Traces/Logs| HUB
+        GCP -->|mTLS OTLP Metrics/Traces/Logs| HUB
     end
 
-    subgraph DataIngestion["Telemetry Ingestion & Preprocessing"]
+    subgraph DynamicIngestion["Vectorized Entity Discovery & Trace Decomposition"]
         PROM["Prometheus Server (Port 9090)"]
+        TEMPO["Grafana Tempo Trace API (Port 3200)"]
         HUB --> PROM
-        POLL["Metric Ingestor (10s Polling)"]
-        PROM -->|14 Golden Features| POLL
-        PROBE["Active Synthetic HTTP Probe\n(WebUI /status, Timeout 3.5s)"]
-        PROBE -.->|End-to-End Health| POLL
-        WIN["Live Sliding Window Buffer\n(12 timesteps = 120s context)"]
-        POLL --> WIN
-        SCALER["Domain-Aware RobustScaler\n(Physical Scale Floors)"]
-        WIN --> SCALER
+        HUB --> TEMPO
+        DISC["Dynamic Entity Discovery\n(cloud_provider, service_name)"]
+        PROM -->|8 Universal Entity Features| DISC
+        TEMPO -->|Sequential Span Decomposition\nT_WAN, T_self, T_DB| DISC
+        CAL["EntityCalibrator\n(Per-Entity Z-Score + 30-Sample Online Auto-Calibration)"]
+        DISC --> CAL
     end
 
-    subgraph DeepEnsemble["Deep Learning Ensemble (Offline / Online)"]
-        GRU["GRU Autoencoder\n(Long-term temporal context)"]
-        TCN["TCN Autoencoder\n(Dilated causal convolutions)"]
-        ISO["Isolation Forest Baseline\n(150 trees benchmark)"]
-        SCALER --> GRU
-        SCALER --> TCN
-        SCALER --> ISO
+    subgraph UniversalDeepEnsemble["Universal Entity Deep Ensemble (Input: 12 x 8 Z-Score)"]
+        GRU["Universal GRU Autoencoder\n(Val Loss = 0.02769)"]
+        TCN["Universal TCN Autoencoder\n(Val Loss = 0.000029)"]
+        ISO["Universal Isolation Forest\n(96-dim, 100% Val Normal Acc)"]
+        CAL --> GRU
+        CAL --> TCN
+        CAL --> ISO
     end
 
-    subgraph ScoringEngine["Inference & False Alarm Suppression"]
-        RECENCY["Recency-Weighted Horizon Scoring\n(Recent steps t-2..t carry 65% weight)"]
-        DAMP["Response-Aware Saturation Damping\n(Damps warm-up CPU when probe is fast)"]
-        GRU --> RECENCY
-        TCN --> RECENCY
-        RECENCY --> DAMP
-        DUAL["Dual-Sliding-Window Scorer\n(Short W=3 vs Long W=18)"]
-        DAMP --> DUAL
-    end
-
-    subgraph DecisionOutput["Verdicts & Diagnostic Output"]
-        HEALTHY["✓ HEALTHY\n(Hệ thống hoàn toàn bình thường)"]
-        TRANSIENT["~ TRANSIENT SPIKE SUPPRESSED\n(Dao động tức thời/GC - Không báo động)"]
-        ALERT["⚠ CRITICAL ALERT\n(Phát hiện bất thường thực sự)"]
-        RCA["RCA Engine\n(Chỉ điểm đích danh dịch vụ thủ phạm)"]
-        
-        DUAL -->|MSE < 0.3500| HEALTHY
-        DUAL -->|Single-step spike| TRANSIENT
-        DUAL -->|Sustained MSE >= 0.3500| ALERT
-        PROBE -->|2x consecutive timeout| ALERT
+    subgraph ScoringAndRCA["Multi-Cloud Scoring & Trace-Guided RCA"]
+        SCORE["Directional & Recency-Weighted MSE\n+ Dual-Sliding-Window Scorer"]
+        GRU --> SCORE
+        TCN --> SCORE
+        HEALTHY["✓ HEALTHY\n(Đa đám mây hoạt động bình thường)"]
+        TRANSIENT["~ TRANSIENT SPIKE SUPPRESSED\n(Dao động tức thời - Không báo động)"]
+        ALERT["⚠ MULTI-CLOUD ALERT\n(Phát hiện bất thường xuyên đám mây)"]
+        RCA["Multi-Cloud Trace + Metric RCA\n(CROSS_CLOUD_WAN_DELAY / CPU / MEMORY_LEAK / DB)"]
+        SCORE -->|Max Entity MSE < 0.3500| HEALTHY
+        SCORE -->|Single-step spike| TRANSIENT
+        SCORE -->|Sustained MSE >= 0.3500| ALERT
         ALERT --> RCA
     end
 ```
 
 ---
 
-## 2. Danh mục 14 Đặc trưng Cốt lõi (14 Golden Features)
+## 2. Vector 8 Đặc trưng Thực thể Phổ quát (8 Universal Entity Features)
 
-AI liên tục theo dõi và đồng hóa 14 chỉ số vi mô theo chu kỳ 10 giây:
+Thay vì đóng cứng số cột theo từng tên dịch vụ, AI Engine V3 tự động phát hiện mọi cặp thực thể $e = (\text{cloud\_provider}, \text{service\_name})$ đang hoạt động trên Prometheus và trích xuất vector chuẩn $\mathbf{x}_e^{(t)} \in \mathbb{R}^8$:
 
-| STT | Tên đặc trưng (`feature`) | Nguồn dữ liệu & PromQL Expression | Ý nghĩa giám sát |
+| STT | Tên đặc trưng (`feature`) | Biểu thức PromQL Vectorized (`by (cloud_provider, service_name)`) | Tính bất biến khi Scale Pods / Thêm Cloud |
 | :-: | :--- | :--- | :--- |
-| **1** | `throughput_qps` | `sum(rate(http_server_request_duration_seconds_count[1m]))` | Tổng lưu lượng request toàn cụm (RED Metrics) |
-| **2** | `latency_p95` | `histogram_quantile(0.95, sum by (le) (rate(...[1m])))` | Độ trễ 95th Percentile phản hồi người dùng |
-| **3** | `app_cpu_pct` | `avg(jvm_cpu_recent_utilization_ratio * jvm_cpu_count) * 100` | Mức sử dụng CPU trung bình 7 microservices |
-| **4** | `max_pod_cpu_pct` | `max(jvm_cpu_recent_utilization_ratio * jvm_cpu_count) * 100` | Tải CPU của pod chạy nặng nhất (phát hiện Hotspot) |
-| **5** | `app_ram_pct` | `avg(sum(jvm_memory_used_bytes) / sum(jvm_memory_limit_bytes))` | Tỷ lệ chiếm dụng RAM JVM Heap trung bình |
-| **6** | `max_pod_ram_pct` | `max(sum(jvm_memory_used_bytes) / sum(jvm_memory_limit_bytes))` | Đỉnh RAM JVM Heap cao nhất (phát hiện rò rỉ bộ nhớ) |
-| **7** | `jvm_threads_live` | `avg(jvm_thread_count)` | Số luồng xử lý đồng thời trong máy ảo Java |
-| **8** | `jvm_gc_pause_rate` | `sum(rate(jvm_gc_duration_seconds_sum[1m]))` | Thời gian dừng máy ảo để dọn rác (GC Pauses) |
-| **9** | `webui_cpu_pct` | `avg(jvm_cpu_recent_utilization_ratio{service="teastore-webui"})` | Tải CPU riêng của tầng Web Gateway trên AWS |
-| **10**| `webui_ram_pct` | `sum(jvm_memory_used_bytes{service="teastore-webui"})` | Tải RAM riêng của tầng Web Gateway trên AWS |
-| **11**| `persistence_cpu_pct`| `avg(jvm_cpu_recent_utilization_ratio{service="persistence"})` | Tải CPU riêng của tầng Database Persistence trên Azure |
-| **12**| `persistence_ram_pct`| `sum(jvm_memory_used_bytes{service="persistence"})` | Tải RAM riêng của tầng Database Persistence trên Azure |
-| **13**| `image_cpu_pct` | `avg(jvm_cpu_recent_utilization_ratio{service="image"})` | Tải CPU của tầng sinh ảnh sản phẩm trên AWS |
-| **14**| `wan_network_io_kbs` | `sum(rate(system_network_io_bytes_total[1m])) / 1024` | Băng thông mạng truyền qua hầm liên mây (WAN I/O) |
+| **1** | `qps` | `sum by (cloud_provider, service_name) (rate(http_server_request_duration_seconds_count[1m]))` | Chuẩn hóa theo `EntityCalibrator` của từng dịch vụ |
+| **2** | `server_latency_p95` | `histogram_quantile(0.95, sum by (le, cloud_provider, service_name) (rate(http_server_request_duration_seconds_bucket[1m])))` | Bất biến với số lượng pod (`1 -> N` replicas) |
+| **3** | `client_latency_p95` | `histogram_quantile(0.95, sum by (le, cloud_provider, service_name) (rate(http_client_request_duration_seconds_bucket[1m])))` + `Tempo T_WAN` | Đo trực tiếp độ trễ gọi liên dịch vụ / xuyên cloud |
+| **4** | `error_rate_5xx` | `sum by (cloud_provider, service_name) (rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[1m]))` | Phát hiện lỗi HTTP 5xx cục bộ tại từng dịch vụ |
+| **5** | `max_pod_cpu_pct` | `clamp_max(max by (cloud_provider, service_name) (jvm_cpu_recent_utilization_ratio * jvm_cpu_count) * 100, 100)` | Dùng `max by` nên không bị pha loãng khi scale-out thêm pod |
+| **6** | `max_pod_ram_pct` | `max by (cloud_provider, service_name) (sum by (..., host_name) (jvm_memory_used_bytes{heap}) / sum by (..., host_name) (jvm_memory_limit_bytes{heap})) * 100` | Bắt đỉnh RAM của pod cao nhất trong dịch vụ |
+| **7** | `ram_floor_2m_pct` | $\min_{\tau \in [t-19, t]} \text{max\_pod\_ram\_pct}_e^{(\tau)}$ | Phân biệt Memory Leak thật (sàn RAM dâng cao) với răng cưa JVM GC bình thường |
+| **8** | `gc_pause_rate` | `sum by (cloud_provider, service_name) (rate(jvm_gc_duration_seconds_sum[1m]))` | Tốc độ dừng JVM để dọn rác bộ nhớ |
 
 ---
 
-## 3. Các Thành phần Mô hình & Thuật toán
+## 3. Khả năng Mở rộng Động & Bóc tách Distributed Trace Xuyên Đám Mây
 
-### 3.1. Deep Learning Ensemble
-* **GRU Autoencoder** ([`models/gru_autoencoder.py`](models/gru_autoencoder.py)): 2 tầng Gated Recurrent Unit (hidden dimension 64, bottleneck latent dimension 16), nắm bắt phụ thuộc ngữ cảnh chuỗi dài hạn 120s.
-* **TCN Autoencoder** ([`models/tcn_autoencoder.py`](models/tcn_autoencoder.py)): Temporal Convolutional Network với Dilated Causal Convolutions (dilation factors: 1, 2, 4; kernel size: 3), bắt trọn các dao động răng cưa ngắn hạn của JVM Garbage Collection.
-* **Isolation Forest Baseline** ([`training/train.py`](training/train.py)): 150 cây quyết định độc lập trên không gian phẳng $12 \times 14 = 168$ chiều, đối chứng độ dị biệt phân phối dữ liệu.
+### 3.1. Chuẩn hóa Z-Score Theo Từng Thực thể & Online Auto-Calibration
+* Mỗi thực thể $e = (\text{cloud}, \text{service})$ có đường cơ sở riêng $(\boldsymbol{\mu}_e, \boldsymbol{\sigma}_e)$ lưu trong [`models/saved/entity_baselines.json`](models/saved/entity_baselines.json):
+  $$z_{e, k}^{(t)} = \text{clip}\left(\frac{x_{e, k}^{(t)} - \mu_{e, k}}{\max(\sigma_{e, k}, s_{\min, k})}, -10.0, +10.0\right)$$
+* **Khi thêm Pod mới (Horizontal Pod Autoscaling)**: Cùng thực thể $(\text{cloud}, \text{service})$, các chỉ số `max_pod_cpu_pct`, `max_pod_ram_pct`, `server_latency_p95` giữ nguyên ý nghĩa vật lý — không cần huấn luyện lại mô hình.
+* **Khi thêm Cloud Provider mới hoặc Microservice mới**: `EntityCalibrator` tự động thu thập 30 mẫu đầu tiên (Online Auto-Calibration) để tính $(\boldsymbol{\mu}_{e_{\text{new}}}, \boldsymbol{\sigma}_{e_{\text{new}}})$ và đưa ngay vào `GRUAutoencoder` + `TCNAutoencoder` mà không cần sửa code hay train lại trọng số mạng.
 
-### 3.2. Cơ chế Khắc phục Báo động giả (False Alarm Suppression)
-1. **Sàn vật lý thích ứng (Domain-Aware Scale Floors)**:
-   Các đặc trưng có khoảng biến thiên hẹp lúc bình thường (như `latency_p95` khoảng 45ms, hoặc `jvm_threads_live` khoảng 26) được đặt sàn IQR tối thiểu trong [`data/preprocess.py`](data/preprocess.py) để trạng thái nhàn rỗi hoặc chạy nhanh không bị thổi phồng sai số lên hàng trăm lần.
-2. **Trọng số Thời gian gần (Recency-Weighted Horizon Scoring)**:
-   Hàm mũ $e^{0.45 \cdot (t - 11)}$ phân bổ trọng số: các mẫu vừa diễn ra `[t-2, t-1, t]` chiếm 65% trọng số đánh giá. Nhờ đó khi sự cố vừa được khắc phục, điểm MSE lập tức hạ xuống, triệt tiêu hoàn toàn hiện tượng "nhớ dai báo còi nhầm" trong suốt 2 phút tiếp theo.
-3. **Giảm chấn theo Sức khỏe phản hồi (Response-Aware Saturation Damping)**:
-   Khi đầu cuối thực tế vẫn trả về `HTTP 200`, độ trễ `< 250ms`, việc CPU tăng lên 25%–45% do Tomcat biên dịch JSP/JIT hoặc đón đợt Flash-Crowd được xem là tải có ích và giảm chấn trọng số về $0.18$, ngăn báo động giả lúc khởi động.
-4. **Bộ lọc Cửa sổ kép (Dual-Sliding-Window Scorer)**:
-   So sánh cửa sổ ngắn ($W_{\text{short}} = 3$ mẫu / 30s) và cửa sổ dài ($W_{\text{long}} = 18$ mẫu / 180s). Các xung đột biến đơn lẻ (transient spike) do GC pause sẽ được tự động lọc bỏ.
-
-### 3.3. Active Synthetic HTTP Health Probe
-Script chạy ngầm gửi probe HTTP định kỳ mỗi 10 giây đến `http://localhost:8080/tools.descartes.teastore.webui/status` (timeout 3.5s). Nếu phát hiện WebUI bị treo/đơ kết nối liên tiếp 2 chu kỳ, AI lập tức phát chuông báo động ngay cả khi Prometheus chưa ghi nhận lỗi HTTP 5xx.
+### 3.2. Toán học Bóc tách Span Xuyên Đám Mây (`TempoTraceAnalyzer`)
+Khi một request `/product` đi qua chuỗi gọi đồng bộ xuyên đám mây (`AWS:teastore-webui` $\to$ `Azure:teastore-persistence` / `Azure:teastore-auth` $\to$ `GCP:teastore-recommender`), `TempoTraceAnalyzer` truy vấn trực tiếp Tempo API (`/api/search` & `/api/traces/<traceID>`) và phân rã từng span con $S_i$:
+1. **Độ trễ truyền dẫn mạng WAN một chiều cô lập cho từng thực thể đích ($T_{\text{WAN}}$)**:
+   $$T_{\text{WAN}}(\text{Cloud}_{\text{root}} \to S_i) = \min\left(\Delta_{\text{pre}}(S_i),\; \Delta_{\text{post}}(S_i)\right)$$
+   trong đó $\Delta_{\text{pre}}(S_i) = t_{\text{start}}(S_i) - t_{\text{end}}(S_{i-1})$ và $\Delta_{\text{post}}(S_i) = t_{\text{start}}(S_{i+1}) - t_{\text{end}}(S_i)$. Công thức $\min(\Delta_{\text{pre}}, \Delta_{\text{post}})$ cô lập chính xác độ trễ mạng WAN của nhánh gọi $S_i$ mà không làm nhiễm sang span kế cận.
+2. **Thời gian tự xử lý nội tại của từng dịch vụ ($T_{\text{self}}$)**:
+   $$T_{\text{self}}(S) = \max\left(0,\; T_{\text{server\_span}}(S) - \sum_{c \in \text{children}(S)} T(c) - T_{\text{remote\_WAN\_wait}}(S)\right)$$
+3. **Thời gian truy vấn SQL tại tầng dữ liệu ($T_{\text{DB}}$)**:
+   Trích xuất trực tiếp từ các span `db.system = "mysql"` (`SELECT teadb.*`) trên `Azure:teastore-persistence`.
 
 ---
 
-## 4. Cơ chế Chỉ điểm Nguyên nhân Gốc rễ (Root Cause Analysis - RCA)
+## 4. Kết quả Huấn luyện & Kiểm thử Thực nghiệm 4 Kịch bản Đa Đám Mây
 
-Khi xuất hiện cảnh báo `[⚠ ALERT]`, AI tính tỷ số sai lệch tái tạo của từng đặc trưng độc lập:
-$$\text{Tỷ lệ lệch (Ratio)} = \frac{\text{Sai số tái tạo thực tế của đặc trưng } i}{\text{Ngưỡng kích hoạt RCA chuẩn của đặc trưng } i}$$
+### 4.1. Hiệu năng Hội tụ Mô hình V3
+* **Dữ liệu huấn luyện thực tế**: `666` dòng thực thể sạch (`111 chu kỳ × 6 thực thể` trên `aws`, `azure`, `gcp`) $\to$ `2,880` cửa sổ huấn luyện (`12 × 8`) và `120` cửa sổ kiểm định độc lập.
+* **Universal GRU Autoencoder**: Best Validation SmoothL1 Loss = **`0.027690`** (Epoch 48).
+* **Universal TCN Autoencoder**: Best Validation SmoothL1 Loss = **`0.000029`** (Epoch 30).
+* **Universal Isolation Forest**: Validation Normal Accuracy = **`100.00%`**.
+* **Ngưỡng quyết định bất thường (`recommended_threshold_p99`)**: **`0.3500`** (Validation P99 = `0.03835`).
 
-Bảng ngưỡng kích hoạt chuẩn (tính từ phân phối dữ liệu sạch tại [`models/saved/threshold_config.json`](models/saved/threshold_config.json)):
-* Các chỉ số CPU, Độ trễ, Mạng WAN: Ngưỡng kích hoạt sàn = **`0.250`**
-* Chỉ số RAM Tomcat WebUI: Ngưỡng kích hoạt = **`0.419`** (tự động nới lỏng để thích nghi với chu kỳ cấp phát RAM tự nhiên của Java)
-* Chỉ số RAM Persistence Azure: Ngưỡng kích hoạt = **`0.313`**
+### 4.2. Kết quả Kiểm thử Thực tế trên 4 Cụm `k3d` (`AWS`, `Azure`, `GCP`, `Hub`)
 
-👉 AI tự động xếp hạng các đặc trưng có tỷ lệ lệch cao nhất và in ra khuyến nghị chuẩn đoán cụ thể.
+| Kịch bản Kiểm thử | Mô tả Thao tác Thực tế | Kết quả Phát hiện (`Verdict`) | Điểm MSE Thực tế | Kết quả Khoanh vùng Nguyên nhân Gốc rễ (`RCA`) |
+| :--- | :--- | :---: | :---: | :--- |
+| **Test 1: Normal Erratic Traffic** | Traffic hỗn loạn 10–50 users (`Flash-Crowd`, `Burst-Spike`), WAN `10ms` bình thường | **100% HEALTHY** (`0.0%` False Alarm, `8/8 TN`) | `0.20 -> 0.045` (`< 0.3500`) | Không báo động giả |
+| **Test 2: GCP WAN Latency (`250ms`)** | Tiêm `tc netem delay 250ms 20ms` vào `k3d-gcp-k3d-server-0` | **ALERT** (Phát hiện 100%) | `4.58 -> 6.49` (`> 0.3500`) | `[CROSS_CLOUD_WAN_DELAY] aws->gcp (gcp:teastore-recommender) (T_WAN=117ms, client_latency_p95 lệch x102.5)` |
+| **Test 3: Azure WAN Latency (`180ms`)** | Tiêm `tc netem delay 180ms 15ms` vào `k3d-azure-k3d-server-0` | **ALERT** (Phát hiện 100%) | `5.07 -> 5.25` (`> 0.3500`) | `[CROSS_CLOUD_WAN_DELAY] aws->azure (azure:teastore-persistence) (T_WAN=202ms), aws->azure (azure:teastore-auth) (T_WAN=194ms)` |
+| **Test 4: Pod Scale-Out (`1 -> 2` Pods)** | `kubectl scale deploy/teastore-recommender --replicas=2` trên `gcp-k3d` | **100% HEALTHY** (`0.0%` False Alarm) | `< 0.3500` | Bất biến hoàn toàn khi tăng gấp đôi số Pod mà không cần train lại |
 
 ---
 
 ## 5. Hướng dẫn Thực thi & Vận hành (Runbook)
 
-### 5.1. Yêu cầu môi trường
-* Hệ điều hành: Linux (Ubuntu 22.04+)
-* Python: `/usr/bin/python3.12`
-* Thư viện: `torch`, `scikit-learn`, `pandas`, `scipy`, `numpy`, `matplotlib`, `pyyaml`, `joblib`
-
-### 5.2. Các câu lệnh thực thi
-
-#### Bước 1: Huấn luyện lại mô hình (Preprocess + Train)
 ```bash
+# 1. Thu thập dữ liệu thực thể đa đám mây từ Prometheus
+python3.12 ai-engine/data/collector.py --duration 1200 --interval 6 --output ai-engine/data/raw/multicloud_entity_baseline.csv
+
+# 2. Phân tích khám phá dữ liệu (EDA) & Tiền xử lý Z-Score theo từng thực thể
+python3.12 ai-engine/data/analyze_data.py
+python3.12 ai-engine/data/preprocess.py
+
+# 3. Huấn luyện Universal GRU + TCN Autoencoders + Isolation Forest
 python3.12 ai-engine/training/train.py
-```
-*Tự động tiền xử lý 3,327 cửa sổ, huấn luyện GRU + TCN + Isolation Forest, hiệu chuẩn ngưỡng cảnh báo và xuất biểu đồ tại `ai-engine/data/processed/training_loss.png`.*
 
-#### Bước 2: Khởi chạy Giám sát & Phát hiện Bất thường Thời gian thực
-```bash
-python3.12 ai-engine/inference/detector.py --interval 10
-```
-*Tự động mở port-forward Prometheus (9090), thăm dò WebUI probe, in kết quả sức khỏe hệ thống mỗi 10 giây.*
-
-#### Bước 3: Giả lập Tải Người dùng Thất thường (Live Traffic Benchmark)
-```bash
-python3.12 tests/locust/traffic_generator.py --erratic --min-users 6 --max-users 42 --duration 300
-```
-*Tự động đổi trạng thái mỗi 25s: Flash-Crowd, Sudden-Drop, Rollercoaster, Burst-Spike.*
-
-#### Bước 4: Chạy Bộ thẩm định Ground-Truth & Tiêm sự cố thử nghiệm
-```bash
+# 4. Chạy bộ kiểm thử 5 kịch bản chuẩn hóa (--benchmark)
 python3.12 ai-engine/inference/evaluate_test.py --benchmark
+
+# 5. Khởi chạy Giám sát & Khoanh vùng Nguyên nhân Gốc rễ Xuyên Cloud Thời gian thực
+python3.12 ai-engine/inference/detector.py --interval 6
 ```
-*Tự động kiểm chứng 5 kịch bản (Flash-Crowd, Warm-up, Nghẽn Database, Tràn RAM Azure, Nghẽn WAN).*
 
 ---
 
-## 6. Cấu trúc Thư mục Module AI
+## 6. Cấu trúc Thư mục Module AI V3
 
 ```
 ai-engine/
 ├── configs/
-│   └── model_config.yaml           # Cấu hình siêu tham số, window size, danh sách features
+│   └── model_config.yaml                  # Cấu hình 8 đặc trưng thực thể, scale floors, ngưỡng cửa sổ kép
 ├── data/
 │   ├── raw/
-│   │   ├── normal_baseline_4h.csv  # Tập dữ liệu đo lường vi mô 4 giờ chuẩn (1,440 mẫu)
-│   │   └── .gitkeep
+│   │   └── multicloud_entity_baseline.csv # Dữ liệu thực thể thu thập thực tế trên 3 cloud (AWS, Azure, GCP)
 │   ├── processed/
-│   │   ├── train_windows.npy       # 3,327 tensor cửa sổ huấn luyện đã tăng cường
-│   │   ├── val_windows.npy         # 288 tensor cửa sổ kiểm định độc lập
-│   │   ├── feature_names.json      # Metadata 14 Golden Features
-│   │   └── training_loss.png       # Biểu đồ đường cong học tập (Convergence curves)
-│   ├── collector.py                # Script thu thập dữ liệu tự động từ Prometheus API
-│   ├── analyze_data.py             # Script phân tích khám phá dữ liệu (EDA)
-│   └── preprocess.py               # Module tiền xử lý, Scale Floors & Tăng cường kịch bản tải
+│   │   ├── entity_baselines.json          # Tham số chuẩn hóa (Median, IQR, Scale) cho từng (cloud, service)
+│   │   ├── train_windows.npy              # 2,880 cửa sổ huấn luyện (12 x 8)
+│   │   ├── val_windows.npy                # 120 cửa sổ kiểm định độc lập (12 x 8)
+│   │   ├── feature_names.json             # Danh sách 8 đặc trưng thực thể chuẩn
+│   │   ├── eda_summary.png                # Biểu đồ phân tích dữ liệu đa đám mây
+│   │   ├── eda_report.md                  # Báo cáo thống kê khám phá dữ liệu
+│   │   └── training_loss.png              # Đường cong hội tụ GRU & TCN Autoencoders
+│   ├── collector.py                       # Bộ thu thập dữ liệu PromQL Vectorized tự động phát hiện thực thể
+│   ├── analyze_data.py                    # Phân tích thống kê theo từng thực thể
+│   └── preprocess.py                      # Chuẩn hóa Z-Score theo thực thể & tạo cửa sổ trượt
 ├── models/
-│   ├── gru_autoencoder.py          # PyTorch GRU Autoencoder
-│   ├── tcn_autoencoder.py          # PyTorch Temporal Convolutional Network Autoencoder
+│   ├── gru_autoencoder.py                 # Universal GRU Autoencoder (input_dim=8)
+│   ├── tcn_autoencoder.py                 # Universal TCN Autoencoder (input_dim=8)
 │   └── saved/
-│       ├── gru_autoencoder.pt      # Trọng số tối ưu GRU (Val MSE = 0.05915)
-│       ├── tcn_autoencoder.pt      # Trọng số tối ưu TCN (Val MSE = 0.000088)
-│       ├── isolation_forest.joblib # Mô hình Isolation Forest đã fit (100% Normal Acc)
-│       ├── robust_scaler.joblib    # Bộ chuẩn hóa Domain-Aware RobustScaler
-│       └── threshold_config.json   # Ngưỡng cảnh báo P99 (0.3500) và RCA Trigger Baselines
+│       ├── entity_baselines.json          # Baseline phục vụ chuẩn hóa online & auto-calibration
+│       ├── gru_autoencoder.pt             # Trọng số GRU Autoencoder
+│       ├── tcn_autoencoder.pt             # Trọng số TCN Autoencoder
+│       ├── isolation_forest.joblib        # Mô hình Isolation Forest (96 chiều)
+│       └── threshold_config.json          # Ngưỡng cảnh báo P99 (0.3500) & RCA baselines
 ├── inference/
-│   ├── detector.py                 # Engine giám sát online thời gian thực & RCA
-│   └── evaluate_test.py            # Công cụ đối chiếu Ground-Truth & Tiêm lỗi benchmark
+│   ├── detector.py                        # Engine phát hiện bất thường + TempoTraceAnalyzer RCA
+│   ├── evaluate_test.py                   # Công cụ thẩm định Ground-Truth & Benchmark
+│   └── test_runs/                         # Log và JSON kết quả kiểm thử thực tế 4 kịch bản
 └── training/
-    ├── train.py                    # Pipeline tự động huấn luyện & hiệu chuẩn ngưỡng
-    └── training_report.md          # Báo cáo kỹ thuật chi tiết kết quả huấn luyện
+    ├── train.py                           # Pipeline huấn luyện mô hình V3
+    └── training_report.md                 # Báo cáo kết quả huấn luyện
 ```
-

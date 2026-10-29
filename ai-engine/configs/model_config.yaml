@@ -1,42 +1,52 @@
-# Configuration for Multi-Cloud Observability Anomaly Detection Models
-# Architecture: GRU Autoencoder + Isolation Forest Baseline
+# Configuration for Multi-Cloud Observability AI Engine V3
+# Architecture: Per-Entity Z-Score Standardized GRU + TCN Autoencoders + Isolation Forest
+#               + Exact Tempo Distributed Trace Span Decomposition RCA
 
 data:
-  raw_csv_path: "ai-engine/data/raw/normal_baseline_4h.csv"
+  raw_csv_path: "ai-engine/data/raw/multicloud_entity_baseline.csv"
   processed_dir: "ai-engine/data/processed"
-  
-  # 14 Golden Features selected from EDA
-  features:
-    - throughput_qps
-    - latency_p95
-    - app_cpu_pct
-    - max_pod_cpu_pct
-    - app_ram_pct
-    - max_pod_ram_pct
-    - jvm_threads_live
-    - jvm_gc_pause_rate
-    - webui_cpu_pct
-    - webui_ram_pct
-    - persistence_cpu_pct
-    - persistence_ram_pct
-    - image_cpu_pct
-    - wan_network_io_kbs
+  entity_baselines_path: "ai-engine/models/saved/entity_baselines.json"
 
-  # Alert guard features (checked by fast rule engine)
-  guard_features:
+  # 8 Universal Entity Features extracted for EVERY (cloud_provider, service_name)
+  # Invariant to horizontal pod scaling (1 -> N pods) and new cloud/service additions
+  features:
+    - qps
+    - server_latency_p95
+    - client_latency_p95
     - error_rate_5xx
+    - max_pod_cpu_pct
+    - max_pod_ram_pct
+    - ram_floor_2m_pct
+    - gc_pause_rate
+
+  # Domain-aware minimum IQR/scale floors so near-constant metrics never explode z-scores
+  physical_scale_floors:
+    qps: 5.0
+    server_latency_p95: 0.035
+    client_latency_p95: 0.035
+    error_rate_5xx: 0.10
+    max_pod_cpu_pct: 12.0
+    max_pod_ram_pct: 12.0
+    ram_floor_2m_pct: 10.0
+    gc_pause_rate: 0.015
+
+  # Cluster-level WAN guard metrics
+  guard_features:
+    - wan_network_io_kbs
     - wan_network_errors
 
-  # Sliding Window Parameters
-  # window_size = 12 samples (12 * 10s = 2 minutes sequence window)
+  # Sliding Window Parameters (12 samples * 10s = 120s context window)
   window_size: 12
   stride: 1
   val_split: 0.2
   random_seed: 42
 
+  # Online Zero-Shot Auto-Calibration for newly added Cloud Providers or Services
+  auto_calibration_samples: 30
+
 model:
-  type: "GRUAutoencoder"
-  input_dim: 14
+  type: "UniversalEntityAutoencoder"
+  input_dim: 8
   hidden_dim: 64
   latent_dim: 16
   num_layers: 2
@@ -59,9 +69,14 @@ baseline:
     save_path: "ai-engine/models/saved/isolation_forest.joblib"
 
 thresholding:
-  # Anomaly threshold percentiles on normal validation reconstruction error
   threshold_percentile: 99.0
   dual_window:
-    short_window: 3   # 30 seconds
-    long_window: 18   # 3 minutes
+    short_window: 3
+    long_window: 18
+    min_consecutive_breaches: 2
 
+observability_endpoints:
+  prometheus_url: "http://localhost:9090"
+  tempo_url: "http://localhost:3200"
+  loki_url: "http://localhost:3100"
+  webui_probe_url: "http://localhost:8080/tools.descartes.teastore.webui/status"

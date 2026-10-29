@@ -1,16 +1,10 @@
 [
-  "throughput_qps",
-  "latency_p95",
-  "app_cpu_pct",
+  "qps",
+  "server_latency_p95",
+  "client_latency_p95",
+  "error_rate_5xx",
   "max_pod_cpu_pct",
-  "app_ram_pct",
   "max_pod_ram_pct",
-  "jvm_threads_live",
-  "jvm_gc_pause_rate",
-  "webui_cpu_pct",
-  "webui_ram_pct",
-  "persistence_cpu_pct",
-  "persistence_ram_pct",
-  "image_cpu_pct",
-  "wan_network_io_kbs"
+  "ram_floor_2m_pct",
+  "gc_pause_rate"
 ]

@@ -1,0 +1,483 @@
+{
+  "aws:teastore-image": {
+    "cloud_provider": "aws",
+    "service_name": "teastore-image",
+    "sample_count": 111,
+    "features": {
+      "qps": {
+        "median": 27.8,
+        "iqr": 10.5,
+        "floor": 5.0,
+        "scale": 10.5,
+        "p95": 41.94,
+        "p99": 45.19
+      },
+      "server_latency_p95": {
+        "median": 0.00477,
+        "iqr": 0.0,
+        "floor": 0.035,
+        "scale": 0.035,
+        "p95": 0.00478,
+        "p99": 0.004929
+      },
+      "client_latency_p95": {
+        "median": 0.00475,
+        "iqr": 0.0,
+        "floor": 0.035,
+        "scale": 0.035,
+        "p95": 0.00475,
+        "p99": 0.004887
+      },
+      "error_rate_5xx": {
+        "median": 0.0,
+        "iqr": 0.0,
+        "floor": 0.1,
+        "scale": 0.1,
+        "p95": 0.0,
+        "p99": 0.0
+      },
+      "max_pod_cpu_pct": {
+        "median": 4.573,
+        "iqr": 4.8355,
+        "floor": 12.0,
+        "scale": 12.0,
+        "p95": 13.11,
+        "p99": 15.6397
+      },
+      "max_pod_ram_pct": {
+        "median": 70.568,
+        "iqr": 17.646,
+        "floor": 12.0,
+        "scale": 17.646,
+        "p95": 83.2505,
+        "p99": 85.3566
+      },
+      "ram_floor_2m_pct": {
+        "median": 54.205,
+        "iqr": 9.917,
+        "floor": 10.0,
+        "scale": 10.0,
+        "p95": 70.676,
+        "p99": 72.081
+      },
+      "gc_pause_rate": {
+        "median": 0.0011,
+        "iqr": 0.00018,
+        "floor": 0.015,
+        "scale": 0.015,
+        "p95": 0.00488,
+        "p99": 0.005684
+      }
+    }
+  },
+  "aws:teastore-registry": {
+    "cloud_provider": "aws",
+    "service_name": "teastore-registry",
+    "sample_count": 111,
+    "features": {
+      "qps": {
+        "median": 10.6,
+        "iqr": 1.8,
+        "floor": 5.0,
+        "scale": 5.0,
+        "p95": 13.9,
+        "p99": 15.426
+      },
+      "server_latency_p95": {
+        "median": 0.00475,
+        "iqr": 0.0,
+        "floor": 0.035,
+        "scale": 0.035,
+        "p95": 0.00475,
+        "p99": 0.00475
+      },
+      "client_latency_p95": {
+        "median": 0.0,
+        "iqr": 0.0,
+        "floor": 0.035,
+        "scale": 0.035,
+        "p95": 0.0,
+        "p99": 0.0
+      },
+      "error_rate_5xx": {
+        "median": 0.0,
+        "iqr": 0.0,
+        "floor": 0.1,
+        "scale": 0.1,
+        "p95": 0.0,
+        "p99": 0.0
+      },
+      "max_pod_cpu_pct": {
+        "median": 0.711,
+        "iqr": 0.204,
+        "floor": 12.0,
+        "scale": 12.0,
+        "p95": 1.52,
+        "p99": 1.8286
+      },
+      "max_pod_ram_pct": {
+        "median": 27.854,
+        "iqr": 8.196,
+        "floor": 12.0,
+        "scale": 12.0,
+        "p95": 35.6565,
+        "p99": 36.401
+      },
+      "ram_floor_2m_pct": {
+        "median": 21.089,
+        "iqr": 1.184,
+        "floor": 10.0,
+        "scale": 10.0,
+        "p95": 23.057,
+        "p99": 25.8704
+      },
+      "gc_pause_rate": {
+        "median": 4e-05,
+        "iqr": 2e-05,
+        "floor": 0.015,
+        "scale": 0.015,
+        "p95": 6e-05,
+        "p99": 6e-05
+      }
+    }
+  },
+  "aws:teastore-webui": {
+    "cloud_provider": "aws",
+    "service_name": "teastore-webui",
+    "sample_count": 111,
+    "features": {
+      "qps": {
+        "median": 21.04,
+        "iqr": 6.92,
+        "floor": 5.0,
+        "scale": 6.92,
+        "p95": 31.18,
+        "p99": 33.14
+      },
+      "server_latency_p95": {
+        "median": 0.42,
+        "iqr": 0.02671,
+        "floor": 0.035,
+        "scale": 0.055,
+        "p95": 0.38754,
+        "p99": 0.426183
+      },
+      "client_latency_p95": {
+        "median": 0.00475,
+        "iqr": 0.0,
+        "floor": 0.035,
+        "scale": 0.035,
+        "p95": 0.00476,
+        "p99": 0.00476
+      },
+      "error_rate_5xx": {
+        "median": 0.0,
+        "iqr": 0.0,
+        "floor": 0.1,
+        "scale": 0.1,
+        "p95": 0.0,
+        "p99": 0.0
+      },
+      "max_pod_cpu_pct": {
+        "median": 11.774,
+        "iqr": 5.405,
+        "floor": 12.0,
+        "scale": 12.0,
+        "p95": 17.249,
+        "p99": 18.203
+      },
+      "max_pod_ram_pct": {
+        "median": 69.686,
+        "iqr": 15.4485,
+        "floor": 12.0,
+        "scale": 15.4485,
+        "p95": 91.261,
+        "p99": 95.2779
+      },
+      "ram_floor_2m_pct": {
+        "median": 56.976,
+        "iqr": 14.8,
+        "floor": 10.0,
+        "scale": 14.8,
+        "p95": 67.822,
+        "p99": 69.052
+      },
+      "gc_pause_rate": {
+        "median": 0.01238,
+        "iqr": 0.00452,
+        "floor": 0.015,
+        "scale": 0.015,
+        "p95": 0.01616,
+        "p99": 0.0179
+      }
+    }
+  },
+  "azure:teastore-auth": {
+    "cloud_provider": "azure",
+    "service_name": "teastore-auth",
+    "sample_count": 111,
+    "features": {
+      "qps": {
+        "median": 20.14,
+        "iqr": 6.78,
+        "floor": 5.0,
+        "scale": 6.78,
+        "p95": 29.74,
+        "p99": 31.44
+      },
+      "server_latency_p95": {
+        "median": 0.00476,
+        "iqr": 0.0,
+        "floor": 0.035,
+        "scale": 0.035,
+        "p95": 0.00477,
+        "p99": 0.00477
+      },
+      "client_latency_p95": {
+        "median": 0.02462,
+        "iqr": 0.00037,
+        "floor": 0.035,
+        "scale": 0.035,
+        "p95": 0.025,
+        "p99": 0.025
+      },
+      "error_rate_5xx": {
+        "median": 0.0,
+        "iqr": 0.0,
+        "floor": 0.1,
+        "scale": 0.1,
+        "p95": 0.0,
+        "p99": 0.0
+      },
+      "max_pod_cpu_pct": {
+        "median": 2.538,
+        "iqr": 1.3235,
+        "floor": 12.0,
+        "scale": 12.0,
+        "p95": 4.7735,
+        "p99": 6.3395
+      },
+      "max_pod_ram_pct": {
+        "median": 54.581,
+        "iqr": 10.4,
+        "floor": 12.0,
+        "scale": 12.0,
+        "p95": 70.638,
+        "p99": 72.664
+      },
+      "ram_floor_2m_pct": {
+        "median": 45.703,
+        "iqr": 9.845,
+        "floor": 10.0,
+        "scale": 10.0,
+        "p95": 53.285,
+        "p99": 53.472
+      },
+      "gc_pause_rate": {
+        "median": 0.00108,
+        "iqr": 0.0003,
+        "floor": 0.015,
+        "scale": 0.015,
+        "p95": 0.00458,
+        "p99": 0.004658
+      }
+    }
+  },
+  "azure:teastore-persistence": {
+    "cloud_provider": "azure",
+    "service_name": "teastore-persistence",
+    "sample_count": 111,
+    "features": {
+      "qps": {
+        "median": 62.12,
+        "iqr": 22.32,
+        "floor": 5.0,
+        "scale": 22.32,
+        "p95": 91.24,
+        "p99": 95.32
+      },
+      "server_latency_p95": {
+        "median": 0.00476,
+        "iqr": 0.0,
+        "floor": 0.035,
+        "scale": 0.035,
+        "p95": 0.00476,
+        "p99": 0.004769
+      },
+      "client_latency_p95": {
+        "median": 0.02425,
+        "iqr": 0.00037,
+        "floor": 0.035,
+        "scale": 0.035,
+        "p95": 0.02462,
+        "p99": 0.025
+      },
+      "error_rate_5xx": {
+        "median": 0.0,
+        "iqr": 0.0,
+        "floor": 0.1,
+        "scale": 0.1,
+        "p95": 0.0,
+        "p99": 0.0
+      },
+      "max_pod_cpu_pct": {
+        "median": 6.284,
+        "iqr": 3.8645,
+        "floor": 12.0,
+        "scale": 12.0,
+        "p95": 11.591,
+        "p99": 12.2329
+      },
+      "max_pod_ram_pct": {
+        "median": 56.812,
+        "iqr": 14.682,
+        "floor": 12.0,
+        "scale": 14.682,
+        "p95": 73.8985,
+        "p99": 78.67
+      },
+      "ram_floor_2m_pct": {
+        "median": 46.596,
+        "iqr": 7.6635,
+        "floor": 10.0,
+        "scale": 10.0,
+        "p95": 57.992,
+        "p99": 63.108
+      },
+      "gc_pause_rate": {
+        "median": 0.00122,
+        "iqr": 0.00028,
+        "floor": 0.015,
+        "scale": 0.015,
+        "p95": 0.00521,
+        "p99": 0.00526
+      }
+    }
+  },
+  "gcp:teastore-recommender": {
+    "cloud_provider": "gcp",
+    "service_name": "teastore-recommender",
+    "sample_count": 111,
+    "features": {
+      "qps": {
+        "median": 4.42,
+        "iqr": 1.5,
+        "floor": 5.0,
+        "scale": 5.0,
+        "p95": 6.76,
+        "p99": 7.422
+      },
+      "server_latency_p95": {
+        "median": 0.00477,
+        "iqr": 3e-05,
+        "floor": 0.035,
+        "scale": 0.035,
+        "p95": 0.004815,
+        "p99": 0.004878
+      },
+      "client_latency_p95": {
+        "median": 0.02449,
+        "iqr": 0.00024,
+        "floor": 0.035,
+        "scale": 0.035,
+        "p95": 0.02474,
+        "p99": 0.024946
+      },
+      "error_rate_5xx": {
+        "median": 0.0,
+        "iqr": 0.0,
+        "floor": 0.1,
+        "scale": 0.1,
+        "p95": 0.0,
+        "p99": 0.0
+      },
+      "max_pod_cpu_pct": {
+        "median": 3.254,
+        "iqr": 2.185,
+        "floor": 12.0,
+        "scale": 12.0,
+        "p95": 8.0165,
+        "p99": 10.9946
+      },
+      "max_pod_ram_pct": {
+        "median": 65.458,
+        "iqr": 15.5975,
+        "floor": 12.0,
+        "scale": 15.5975,
+        "p95": 86.414,
+        "p99": 90.906
+      },
+      "ram_floor_2m_pct": {
+        "median": 48.346,
+        "iqr": 8.541,
+        "floor": 10.0,
+        "scale": 10.0,
+        "p95": 61.555,
+        "p99": 62.862
+      },
+      "gc_pause_rate": {
+        "median": 0.00192,
+        "iqr": 0.00338,
+        "floor": 0.015,
+        "scale": 0.015,
+        "p95": 0.00554,
+        "p99": 0.0058
+      }
+    }
+  },
+  "__default__": {
+    "cloud_provider": "any",
+    "service_name": "default",
+    "sample_count": 666,
+    "features": {
+      "qps": {
+        "median": 20.59,
+        "iqr": 6.85,
+        "floor": 5.0,
+        "scale": 6.85
+      },
+      "server_latency_p95": {
+        "median": 0.004765,
+        "iqr": 0.035,
+        "floor": 0.035,
+        "scale": 0.035
+      },
+      "client_latency_p95": {
+        "median": 0.0145,
+        "iqr": 0.035,
+        "floor": 0.035,
+        "scale": 0.035
+      },
+      "error_rate_5xx": {
+        "median": 0.0,
+        "iqr": 0.1,
+        "floor": 0.1,
+        "scale": 0.1
+      },
+      "max_pod_cpu_pct": {
+        "median": 3.9135,
+        "iqr": 12.0,
+        "floor": 12.0,
+        "scale": 12.0
+      },
+      "max_pod_ram_pct": {
+        "median": 61.135,
+        "iqr": 15.06525,
+        "floor": 12.0,
+        "scale": 15.06525
+      },
+      "ram_floor_2m_pct": {
+        "median": 47.471,
+        "iqr": 10.0,
+        "floor": 10.0,
+        "scale": 10.0
+      },
+      "gc_pause_rate": {
+        "median": 0.00116,
+        "iqr": 0.015,
+        "floor": 0.015,
+        "scale": 0.015
+      }
+    }
+  }
+}

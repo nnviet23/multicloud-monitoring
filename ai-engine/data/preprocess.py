@@ -1,220 +1,242 @@
 #!/usr/bin/env python3.12
 """
-Data Preprocessing & Windowing Module for Multi-Cloud Observability
-Author: Antigravity AI Pair Programmer
-Project: Multicloud Monitoring
-
-Performs:
-  1. Feature extraction for 14 Golden Features
-  2. Domain-Aware RobustScaler with physical scale floors (prevents false alarms
-     when latency is faster than average or during light-load / warmup regimes)
-  3. Sliding window generation: 3D Tensor [N_sequences, Window_Size, N_Features]
-  4. Stratified phase-balanced Train / Validation split + Normal regime augmentation
+Per-Entity Standardized Time-Series Preprocessing Pipeline (V3).
+Computes Per-Entity Robust Baselines (Median & Scale-Floored IQR) for each (cloud_provider, service_name),
+transforms each entity's timeline into standardized residual space Z_e(t) in R^8,
+extracts per-entity sliding windows (12 x 8), performs a stratified 4-phase train/val split,
+and applies domain-aware augmentation on training windows.
 """
 
 import os
 import json
 import yaml
-import joblib
 import argparse
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import RobustScaler
 
-# Physical minimum scale floors so narrow-IQR metrics (like latency_p95 ~ 80ms
-# or jvm_threads_live ~ 26) do not blow up to ±30 during light load or startup.
-PHYSICAL_SCALE_FLOORS = {
-    "throughput_qps": 60.0,
-    "latency_p95": 0.045,        # 45ms scale unit (5ms..95ms stays within ~2 units)
-    "app_cpu_pct": 12.0,         # 12% CPU scale unit (handles warm-up & burst CPU smoothly)
-    "max_pod_cpu_pct": 25.0,     # 25% hotspot CPU scale unit
-    "app_ram_pct": 12.0,         # 12% RAM scale unit
-    "max_pod_ram_pct": 15.0,
-    "jvm_threads_live": 6.0,     # 6 threads scale unit (15..32 threads stays normal)
-    "jvm_gc_pause_rate": 0.025,
-    "webui_cpu_pct": 22.0,       # 22% WebUI CPU scale unit (JSP/JIT & flash-crowd bursts)
-    "webui_ram_pct": 18.0,
-    "persistence_cpu_pct": 8.0,
-    "persistence_ram_pct": 18.0,
-    "image_cpu_pct": 10.0,
-    "wan_network_io_kbs": 70.0,
-}
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Preprocess telemetry data for Deep Learning")
-    parser.add_argument("--config", default="ai-engine/configs/model_config.yaml", help="Path to config YAML")
-    return parser.parse_args()
+def load_config(config_path):
+    with open(config_path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
 
-def create_sliding_windows(data_matrix, window_size, stride=1):
+
+def compute_entity_baselines(df, features, scale_floors):
     """
-    Transforms 2D matrix (T, F) into 3D windows (N, W, F)
+    Computes Median, IQR, P95, P99, and Scale-Floored Robust denominator per (cloud_provider, service_name).
     """
-    num_samples, _ = data_matrix.shape
+    baselines = {}
+    all_medians = {f: [] for f in features}
+    all_scales = {f: [] for f in features}
+
+    for (cp, sn), grp in df.groupby(["cloud_provider", "service_name"]):
+        entity_key = f"{cp}:{sn}"
+        ent_meta = {
+            "cloud_provider": cp,
+            "service_name": sn,
+            "sample_count": int(len(grp)),
+            "features": {}
+        }
+        for f in features:
+            vals = grp[f].astype(np.float64).values
+            med = float(np.median(vals))
+            q25, q75, p95, p99 = [float(x) for x in np.percentile(vals, [25, 75, 95, 99])]
+            iqr = max(0.0, q75 - q25)
+            floor = float(scale_floors.get(f, 1.0))
+            scale = max(iqr, floor)
+
+            ent_meta["features"][f] = {
+                "median": round(med, 6),
+                "iqr": round(iqr, 6),
+                "floor": round(floor, 6),
+                "scale": round(scale, 6),
+                "p95": round(p95, 6),
+                "p99": round(p99, 6),
+            }
+            all_medians[f].append(med)
+            all_scales[f].append(scale)
+
+        baselines[entity_key] = ent_meta
+
+    # Global fallback for newly discovered services during initial warm-up
+    default_features = {}
+    for f in features:
+        floor = float(scale_floors.get(f, 1.0))
+        default_features[f] = {
+            "median": round(float(np.median(all_medians[f])) if all_medians[f] else 0.0, 6),
+            "iqr": round(float(np.median(all_scales[f])) if all_scales[f] else floor, 6),
+            "floor": round(floor, 6),
+            "scale": round(max(float(np.median(all_scales[f])) if all_scales[f] else floor, floor), 6),
+        }
+    baselines["__default__"] = {
+        "cloud_provider": "any",
+        "service_name": "default",
+        "sample_count": int(len(df)),
+        "features": default_features
+    }
+    return baselines
+
+
+def transform_entity_df(grp, ent_meta, features):
+    """Transforms a single entity's dataframe into standardized z-score matrix (N, 8)."""
+    n = len(grp)
+    k = len(features)
+    z_mat = np.zeros((n, k), dtype=np.float32)
+    for j, f in enumerate(features):
+        f_meta = ent_meta["features"][f]
+        med = f_meta["median"]
+        scale = max(1e-6, f_meta["scale"])
+        raw = grp[f].astype(np.float32).values
+        z_mat[:, j] = np.clip((raw - med) / scale, -10.0, 10.0)
+    return z_mat
+
+
+def create_windows(data_2d, window_size, stride=1):
     windows = []
-    for start in range(0, num_samples - window_size + 1, stride):
-        end = start + window_size
-        windows.append(data_matrix[start:end, :])
+    n = len(data_2d)
+    for start in range(0, n - window_size + 1, stride):
+        windows.append(data_2d[start:start + window_size])
+    if not windows:
+        return np.empty((0, window_size, data_2d.shape[1]), dtype=np.float32)
     return np.array(windows, dtype=np.float32)
 
-def generate_normal_regime_augmentations(windows, rng):
+
+def augment_training_windows(train_windows, features, rng):
     """
-    Augments normal training windows with realistic operational regimes:
-      - Light / Idle load scaling (when server just started or traffic is low)
-      - Mild Gaussian sensor jitter
-      - Erratic user traffic transitions (sudden bursts, drops, and rollercoaster swings)
+    Generates realistic standardized training windows:
+      1. Micro-jitter in z-score space
+      2. Load-correlated scaling (QPS + CPU + RAM rise together while Latency/Error remain normal)
+      3. Pre-GC Sawtooth RAM pattern (max_pod_ram_pct elevated while ram_floor_2m_pct stays low)
     """
-    augmented = [windows]
-    # 1. Mild jitter augmentation
-    noise = rng.normal(0.0, 0.08, size=windows.shape).astype(np.float32)
-    augmented.append(windows + noise)
+    augmented = [train_windows]
+    idx_map = {f: i for i, f in enumerate(features)}
 
-    # 2. Low-load / fresh-start regime (scaled down towards idle baseline)
-    n_low = max(1, len(windows) // 4)
-    idx = rng.choice(len(windows), size=n_low, replace=False)
-    low_windows = windows[idx].copy()
-    low_factors = rng.uniform(0.25, 0.75, size=(n_low, 1, 1)).astype(np.float32)
-    low_windows = low_windows * low_factors + rng.normal(0.0, 0.05, size=low_windows.shape).astype(np.float32)
-    augmented.append(low_windows)
+    # 1. Gaussian micro-jitter
+    jitter = train_windows + rng.normal(0.0, 0.05, size=train_windows.shape).astype(np.float32)
+    augmented.append(jitter)
 
-    # 3. Erratic traffic regime (abrupt step changes & fluctuating user load within window)
-    n_erratic = max(1, len(windows) // 3)
-    idx_err = rng.choice(len(windows), size=n_erratic, replace=False)
-    err_windows = windows[idx_err].copy()
-    seq_len = windows.shape[1]
-    for i in range(n_erratic):
-        step_t = rng.integers(2, seq_len - 2)
-        factor_before = rng.uniform(-0.8, 0.8)
-        factor_after = rng.uniform(-0.8, 0.9)
-        # Apply abrupt workload shift primarily to QPS (idx 0) and WAN IO (idx 13) + mild ripple
-        err_windows[i, :step_t, 0] += factor_before
-        err_windows[i, step_t:, 0] += factor_after
-        err_windows[i, :step_t, 13] += factor_before * 0.85
-        err_windows[i, step_t:, 13] += factor_after * 0.85
-    err_windows += rng.normal(0.0, 0.06, size=err_windows.shape).astype(np.float32)
-    augmented.append(err_windows)
+    # 2. Load-correlated active workload regimes
+    for delta in [-0.35, 0.45, 0.85]:
+        w = train_windows.copy()
+        for fname in ["qps", "max_pod_cpu_pct", "max_pod_ram_pct"]:
+            if fname in idx_map:
+                j = idx_map[fname]
+                w[:, :, j] = np.clip(w[:, :, j] + delta + rng.normal(0.0, 0.06, size=w[:, :, j].shape), -2.5, 2.6)
+        augmented.append(w.astype(np.float32))
 
-    # 4. Active Burst & JVM Warm-up CPU regime (higher healthy CPU utilization while latency remains fast)
-    n_burst = max(1, len(windows) // 3)
-    idx_burst = rng.choice(len(windows), size=n_burst, replace=False)
-    burst_windows = windows[idx_burst].copy()
-    for i in range(n_burst):
-        cpu_boost = rng.uniform(0.4, 2.2)
-        # Indices: 2=app_cpu_pct, 3=max_pod_cpu_pct, 8=webui_cpu_pct, 10=persistence_cpu_pct, 12=image_cpu_pct
-        burst_windows[i, :, 2] += cpu_boost
-        burst_windows[i, :, 3] += cpu_boost * rng.uniform(0.9, 1.3)
-        burst_windows[i, :, 8] += cpu_boost * rng.uniform(0.8, 1.25)
-        burst_windows[i, :, 10] += cpu_boost * rng.uniform(0.3, 0.7)
-        burst_windows[i, :, 12] += cpu_boost * rng.uniform(0.3, 0.7)
-    burst_windows += rng.normal(0.0, 0.06, size=burst_windows.shape).astype(np.float32)
-    augmented.append(burst_windows)
+    # 3. Healthy JVM pre-GC sawtooth (high instant RAM before GC, but normal 2-min RAM floor)
+    if "max_pod_ram_pct" in idx_map and "ram_floor_2m_pct" in idx_map:
+        w_gc = train_windows.copy()
+        j_ram = idx_map["max_pod_ram_pct"]
+        j_flr = idx_map["ram_floor_2m_pct"]
+        sawtooth = np.linspace(-0.2, 1.8, train_windows.shape[1], dtype=np.float32).reshape(1, -1)
+        w_gc[:, :, j_ram] = np.clip(w_gc[:, :, j_ram] + sawtooth, -2.0, 2.5)
+        w_gc[:, :, j_flr] = np.clip(w_gc[:, :, j_flr], -2.0, 0.6)
+        augmented.append(w_gc.astype(np.float32))
 
     return np.concatenate(augmented, axis=0)
 
-def run_preprocessing(config_path="ai-engine/configs/model_config.yaml"):
-    with open(config_path, "r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f)
 
-    raw_path = cfg["data"]["raw_csv_path"]
+def main():
+    parser = argparse.ArgumentParser(description="Preprocess Multi-Cloud Per-Entity Telemetry (V3)")
+    parser.add_argument("--config", default="ai-engine/configs/model_config.yaml", help="Path to model_config.yaml")
+    args = parser.parse_args()
+
+    cfg = load_config(args.config)
+    raw_csv = cfg["data"]["raw_csv_path"]
     processed_dir = cfg["data"]["processed_dir"]
+    baselines_path = cfg["data"]["entity_baselines_path"]
     features = cfg["data"]["features"]
+    scale_floors = cfg["data"]["physical_scale_floors"]
     window_size = cfg["data"]["window_size"]
-    stride = cfg["data"].get("stride", 1)
-    val_split = cfg["data"].get("val_split", 0.2)
-    seed = cfg["data"].get("random_seed", 42)
-    rng = np.random.default_rng(seed)
+    stride = cfg["data"]["stride"]
+    val_split = cfg["data"]["val_split"]
+    seed = cfg["data"]["random_seed"]
 
     os.makedirs(processed_dir, exist_ok=True)
-    models_dir = cfg["training"]["save_dir"]
-    os.makedirs(models_dir, exist_ok=True)
+    os.makedirs(os.path.dirname(os.path.abspath(baselines_path)), exist_ok=True)
 
-    print("=" * 70)
-    print("  MULTI-CLOUD TELEMETRY PREPROCESSING & WINDOWING (V2 ROBUST)")
-    print("=" * 70)
-    print(f"  Input CSV      : {raw_path}")
-    print(f"  Target Features: {len(features)} Golden Features")
-    print(f"  Window Size    : {window_size} samples ({window_size * 10} seconds)")
-    print(f"  Validation Ratio: {val_split * 100:.1f}% (Stratified across all 4 load phases)")
-    print("-" * 70)
+    print("========================================================================", flush=True)
+    print("  MULTI-CLOUD PER-ENTITY STANDARDIZED PREPROCESSING PIPELINE (V3)", flush=True)
+    print("========================================================================", flush=True)
 
-    # 1. Load data
-    df = pd.read_csv(raw_path)
-    total_raw_samples = len(df)
-    print(f"[1/4] Loaded raw dataset: {total_raw_samples} samples.")
+    df = pd.read_csv(raw_csv)
+    df = df.sort_values(["cloud_provider", "service_name", "timestamp"]).reset_index(drop=True)
+    df[features] = df[features].ffill().bfill().fillna(0.0)
 
-    missing_cols = [c for c in features if c not in df.columns]
-    if missing_cols:
-        raise ValueError(f"Missing required columns in CSV: {missing_cols}")
+    if "anomaly_label" in df.columns:
+        df = df[df["anomaly_label"] == 0].reset_index(drop=True)
 
-    data_subset = df[features].values.astype(np.float64)
+    baselines = compute_entity_baselines(df, features, scale_floors)
 
-    # 2. Fit RobustScaler with Physical Scale Floors
-    scaler = RobustScaler(unit_variance=True)
-    scaler.fit(data_subset)
+    with open(baselines_path, "w", encoding="utf-8") as f:
+        json.dump(baselines, f, indent=2)
+    with open(os.path.join(processed_dir, "entity_baselines.json"), "w", encoding="utf-8") as f:
+        json.dump(baselines, f, indent=2)
 
-    for idx, fname in enumerate(features):
-        floor_val = PHYSICAL_SCALE_FLOORS.get(fname, 1.0)
-        if scaler.scale_[idx] < floor_val:
-            scaler.scale_[idx] = floor_val
+    train_chunks = []
+    val_chunks = []
+    entity_window_counts = {}
 
-    scaled_all = scaler.transform(data_subset)
-    scaler_path = os.path.join(models_dir, "robust_scaler.joblib")
-    joblib.dump(scaler, scaler_path)
-    print(f"[2/4] Fitted Domain-Aware RobustScaler (with physical scale floors) -> {scaler_path}")
+    for (cp, sn), grp in df.groupby(["cloud_provider", "service_name"]):
+        entity_key = f"{cp}:{sn}"
+        z_mat = transform_entity_df(grp, baselines[entity_key], features)
+        ew = create_windows(z_mat, window_size=window_size, stride=stride)
+        if len(ew) == 0:
+            continue
+        entity_window_counts[entity_key] = int(len(ew))
 
-    # 3. Generate sliding windows & Stratified Phase Split (80% Train / 20% Val per hour phase)
-    all_windows = create_sliding_windows(scaled_all, window_size, stride)
-    n_total_win = len(all_windows)
+        # Stratified 4-phase split across this entity's timeline
+        num_phases = min(4, max(1, len(ew) // 5))
+        phases = np.array_split(ew, num_phases)
+        for p in phases:
+            if len(p) == 0:
+                continue
+            v_cnt = max(1, int(len(p) * val_split))
+            t_cnt = len(p) - v_cnt
+            if t_cnt > 0:
+                train_chunks.append(p[:t_cnt])
+            val_chunks.append(p[t_cnt:])
 
-    train_list, val_list = [], []
-    n_phases = 4
-    phase_len = n_total_win // n_phases
-    for p in range(n_phases):
-        p_start = p * phase_len
-        p_end = n_total_win if p == n_phases - 1 else (p + 1) * phase_len
-        phase_win = all_windows[p_start:p_end]
-        split_pt = int(len(phase_win) * (1.0 - val_split))
-        train_list.append(phase_win[:split_pt])
-        val_list.append(phase_win[split_pt:])
+    base_train_windows = np.concatenate(train_chunks, axis=0)
+    val_windows = np.concatenate(val_chunks, axis=0)
 
-    train_windows_base = np.concatenate(train_list, axis=0)
-    val_windows = np.concatenate(val_list, axis=0)
+    rng = np.random.default_rng(seed)
+    train_windows = augment_training_windows(base_train_windows, features, rng)
+    rng.shuffle(train_windows)
 
-    # Augment training windows with low-load / warmup transitions
-    train_windows = generate_normal_regime_augmentations(train_windows_base, rng)
+    np.save(os.path.join(processed_dir, "train_windows.npy"), train_windows)
+    np.save(os.path.join(processed_dir, "val_windows.npy"), val_windows)
 
-    print(f"[3/4] Stratified Phase Split & Augmentation:")
-    print(f"      Base Train Windows     : {len(train_windows_base)}")
-    print(f"      Augmented Train Windows: {len(train_windows)} (includes low-load & jitter regimes)")
-    print(f"      Validation Windows     : {len(val_windows)}")
-
-    train_out_path = os.path.join(processed_dir, "train_windows.npy")
-    val_out_path = os.path.join(processed_dir, "val_windows.npy")
-    np.save(train_out_path, train_windows)
-    np.save(val_out_path, val_windows)
-
-    feature_meta_path = os.path.join(processed_dir, "feature_names.json")
-    with open(feature_meta_path, "w", encoding="utf-8") as f:
+    with open(os.path.join(processed_dir, "feature_names.json"), "w", encoding="utf-8") as f:
         json.dump(features, f, indent=2)
 
     summary = {
-        "raw_samples": total_raw_samples,
+        "architecture": "Per-Entity Z-Score Standardized Universal Autoencoder (V3)",
+        "total_raw_entity_rows": int(len(df)),
+        "discovered_entities": list(entity_window_counts.keys()),
+        "entity_window_counts": entity_window_counts,
+        "num_features": len(features),
         "features": features,
-        "n_features": len(features),
         "window_size": window_size,
-        "window_duration_seconds": window_size * 10,
-        "train_windows_shape": list(train_windows.shape),
-        "val_windows_shape": list(val_windows.shape),
-        "scaler_path": scaler_path,
-        "physical_scale_floors": PHYSICAL_SCALE_FLOORS
+        "stride": stride,
+        "base_train_windows": int(len(base_train_windows)),
+        "augmented_train_windows": int(len(train_windows)),
+        "val_windows": int(len(val_windows)),
+        "train_shape": list(train_windows.shape),
+        "val_shape": list(val_windows.shape),
+        "physical_scale_floors": scale_floors,
     }
     with open(os.path.join(processed_dir, "preprocess_summary.json"), "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
 
-    print(f"[4/4] Saved processed tensors to {processed_dir}")
-    print("=" * 70)
-    print("[V] Preprocessing completed successfully!\n")
-    return summary
+    print(f"  * Total Raw Entity Rows  : {len(df)}", flush=True)
+    print(f"  * Discovered Entities    : {', '.join(entity_window_counts.keys())}", flush=True)
+    print(f"  * Base Train Windows     : {base_train_windows.shape}", flush=True)
+    print(f"  * Augmented Train Windows: {train_windows.shape}", flush=True)
+    print(f"  * Validation Windows     : {val_windows.shape}", flush=True)
+    print(f"  * Saved Entity Baselines : {baselines_path}", flush=True)
+    print("========================================================================", flush=True)
+
 
 if __name__ == "__main__":
-    args = parse_args()
-    run_preprocessing(args.config)
+    main()
