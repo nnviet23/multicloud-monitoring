@@ -29,17 +29,24 @@
   },
   "likelihood_calibration": {
     "calibration_method": "logistic_boundary_anchored",
+    "score_input": "min(current_mse,short_mean_mse)",
     "temperature": 0.075121,
     "threshold_anchor_prob_pct": 50.0,
-    "brier_score": 9.2e-05,
-    "expected_calibration_error": 0.009182,
-    "log_loss": 0.009228,
-    "normal_val_mean_prob_pct": 1.0,
-    "normal_val_p95_prob_pct": 1.11,
+    "brier_score": 9e-05,
+    "expected_calibration_error": 0.009078,
+    "log_loss": 0.009123,
+    "normal_val_mean_prob_pct": 0.99,
+    "normal_val_p95_prob_pct": 1.08,
     "normal_val_max_prob_pct": 1.19,
     "fault_min_prob_pct": 100.0,
     "fault_mean_prob_pct": 100.0,
-    "calibration_verified": true
+    "calibration_verified": true,
+    "scope": "normal_validation_and_synthetic_reference_faults",
+    "validation_sha256": "f8caa2f9c5d262ba7635e0230a0cff39aa725932fe2776de5dc53a6ecee5c6c9",
+    "model_sha256": {
+      "gru_autoencoder.pt": "c24beb13b45fa390338a72b029173b59982c8f1601b03c3e0a1d5fd364668461",
+      "tcn_autoencoder.pt": "690d648b4a9dd3514c7772e08cba01213bd5f5c80c5f3e15470832988c6125dd"
+    }
   },
   "feature_rca_baselines": {
     "qps": {

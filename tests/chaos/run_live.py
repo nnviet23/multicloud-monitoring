@@ -78,7 +78,8 @@ def evaluate(records, phases, settle):
         fault = phase["id"] in FAULTS
         expected = f"[CROSS_CLOUD_WAN_DELAY] aws->{FAULTS[phase['id']][0]}" if fault else ""
         rca_ok = any(expected in cause for cause in causes) if fault else True
-        coverage = len(selected) >= 3 and all(r.get("entity_count", 0) >= 6 for r in selected)
+        coverage = len(selected) >= 3 and all(r.get("entity_count", 0) >= 6
+            and r.get("telemetry_complete", True) and r.get("verdict") != "UNKNOWN" for r in selected)
         probes_healthy = bool(selected) and all(r.get("probe_ok") and r.get("probe_ms", 0) < 500
                                                 for r in selected)
         # Fault tests require model detection and exact-cloud RCA, not just an SLO guard.

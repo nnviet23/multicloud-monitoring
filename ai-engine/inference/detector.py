@@ -30,6 +30,7 @@ import json
 import yaml
 import signal
 import urllib.request
+import urllib.error
 import urllib.parse
 import subprocess
 import argparse
@@ -44,6 +45,7 @@ if ai_engine_root not in sys.path:
 
 from models.gru_autoencoder import GRUAutoencoder
 from models.tcn_autoencoder import TCNAutoencoder
+from inference.streaming import HistogramDeltas, LatencyRecovery, TraceEvidence
 from models.scoring import (
     UPPER_BOUND_SATURATION_METRICS,
     ACTIVE_RESOURCE_METRICS,
@@ -56,6 +58,7 @@ from models.scoring import (
 from data.collector import (
     ENTITY_VECTOR_QUERIES,
     CLOUD_VECTOR_QUERIES,
+    ACTIVE_JVM_PODS,
 )
 
 ENTITY_FEATURE_COLS = [
@@ -100,6 +103,8 @@ def probe_webui_health(url="http://localhost:8080/tools.descartes.teastore.webui
             _ = resp.read(512)
             lat_ms = (time.time() - t0) * 1000.0
             return (200 <= resp.status < 400), resp.status, lat_ms
+    except urllib.error.HTTPError as error:
+        return False, error.code, (time.time() - t0) * 1000.0
     except Exception:
         lat_ms = (time.time() - t0) * 1000.0
         return False, 0, lat_ms
@@ -110,6 +115,12 @@ class PrometheusVectorClient:
         self.base_url = base_url.rstrip("/")
         self.pf_proc = None
         self.ram_history = {}
+        self.histograms = HistogramDeltas()
+        self.fast_metrics = {}
+        self.client_entities = set()
+        self.error_counters = {}
+        self.query_failures = []
+        self.metric_presence = {}
         self._ensure_connection()
 
     def _ensure_connection(self):
@@ -122,6 +133,9 @@ class PrometheusVectorClient:
         except Exception:
             pass
 
+        if self.base_url not in ("http://localhost:9090", "http://127.0.0.1:9090"):
+            print(f"[Prometheus] Custom endpoint unavailable: {self.base_url}", flush=True)
+            return
         print(f"[Prometheus] {self.base_url} not reachable. Spawning kubectl port-forward...")
         try:
             cmd = [
@@ -142,8 +156,9 @@ class PrometheusVectorClient:
                 res = json.loads(resp.read().decode("utf-8"))
                 if res.get("status") == "success":
                     return res.get("data", {}).get("result", [])
+                self.query_failures.append(promql)
         except Exception:
-            pass
+            self.query_failures.append(promql)
         return []
 
     def discover_entities(self):
@@ -158,7 +173,12 @@ class PrometheusVectorClient:
         return sorted(entities)
 
     def collect_all_entities(self):
+        self.query_failures = []
+        self.metric_presence = {}
         entities = self.discover_entities()
+        if self.query_failures:
+            self.fast_metrics = {}
+            return [], {}, {}
         entity_metrics = {
             e: {col: 0.0 for col in ENTITY_FEATURE_COLS}
             for e in entities
@@ -168,6 +188,9 @@ class PrometheusVectorClient:
             if col == "discover":
                 continue
             results = self.query_vector(promql)
+            if self.query_failures:
+                self.fast_metrics = {}
+                return entities, entity_metrics, {}
             for item in results:
                 m = item.get("metric", {})
                 cp = m.get("cloud_provider", "").strip()
@@ -178,6 +201,7 @@ class PrometheusVectorClient:
                         val = float(item["value"][1])
                         if not math.isnan(val) and not math.isinf(val):
                             entity_metrics[key][col] = max(0.0, val)
+                            self.metric_presence.setdefault(key, set()).add(col)
                     except (ValueError, KeyError, IndexError):
                         pass
 
@@ -204,7 +228,52 @@ class PrometheusVectorClient:
                     except (ValueError, KeyError, IndexError):
                         pass
 
+        self._collect_fresh_histograms(entities, entity_metrics)
         return entities, entity_metrics, cloud_wan
+
+    def _collect_fresh_histograms(self, entities, metrics):
+        now = time.time()
+        self.fast_metrics = {}
+        for side in ("server", "client"):
+            dimensions = "le, cloud_provider, service_name" + (", http_response_status_code" if side == "server" else "")
+            query = (f"sum by ({dimensions}) (http_{side}_request_duration_seconds_bucket "
+                     f"and on (cloud_provider, service_name, host_name) ({ACTIVE_JVM_PODS}))")
+            failures_before = len(self.query_failures)
+            rows = self.query_vector(query)
+            if len(self.query_failures) > failures_before:
+                continue
+            grouped, errors = {}, {}
+            for item in rows:
+                labels = item.get("metric", {})
+                key = (labels.get("cloud_provider"), labels.get("service_name"))
+                if key not in metrics:
+                    continue
+                try:
+                    bound, count = float(labels["le"]), float(item["value"][1])
+                except (KeyError, ValueError, IndexError):
+                    continue
+                if not math.isfinite(count) or count < 0:
+                    continue
+                buckets = grouped.setdefault(key, {})
+                buckets[bound] = buckets.get(bound, 0.0) + count
+                if side == "server" and math.isinf(bound) and labels.get("http_response_status_code", "").startswith("5"):
+                    errors[key] = errors.get(key, 0.0) + count
+            for key in entities:
+                eid = ":".join(key)
+                if side == "client" and key in grouped:
+                    self.client_entities.add(eid)
+                observation = self.histograms.update((eid, side), grouped.get(key, {}), now)
+                entry = self.fast_metrics.setdefault(eid, {})
+                entry[side] = observation
+                entry["client_required"] = eid in self.client_entities
+                if observation:
+                    metrics[key][f"{side}_latency_p95"] = observation["value"]
+                if side == "server" and key in grouped:
+                    count = errors.get(key, 0.0)
+                    previous = self.error_counters.get(eid)
+                    self.error_counters[eid] = (count, now)
+                    if previous is not None and count >= previous[0] and observation:
+                        metrics[key]["error_rate_5xx"] = (count - previous[0]) / max(0.001, now - previous[1])
 
     def close(self):
         if self.pf_proc:
@@ -223,6 +292,7 @@ class TempoTraceAnalyzer:
     def __init__(self, base_url="http://localhost:3200"):
         self.base_url = base_url.rstrip("/")
         self.pf_proc = None
+        self.evidence = TraceEvidence()
         self._ensure_connection()
 
     def _ensure_connection(self):
@@ -235,6 +305,9 @@ class TempoTraceAnalyzer:
         except Exception:
             pass
 
+        if self.base_url not in ("http://localhost:3200", "http://127.0.0.1:3200"):
+            print(f"[Tempo] Custom endpoint unavailable: {self.base_url}", flush=True)
+            return
         print(f"[Tempo] {self.base_url} not reachable. Spawning kubectl port-forward...")
         try:
             cmd = [
@@ -266,13 +339,13 @@ class TempoTraceAnalyzer:
         }
         try:
             now_sec = int(time.time())
-            start_sec = now_sec - 20
+            start_sec = now_sec - 45
             q_str = f'{{ resource.service.name = "teastore-webui" && duration > {int(min_duration_ms)}ms }}'
             params = urllib.parse.urlencode({
                 "q": q_str,
                 "start": start_sec,
                 "end": now_sec + 5,
-                "limit": limit,
+                "limit": max(24, limit),
             })
             url = f"{self.base_url}/api/search?{params}"
             with urllib.request.urlopen(url, timeout=3.0) as resp:
@@ -293,14 +366,25 @@ class TempoTraceAnalyzer:
 
             traces.sort(key=trace_sort_key, reverse=True)
 
-            for tr_meta in traces[:6]:
+            for tr_meta in traces[:12]:
                 tid = tr_meta.get("traceID")
                 if not tid:
                     continue
                 t_url = f"{self.base_url}/api/traces/{tid}"
                 with urllib.request.urlopen(t_url, timeout=3.0) as resp:
                     t_data = json.loads(resp.read().decode("utf-8"))
-                self._decompose_single_trace(t_data, summary)
+                local = {"wan_links": {}, "entity_wan_ms": {}, "self_times": {},
+                         "server_times": {}, "db_time_ms": 0.0}
+                self._decompose_single_trace(t_data, local)
+                start = int(tr_meta.get("startTimeUnixNano", 0) or 0) / 1e9
+                observed_at = start + float(tr_meta.get("durationMs", 0) or 0) / 1000
+                self.evidence.observe(local, tid, observed_at, now_sec)
+                # Old traces remain RCA evidence, never a current guard or model feature.
+                if now_sec - observed_at <= 20:
+                    for name in ("wan_links", "entity_wan_ms", "self_times", "server_times"):
+                        for key, value in local[name].items():
+                            summary[name][key] = max(summary[name].get(key, 0.0), value)
+                    summary["db_time_ms"] = max(summary["db_time_ms"], local["db_time_ms"])
                 summary["traces_inspected"] += 1
         except Exception:
             pass
@@ -525,9 +609,13 @@ def synthesize_multicloud_rca(
 
     # 1. Check Tempo Span Decomposition for explicit Cross-Cloud WAN delay or Database bottleneck
     for link_name, wan_ms in sorted(trace_summary.get("wan_links", {}).items(), key=lambda x: x[1], reverse=True):
-        if wan_ms >= 65.0:
+        path = link_name.split(" (", 1)[0].split("->")
+        if (wan_ms >= 65.0 and len(path) == 2 and path[0] != path[1]
+                and TraceEvidence.supported(link_name, entity_results)):
+            evidence = trace_summary.get("wan_evidence", {}).get(link_name)
+            detail = f", trace_age={evidence['age_seconds']:.0f}s" if evidence else ""
             candidates.append(
-                f"[CROSS_CLOUD_WAN_DELAY] {link_name} (T_WAN={wan_ms:.0f}ms)"
+                f"[CROSS_CLOUD_WAN_DELAY] {link_name} (T_WAN={wan_ms:.0f}ms{detail})"
             )
 
     if trace_summary.get("db_time_ms", 0.0) >= 80.0:
@@ -656,7 +744,8 @@ def main():
         tcn_model.eval()
 
     cal_meta = threshold_meta.get("likelihood_calibration", {})
-    likelihood_calibrated = bool(cal_meta.get("calibration_verified", False))
+    likelihood_calibrated = bool(cal_meta.get("calibration_verified", False)
+        and cal_meta.get("score_input") == "min(current_mse,short_mean_mse)")
 
     global_scorer = DualSlidingWindowScorer(
         base_mean=err_dist["mean"],
@@ -677,12 +766,15 @@ def main():
     print(f"  * Decision Bound   : {threshold_p99:.4f} | Calibrated Likelihood: {'VERIFIED' if likelihood_calibrated else 'UNVERIFIED'}")
     print("=" * 88)
 
-    prom_client = PrometheusVectorClient()
-    tempo_analyzer = TempoTraceAnalyzer()
+    endpoints = cfg.get("observability_endpoints", {})
+    prom_client = PrometheusVectorClient(endpoints.get("prometheus_url", "http://localhost:9090"))
+    tempo_analyzer = TempoTraceAnalyzer(endpoints.get("tempo_url", "http://localhost:3200"))
     entity_buffers = {}
+    recovery = LatencyRecovery()
     sample_idx = 0
     consecutive_probe_failures = 0
     consecutive_slow_probes = 0
+    last_model_observation = None
 
     stats_summary = {
         "total_samples": 0,
@@ -701,7 +793,14 @@ def main():
             sample_idx += 1
 
             entities, entity_metrics, cloud_wan = prom_client.collect_all_entities()
-            probe_ok, probe_code, probe_ms = probe_webui_health()
+            required_entities = set(cfg.get("inference", {}).get("required_entities",
+                [eid for eid in calibrator.entities if not eid.startswith("__")]))
+            missing_entities = sorted(required_entities - {":".join(entity) for entity in entities})
+            telemetry_ok = bool(entities) and not missing_entities and not prom_client.query_failures and all(
+                {"max_pod_cpu_pct", "max_pod_ram_pct"} <= prom_client.metric_presence.get(entity, set())
+                for entity in entities)
+            probe_ok, probe_code, probe_ms = probe_webui_health(endpoints.get(
+                "webui_probe_url", "http://localhost:8080/tools.descartes.teastore.webui/product?id=7"))
             trace_summary = tempo_analyzer.analyze_recent_traces(min_duration_ms=40, limit=12)
 
             if probe_ok:
@@ -727,11 +826,12 @@ def main():
                 and webui_lat_ms < 520.0
                 and total_5xx <= 0.05
                 and total_wan_drops == 0.0
-                and max(trace_summary.get("wan_links", {}).values(), default=0.0) < 60.0
             )
 
             entity_results = {}
-            for (cp, sn) in entities:
+            refreshed_entities = []
+            cpu_refreshed_entities = []
+            for (cp, sn) in entities if telemetry_ok else []:
                 eid = f"{cp}:{sn}"
                 if eid not in stats_summary["discovered_entities"]:
                     stats_summary["discovered_entities"].append(eid)
@@ -739,7 +839,8 @@ def main():
                 raw_dict = dict(entity_metrics[(cp, sn)])
                 # Fuse Tempo cross-cloud WAN transit lag (>32ms excess over 20ms baseline) into spoke client_latency_p95
                 ent_wan_ms = trace_summary.get("entity_wan_ms", {}).get(eid, 0.0)
-                if ent_wan_ms > 32.0:
+                fresh = prom_client.fast_metrics.get(eid, {})
+                if ent_wan_ms > 32.0 and not fresh.get("client"):
                     excess_wan_sec = (ent_wan_ms - 22.0) / 1000.0
                     raw_dict["client_latency_p95"] = max(raw_dict["client_latency_p95"], excess_wan_sec)
 
@@ -753,6 +854,20 @@ def main():
                     buf.append(z_vec.copy())
                     if len(buf) > window_size:
                         buf.pop(0)
+
+                confirmed = recovery.update(
+                    eid, fresh.get("server"), fresh.get("client"),
+                    probe_ok and telemetry_ok, probe_ms, raw_dict["error_rate_5xx"],
+                    client_required=fresh.get("client_required", False))
+                latency_indices = [features.index(name) for name in ("server_latency_p95", "client_latency_p95", "error_rate_5xx")]
+                if confirmed and any(row[index] > 2.0 for row in buf for index in latency_indices):
+                    recovery.refresh_latency_history(buf, z_vec, features,
+                        include_errors=recovery.state[eid]["count"] >= recovery.confirmations)
+                    tempo_analyzer.evidence.forget(eid, loop_start)
+                    refreshed_entities.append(eid)
+                if recovery.refresh_cpu_history(buf, z_vec, features, raw_dict["max_pod_cpu_pct"],
+                                                 confirmed and bool(fresh.get("server", {}).get("fresh") if fresh.get("server") else False)):
+                    cpu_refreshed_entities.append(eid)
 
                 win_np = np.array(buf, dtype=np.float32)
                 tensor_in = torch.from_numpy(win_np).unsqueeze(0).to(device)
@@ -796,7 +911,23 @@ def main():
                 worst_entity_id = "none"
                 max_entity_mse = 0.0
 
-            dw_res = global_scorer.update_and_score(max_entity_mse)
+            worst_fast = prom_client.fast_metrics.get(worst_entity_id, {})
+            worst_raw = entity_results.get(worst_entity_id, {}).get("raw", {})
+            observation = (worst_entity_id, *(worst_fast.get(side, {}).get("observed_at")
+                if worst_fast.get(side) else None for side in ("server", "client")),
+                *(worst_raw.get(name) for name in ("max_pod_cpu_pct", "max_pod_ram_pct", "ram_floor_2m_pct", "gc_pause_rate")))
+            dw_res = global_scorer.update_and_score(max_entity_mse,
+                new_observation=observation != last_model_observation) if telemetry_ok else {
+                "short_mean_mse": 0.0, "likelihood": 0.0, "likelihood_pct": 0.0,
+                "is_sustained_anomaly": False, "is_transient_spike": False}
+            if telemetry_ok:
+                last_model_observation = observation
+
+            rca_trace_summary = dict(trace_summary)
+            evidence = tempo_analyzer.evidence.active(entity_results, time.time())
+            rca_trace_summary["wan_evidence"] = evidence
+            rca_trace_summary["wan_links"] = {**trace_summary["wan_links"],
+                                             **{key: value["delay_ms"] for key, value in evidence.items()}}
 
             # Guard rules for deterministic multi-cloud SLO violations (e.g. sustained WAN delay or 5xx)
             guard_triggered = False
@@ -809,7 +940,7 @@ def main():
                 guard_reasons.append("Cross-cloud WAN packet drop")
             if consecutive_probe_failures >= 2:
                 guard_triggered = True
-                guard_reasons.append(f"End-to-End Multi-Cloud Probe Timeout ({consecutive_probe_failures}x)")
+                guard_reasons.append(f"End-to-End Multi-Cloud Probe Failure (HTTP {probe_code}, {consecutive_probe_failures}x)")
             if consecutive_slow_probes >= 2 and (
                 max(trace_summary.get("wan_links", {}).values(), default=0.0) >= 65.0
                 or probe_ms >= 500.0
@@ -830,7 +961,10 @@ def main():
 
             verdict = "HEALTHY"
             top_causes = []
-            if not dw_res["is_sustained_anomaly"] and not guard_triggered:
+            if not telemetry_ok and not guard_triggered:
+                verdict = "UNKNOWN"
+                print("   └── Telemetry unavailable/incomplete; AI health is UNKNOWN", flush=True)
+            elif not dw_res["is_sustained_anomaly"] and not guard_triggered:
                 if dw_res["is_transient_spike"] or not probe_ok:
                     verdict = "TRANSIENT_SPIKE_SUPPRESSED"
                     stats_summary["transient_spike_count"] += 1
@@ -864,7 +998,7 @@ def main():
                     entity_results=entity_results,
                     rca_baselines=rca_baselines,
                     features=features,
-                    trace_summary=trace_summary,
+                    trace_summary=rca_trace_summary,
                     probe_ok=probe_ok,
                     probe_ms=probe_ms,
                 )
@@ -899,15 +1033,24 @@ def main():
                 "webui_qps": round(webui_qps, 2),
                 "latency_p95_ms": round(webui_lat_ms, 2),
                 "probe_ok": probe_ok,
+                "probe_code": probe_code,
                 "probe_ms": round(probe_ms, 1),
                 "error_5xx": round(total_5xx, 4),
                 "worst_entity": worst_entity_id,
                 "instant_mse": round(max_entity_mse, 5),
                 "short_window_mse": round(dw_res["short_mean_mse"], 5),
-                "likelihood_pct": round(dw_res["likelihood_pct"], 2),
+                "likelihood_pct": round(dw_res["likelihood_pct"], 2) if telemetry_ok else None,
+                "window_likelihood_pct": dw_res.get("window_likelihood_pct") if telemetry_ok else None,
                 "likelihood_calibrated": likelihood_calibrated,
                 "verdict": verdict,
                 "model_alert": bool(dw_res["is_sustained_anomaly"]),
+                "telemetry_complete": telemetry_ok,
+                "query_failures": len(prom_client.query_failures),
+                "missing_entities": missing_entities,
+                "latency_history_refreshed": refreshed_entities,
+                "cpu_history_refreshed": cpu_refreshed_entities,
+                "fast_metrics": prom_client.fast_metrics,
+                "rca_evidence": evidence,
                 "guard_reasons": guard_reasons,
                 "traces_inspected": trace_summary.get("traces_inspected", 0),
                 "rca_causes": top_causes,

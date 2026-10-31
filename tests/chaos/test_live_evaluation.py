@@ -30,6 +30,10 @@ class LiveEvaluationTests(unittest.TestCase):
         records[0]["entity_count"] = 0
         self.assertEqual(live.evaluate(records, phases, 30)["passed"], 0)
         self.assertEqual(live.evaluate(self.records()[:1], phases, 30)["passed"], 0)
+        unknown = self.records()
+        for record in unknown:
+            record.update(verdict="UNKNOWN", telemetry_complete=False)
+        self.assertEqual(live.evaluate(unknown, [self.phase("baseline")], 30)["passed"], 0)
 
     def test_recovery_requires_healthy_probes_and_no_alerts(self):
         phases = [self.phase("recovery_after_gcp_wan_delay")]

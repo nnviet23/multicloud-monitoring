@@ -142,6 +142,27 @@ def compute_entity_baselines(train_df, features, scale_floors):
     return baselines
 
 
+def impute_causally(train_df, val_df, features):
+    """Fill each entity in time order without reading a later observation.
+
+    Training starts from a fixed zero fallback when no past observation exists.
+    Validation starts from that entity's last training observation and then uses
+    only its own past. No statistics are fit on validation or on another entity.
+    """
+    train_parts, val_parts = [], []
+    for (cp, sn), group in train_df.groupby(["cloud_provider", "service_name"]):
+        training = group.sort_values("timestamp").copy()
+        training[features] = training[features].replace([np.inf, -np.inf], np.nan).ffill().fillna(0.0)
+        validation = val_df[(val_df["cloud_provider"] == cp) & (val_df["service_name"] == sn)]
+        validation = validation.sort_values("timestamp").copy()
+        values = pd.concat([training[features].tail(1), validation[features]], ignore_index=True)
+        filled = values.replace([np.inf, -np.inf], np.nan).ffill().fillna(0.0)
+        validation[features] = filled.iloc[1:].to_numpy()
+        train_parts.append(training)
+        val_parts.append(validation)
+    return pd.concat(train_parts, ignore_index=True), pd.concat(val_parts, ignore_index=True)
+
+
 def transform_entity_df(grp, ent_meta, features):
     """Transforms a single entity's dataframe into standardized z-score matrix `(N, 8)`."""
     n = len(grp)
@@ -278,18 +299,12 @@ def main():
     df = pd.read_csv(raw_csv)
     df = df.sort_values(["cloud_provider", "service_name", "timestamp"]).reset_index(drop=True)
 
-    # Forward/backward fill strictly within each entity to avoid cross-entity contamination
-    df[features] = (
-        df.groupby(["cloud_provider", "service_name"])[features]
-        .transform(lambda g: g.ffill().bfill())
-        .fillna(0.0)
-    )
-
     if "anomaly_label" in df.columns:
         df = df[df["anomaly_label"] == 0].reset_index(drop=True)
 
     # Step 1: Chronological train/val split per entity BEFORE computing baselines or windows
     train_df, val_df, split_audit = split_entities_chronologically(df, val_split=val_split, window_size=window_size)
+    train_df, val_df = impute_causally(train_df, val_df, features)
 
     # Step 2: Fit per-entity baselines strictly on train_df
     baselines = compute_entity_baselines(train_df, features, scale_floors)
@@ -319,6 +334,7 @@ def main():
         "architecture": "Per-Entity Z-Score Standardized Universal Autoencoder (V3)",
         "split_strategy": "strict_chronological_per_entity_pre_windowing",
         "baseline_fit_scope": "train_only",
+        "imputation": "causal_forward_fill_per_entity_after_split; initial_fallback=0",
         "window_overlap_between_train_and_val": 0,
         "total_raw_entity_rows": int(len(df)),
         "train_raw_entity_rows": int(len(train_df)),

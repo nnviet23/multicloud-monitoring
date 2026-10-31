@@ -185,7 +185,9 @@ class DualSlidingWindowScorer:
     sustained anomaly verdicts using short-term vs long-term error windows.
 
     Calibration properties:
-      - Decision boundary alignment: at `short_mean == threshold`, `likelihood == 0.50` (50.0%).
+      - Probability input is min(current_mse, short_mean), so old window errors
+        cannot keep the current risk above 50% after a recovered sample.
+      - Decision boundary alignment: at input == threshold, likelihood == 50%.
       - Healthy baseline anchoring: at `short_mean <= base_mean`, `likelihood <= 0.01` (1.0%).
       - Strictly monotonic logistic sigmoid parameterized by validation `(base_mean, base_std, threshold)`.
     """
@@ -211,19 +213,24 @@ class DualSlidingWindowScorer:
         logit = max(-20.0, min(20.0, logit))
         return 1.0 / (1.0 + math.exp(-logit))
 
-    def update_and_score(self, current_mse):
+    def update_and_score(self, current_mse, new_observation=True):
         current_mse = float(current_mse)
-        self.error_history.append(current_mse)
+        if new_observation or not self.error_history:
+            self.error_history.append(current_mse)
+        else:
+            self.error_history[-1] = current_mse
         if len(self.error_history) > self.long_w:
             self.error_history.pop(0)
 
         short_slice = self.error_history[-self.short_w:]
         short_mean = float(np.mean(short_slice))
-        likelihood = self.compute_likelihood(short_mean)
+        # Current evidence must still support the recent-window risk. Otherwise
+        # a recovered sample could be labelled HEALTHY with a 90% fault score.
+        likelihood = self.compute_likelihood(min(current_mse, short_mean))
 
-        if current_mse > self.threshold:
+        if current_mse > self.threshold and new_observation:
             self.consecutive_breaches += 1
-        else:
+        elif current_mse <= self.threshold:
             self.consecutive_breaches = 0
 
         is_sustained_anomaly = (
@@ -235,6 +242,7 @@ class DualSlidingWindowScorer:
             "short_mean_mse": short_mean,
             "likelihood": likelihood,
             "likelihood_pct": round(likelihood * 100.0, 2),
+            "window_likelihood_pct": round(self.compute_likelihood(short_mean) * 100.0, 2),
             "consecutive_breaches": self.consecutive_breaches,
             "is_sustained_anomaly": is_sustained_anomaly,
             "is_transient_spike": is_transient_spike,
@@ -325,6 +333,7 @@ def validate_likelihood_calibration(normal_mse_array, fault_mse_array, base_mean
 
     return {
         "calibration_method": "logistic_boundary_anchored",
+        "score_input": "min(current_mse,short_mean_mse)",
         "temperature": round(scorer.temperature, 6),
         "threshold_anchor_prob_pct": round(prob_at_threshold * 100.0, 2),
         "brier_score": round(brier_score, 6),

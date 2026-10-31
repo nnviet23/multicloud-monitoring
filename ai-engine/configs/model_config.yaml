@@ -79,4 +79,4 @@ observability_endpoints:
   prometheus_url: "http://localhost:9090"
   tempo_url: "http://localhost:3200"
   loki_url: "http://localhost:3100"
-  webui_probe_url: "http://localhost:8080/tools.descartes.teastore.webui/status"
+  webui_probe_url: "http://localhost:8080/tools.descartes.teastore.webui/product?id=7"

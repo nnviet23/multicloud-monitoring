@@ -84,3 +84,75 @@ Baseline có ALERT được ghi FAIL, không được tính là phát hiện l�
 Kết quả live chỉ phản ánh lab và thời điểm chạy; baseline cũ, warm-up và
 độ trễ export telemetry có thể làm baseline hoặc recovery FAIL. Báo cáo giữ
 nguyên các ca FAIL để xác định vấn đề thay vì tự đổi threshold cho test PASS.
+
+## 4. CPU JVM, database lock và HTTP 5xx thật
+
+```bash
+python3.12 tests/chaos/run_service_faults.py \
+  --scenarios cpu db_lock webui_outage --users 12 \
+  --output tests/benchmarks/results/service-new-run
+```
+
+Runner chạy tuần tự, giữ một detector xuyên các pha và lưu log/JSON:
+
+- `cpu`: biên dịch agent Java bằng JDK có sẵn trong pod, attach vào đúng JVM
+  recommender và chạy một thread CPU có thời hạn. Agent có lệnh stop và tự dừng
+  sau tối đa 180 giây; không cần tải thư viện hoặc khởi động lại JVM.
+  Compiler/helper tắt `JAVA_TOOL_OPTIONS` và giới hạn heap 32–64 MiB để tránh
+  tự chạy OTel agent hoặc làm pod thiếu bộ nhớ trong bước chuẩn bị.
+- `db_lock`: giữ write lock trên hai bảng catalog TeaStore trong một session
+  MariaDB với `autocommit=0`, có `SLEEP` giới hạn, sau đó unlock. Một kết nối
+  SQL độc lập phải bị timeout khi đọc bảng để xác nhận lock có tác dụng.
+  Cleanup đóng session; remote
+  `timeout` giới hạn cả thời gian đợi lấy lock. Không sửa dữ liệu bảng.
+  Runner evict cache JPA và reset EntityManagerFactory qua endpoint quản trị
+  TeaStore. Cache ở các tầng khác vẫn có thể che lỗi khỏi luồng duyệt web;
+  SQL lock được xác nhận chưa đủ chứng minh request người dùng bị chặn.
+- `webui_outage`: tạm đưa replicas WebUI về 0 rồi trả về số replicas ban đầu.
+  Watchdog độc lập tự khôi phục nếu runner bị dừng bất thường.
+
+Mặc định mỗi lỗi 60 giây, recovery 120 giây, settle 30 giây. CPU cần model alert
+và RCA CPU tại GCP; DB cần ALERT và bằng chứng SQL bottleneck (có thể tới sau
+khi lock được nhả vì span chỉ kết thúc lúc đó). Outage kiểm tra ALERT và probe
+HTTP lỗi; báo cáo tách cảnh báo mô hình khỏi SLO guard. Memory leak hiện vẫn
+được replay tổng hợp; các ca trên không được coi là tiêm memory leak thật.
+
+## 5. Dữ liệu mới, thời gian phục hồi và ý nghĩa điểm số
+
+- Preprocessing chia train/validation trước khi điền dữ liệu thiếu. Forward fill
+  theo từng entity và từng thời điểm; validation được phép mang giá trị cuối
+  train sang. Khi chưa có quan sát quá khứ, fallback ban đầu là 0; không bfill.
+- Detector dùng chênh lệch histogram counter giữa các export để đo P95 của các
+  request mới. Counter reset, bucket thay đổi, dữ liệu lặp hoặc quá tuổi không
+  được coi là bằng chứng phục hồi.
+- Chỉ làm mới lịch sử hai feature latency khi có hai export khỏe độc lập, hoặc
+  batch ít nhất 5 request mới khỏe cùng nhiều HTTP probe khỏe. Lịch sử 5xx cần
+  đủ hai export khỏe; CPU chỉ giảm khi có xác nhận mới và CPU hiện tại thấp cả
+  theo phần trăm lẫn z-score. Memory và GC được giữ lại.
+  Chỉ giảm các giá trị latency lịch sử, không nhân một spike mới ra cả window.
+  Poll đọc lại cùng export không tự tăng số bằng chứng xác nhận model alert.
+- RCA có thể sử dụng trace của cùng sự cố trong tối đa 90 giây. `rca_evidence`
+  ghi trace ID và tuổi; đọc cache không gia hạn TTL, xác nhận phục hồi vô hiệu
+  bằng chứng cũ. Cache không dùng để kích hoạt model hay SLO guard.
+  Không gán WAN theo phần thời gian dư của span khi CPU bên gọi/đích đang
+  saturation: lịch lập luồng tại client cũng có thể làm phần dư tăng.
+- `likelihood_pct` là risk score của model dựa trên điểm hiện tại và short
+  window; `window_likelihood_pct` cho biết rủi ro còn trong lịch sử. SLO guard
+  có thể ALERT dù risk score của model thấp; xem `model_alert`/`guard_reasons`.
+- Khi truy vấn Prometheus lỗi, thiếu CPU/RAM hoặc thiếu entity đã huấn luyện,
+  trạng thái mô hình là UNKNOWN; SLO guard độc lập vẫn có thể phát ALERT.
+  Detector không cập nhật buffer bằng các số 0 giả. Endpoint lấy từ config; endpoint tùy
+  chỉnh không tự chuyển sang dữ liệu localhost.
+  Có thể khai báo `inference.required_entities` để thay đổi danh sách bắt buộc
+  khi chủ đích gỡ một dịch vụ. Gauge discovery/CPU/RAM lọc các JVM có counter
+  hoạt động gần đây để tránh gauge pod đã chết còn lưu trong exporter.
+
+Sau khi thay đổi cách ánh xạ likelihood, kiểm định lại với trọng số hiện có:
+
+```bash
+OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 python3.12 ai-engine/training/recalibrate.py
+```
+
+Lệnh giữ nguyên weights và ngưỡng MSE, cập nhật metadata likelihood trên normal
+validation và reference fault tổng hợp. Kết quả này không thay thế đánh giá xác
+suất trên các sự cố thực tế độc lập.

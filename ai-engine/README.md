@@ -104,7 +104,7 @@ Khi một request `/product` đi qua chuỗi gọi đồng bộ xuyên đám mâ
 * **Universal TCN Autoencoder**: Best Disjoint Validation SmoothL1 Loss = **`0.000048`** (Epoch 40).
 * **Universal Isolation Forest**: Disjoint Validation Normal Accuracy = **`100.00%`**.
 * **Ngưỡng quyết định bất thường (`recommended_threshold_p99`)**: **`0.3500`** (Disjoint Validation P99 = `0.020693`, Max = `0.021904`).
-* **Kiểm định xác suất lỗi (`likelihood_pct`)**: Hiệu chỉnh bằng hàm logistic neo tại ngưỡng quyết định $P(\text{fault} \mid \bar{e}_{\text{short}} = \tau) = 50.0\%$ và mức cơ sở $P(\text{fault} \mid \mu_{\text{val}}) = 1.0\%$, đạt **Brier Score = `0.000092`**, **ECE = `0.009182`**, **Log-Loss = `0.009228`** (`calibration_verified = true`).
+* **Kiểm định risk score (`likelihood_pct`)**: Hàm logistic neo tại ngưỡng MSE ở 50% và mức cơ sở ở 1%. Bản hiệu chỉnh 31/10 dùng `min(current_mse, short_mean_mse)`, đạt Brier `0.000090`, ECE `0.009078`, Log-Loss `0.009123` trên normal validation và reference fault tổng hợp. `calibration_verified` chỉ áp dụng trong phạm vi này; chưa chứng minh đây là xác suất lỗi production.
 
 ### 4.2. Kết quả Kiểm thử Thực tế trên 4 Cụm `k3d` (`AWS`, `Azure`, `GCP`, `Hub`)
 
@@ -141,6 +141,32 @@ python3.12 ai-engine/inference/detector.py --interval 6
 
 Xem [tests/chaos/README.md](../tests/chaos/README.md) để chạy test hành vi AI,
 replay có kiểm tra kết quả kỳ vọng và tiêm lỗi WAN thật với khôi phục tự động.
+
+### Cập nhật xử lý online và kiểm thử 31/10/2026
+
+Preprocessing điền dữ liệu thiếu theo quá khứ sau khi chia train/validation.
+Detector dùng histogram counter delta của request mới, xác nhận phục hồi trước
+khi giảm lịch sử latency/5xx/CPU và giữ nguyên lịch sử memory/GC. Mẫu export lặp
+không tự xác nhận một cảnh báo mới. Gauge của JVM không còn hoạt động bị loại
+khỏi discovery/CPU/RAM; telemetry lỗi hoặc thiếu entity bắt buộc cho trạng thái
+mô hình UNKNOWN thay vì HEALTHY giả.
+Điểm ensemble hiện dùng GRU và TCN; artifact Isolation Forest chưa tham gia
+quyết định online.
+
+RCA giữ bằng chứng trace có ID/tuổi tối đa 90 giây trong cùng sự cố, vô hiệu
+khi phục hồi và lọc trường hợp CPU làm nhiễu suy luận WAN. `likelihood_pct` là
+risk score dựa trên `min(current_mse, short_mean_mse)`;
+`window_likelihood_pct` cho biết điểm của lịch sử. Đây chưa phải xác suất sự cố
+đã được kiểm định trên tập sự cố production độc lập.
+
+Đọc [báo cáo cải thiện và giới hạn còn lại](../tests/chaos/IMPROVEMENTS-2026-10-31.md)
+trước khi diễn giải các kết quả lab lịch sử ở mục 4.2. Runner mới có CPU JVM,
+SQL lock có xác minh độc lập và WebUI outage thật; memory leak vẫn là replay.
+
+```bash
+# Chỉ hiệu chỉnh lại metadata risk score, giữ nguyên trọng số và ngưỡng MSE
+OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 python3.12 ai-engine/training/recalibrate.py
+```
 
 ## 6. Cấu trúc Thư mục Module AI V3
 

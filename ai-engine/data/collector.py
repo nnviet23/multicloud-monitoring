@@ -33,14 +33,20 @@ signal.signal(signal.SIGTERM, handle_signal)
 
 # Vectorized PromQL queries grouped by (cloud_provider, service_name)
 # Scales in O(1) queries regardless of the number of pods, services, or clouds!
+ACTIVE_JVM_PODS = (
+    '(sum by (cloud_provider, service_name, host_name) (rate(jvm_cpu_time_seconds_total[30s])) > 0)'
+    ' or (sum by (cloud_provider, service_name, host_name) (rate(http_server_request_duration_seconds_count[30s])) > 0)'
+    ' or (sum by (cloud_provider, service_name, host_name) (rate(http_client_request_duration_seconds_count[30s])) > 0)'
+)
+
 ENTITY_VECTOR_QUERIES = {
-    "discover": 'count by (cloud_provider, service_name) (jvm_memory_used_bytes{jvm_memory_type="heap"})',
+    "discover": f'count by (cloud_provider, service_name) (jvm_memory_used_bytes{{jvm_memory_type="heap"}} and on (cloud_provider, service_name, host_name) ({ACTIVE_JVM_PODS}))',
     "qps": 'sum by (cloud_provider, service_name) (rate(http_server_request_duration_seconds_count[1m]))',
     "server_latency_p95": 'histogram_quantile(0.95, sum by (le, cloud_provider, service_name) (rate(http_server_request_duration_seconds_bucket[1m])))',
     "client_latency_p95": 'histogram_quantile(0.95, sum by (le, cloud_provider, service_name) (rate(http_client_request_duration_seconds_bucket[1m])))',
     "error_rate_5xx": 'sum by (cloud_provider, service_name) (rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[1m]))',
-    "max_pod_cpu_pct": 'clamp_max(max by (cloud_provider, service_name) (jvm_cpu_recent_utilization_ratio * jvm_cpu_count) * 100, 100)',
-    "max_pod_ram_pct": 'max by (cloud_provider, service_name) (sum by (cloud_provider, service_name, host_name) (jvm_memory_used_bytes{jvm_memory_type="heap"}) / sum by (cloud_provider, service_name, host_name) (jvm_memory_limit_bytes{jvm_memory_type="heap"})) * 100',
+    "max_pod_cpu_pct": f'clamp_max(max by (cloud_provider, service_name) ((jvm_cpu_recent_utilization_ratio * jvm_cpu_count) and on (cloud_provider, service_name, host_name) ({ACTIVE_JVM_PODS})) * 100, 100)',
+    "max_pod_ram_pct": f'max by (cloud_provider, service_name) ((sum by (cloud_provider, service_name, host_name) (jvm_memory_used_bytes{{jvm_memory_type="heap"}}) / sum by (cloud_provider, service_name, host_name) (jvm_memory_limit_bytes{{jvm_memory_type="heap"}})) and on (cloud_provider, service_name, host_name) ({ACTIVE_JVM_PODS})) * 100',
     "gc_pause_rate": 'sum by (cloud_provider, service_name) (rate(jvm_gc_duration_seconds_sum[1m]))',
 }
 
