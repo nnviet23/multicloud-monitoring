@@ -60,6 +60,16 @@ cd ai-engine && python inference/detector.py
 ```
 Access Grafana at http://localhost:3000 (credentials: admin / admin).
 
+## AI fault scenarios and tests
+
+See [tests/chaos/README.md](tests/chaos/README.md) for synthetic model/RCA scenarios,
+behavior tests, and live WAN fault injection with automatic cleanup.
+
+```bash
+OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 python3.12 -m unittest discover -s tests/chaos -p 'test_*.py' -v
+OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 python3.12 ai-engine/inference/evaluate_test.py --benchmark
+```
+
 ## Configuration
 
 | Variable | Description | Default |

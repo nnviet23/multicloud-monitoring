@@ -44,6 +44,15 @@ if ai_engine_root not in sys.path:
 
 from models.gru_autoencoder import GRUAutoencoder
 from models.tcn_autoencoder import TCNAutoencoder
+from models.scoring import (
+    UPPER_BOUND_SATURATION_METRICS,
+    ACTIVE_RESOURCE_METRICS,
+    EXOGENOUS_WORKLOAD_METRICS,
+    DualSlidingWindowScorer,
+    compute_directional_errors,
+    compute_batch_directional_errors,
+    validate_likelihood_calibration,
+)
 from data.collector import (
     ENTITY_VECTOR_QUERIES,
     CLOUD_VECTOR_QUERIES,
@@ -71,25 +80,6 @@ def handle_signal(sig, frame):
 
 signal.signal(signal.SIGINT, handle_signal)
 signal.signal(signal.SIGTERM, handle_signal)
-
-UPPER_BOUND_SATURATION_METRICS = {
-    "server_latency_p95",
-    "client_latency_p95",
-    "error_rate_5xx",
-    "max_pod_cpu_pct",
-    "max_pod_ram_pct",
-    "ram_floor_2m_pct",
-    "gc_pause_rate",
-}
-
-ACTIVE_RESOURCE_METRICS = {
-    "max_pod_cpu_pct",
-    "max_pod_ram_pct",
-}
-
-EXOGENOUS_WORKLOAD_METRICS = {
-    "qps",
-}
 
 
 def probe_webui_health(url="http://localhost:8080/tools.descartes.teastore.webui/product?id=7", timeout=4.5):
@@ -519,85 +509,6 @@ class EntityCalibrator:
         return np.array(z_vec, dtype=np.float32), True
 
 
-class DualSlidingWindowScorer:
-    """
-    Computes adaptive Anomaly Likelihood L_t using short-term vs long-term error windows
-    to suppress single-sample transient spikes.
-    """
-    def __init__(self, base_mean, base_std, threshold, short_w=2, long_w=15, min_consecutive=2):
-        self.base_mean = base_mean
-        self.base_std = max(1e-4, base_std)
-        self.threshold = threshold
-        self.short_w = short_w
-        self.long_w = long_w
-        self.min_consecutive = min_consecutive
-        self.error_history = []
-        self.consecutive_breaches = 0
-
-    def update_and_score(self, current_mse):
-        self.error_history.append(current_mse)
-        if len(self.error_history) > self.long_w:
-            self.error_history.pop(0)
-
-        short_slice = self.error_history[-self.short_w:]
-        short_mean = float(np.mean(short_slice))
-
-        center = 0.65 * self.threshold
-        scale = max(0.05, 0.20 * self.threshold)
-        z_score = (short_mean - center) / scale
-        likelihood = 0.5 * (1.0 + math.erf(z_score / math.sqrt(2.0)))
-
-        if current_mse > self.threshold:
-            self.consecutive_breaches += 1
-        else:
-            self.consecutive_breaches = 0
-
-        is_sustained_anomaly = (
-            self.consecutive_breaches >= self.min_consecutive and short_mean > self.threshold
-        )
-        is_transient_spike = (current_mse > self.threshold) and not is_sustained_anomaly
-
-        return {
-            "short_mean_mse": short_mean,
-            "likelihood": likelihood,
-            "consecutive_breaches": self.consecutive_breaches,
-            "is_sustained_anomaly": is_sustained_anomaly,
-            "is_transient_spike": is_transient_spike,
-        }
-
-
-def compute_directional_errors(x_input, x_rec, features, is_response_healthy=True):
-    """
-    Computes directional & recency-weighted reconstruction squared error for a single entity window
-    or batch of entity windows.
-    """
-    diff = x_input - x_rec  # (1, seq_len, n_features)
-    seq_len = diff.shape[1]
-    weights = torch.ones_like(diff)
-
-    for idx, fname in enumerate(features):
-        if fname in UPPER_BOUND_SATURATION_METRICS:
-            mask_low = (x_input[:, :, idx] < 0.0) & (diff[:, :, idx] < 0.0)
-            weights[:, :, idx] = torch.where(mask_low, torch.tensor(0.15), weights[:, :, idx])
-
-            if is_response_healthy and fname in ACTIVE_RESOURCE_METRICS:
-                mask_active = (x_input[:, :, idx] >= 0.0) & (x_input[:, :, idx] < 3.5)
-                weights[:, :, idx] = torch.where(mask_active, torch.tensor(0.15), weights[:, :, idx])
-        elif fname in EXOGENOUS_WORKLOAD_METRICS:
-            mask = x_input[:, :, idx] < 3.0
-            weights[:, :, idx] = torch.where(mask, torch.tensor(0.15), torch.tensor(1.0))
-
-    t_indices = torch.arange(seq_len, dtype=torch.float32, device=diff.device)
-    t_weights = torch.exp(0.45 * (t_indices - (seq_len - 1)))
-    t_weights = (t_weights / t_weights.sum()).view(1, seq_len, 1)
-
-    weighted_sq_err = (diff ** 2) * weights
-    feat_mse_tensor = (weighted_sq_err * t_weights).sum(dim=1).squeeze(0)
-    sample_mse = feat_mse_tensor.mean().item()
-    feat_mse = feat_mse_tensor.cpu().numpy()
-    return sample_mse, feat_mse
-
-
 def synthesize_multicloud_rca(
     entity_results,
     rca_baselines,
@@ -638,21 +549,10 @@ def synthesize_multicloud_rca(
 
         # Check specific physical signatures on each anomalous or high-latency entity
         srv_lat_ms = raw["server_latency_p95"] * 1000.0
-        cli_lat_ms = raw["client_latency_p95"] * 1000.0
 
-        # Signature A: Cross-Cloud WAN Delay affecting calls to this entity or from WebUI
-        if eid == "aws:teastore-webui" and (cli_lat_ms > 150.0 or srv_lat_ms > 350.0 or probe_ms > 400.0):
-            # Look for downstream spoke cloud with elevated client wait or trace WAN lag
-            for spoke_id, spoke_res in ranked_entities:
-                if spoke_id.startswith(("gcp:", "azure:")):
-                    spoke_srv_ms = spoke_res["raw"]["server_latency_p95"] * 1000.0
-                    # If WebUI client/server latency is high while spoke internal server execution is fast,
-                    # that proves WAN network transit delay between AWS and the spoke cloud!
-                    if spoke_res["mse"] > 0.25 or z_map.get("client_latency_p95", 0.0) > 1.8:
-                        spoke_cloud = spoke_id.split(":")[0]
-                        tag = f"[CROSS_CLOUD_WAN_DELAY] aws->{spoke_cloud} ({spoke_id}) (WebUI_Srv={srv_lat_ms:.0f}ms vs {spoke_id}_Srv={spoke_srv_ms:.0f}ms)"
-                        if tag not in candidates:
-                            candidates.append(tag)
+        # WAN attribution requires trace evidence from the cross-cloud link above.
+        # A slow WebUI and an anomalous downstream service can also be caused by
+        # CPU, GC or database stalls; they do not establish a network fault.
 
         # Signature B: Memory Leak / GC Stall
         if z_map.get("ram_floor_2m_pct", 0.0) > 2.5 and z_map.get("gc_pause_rate", 0.0) > 1.5:
@@ -755,6 +655,9 @@ def main():
         tcn_model.load_state_dict(tcn_ckpt["model_state_dict"])
         tcn_model.eval()
 
+    cal_meta = threshold_meta.get("likelihood_calibration", {})
+    likelihood_calibrated = bool(cal_meta.get("calibration_verified", False))
+
     global_scorer = DualSlidingWindowScorer(
         base_mean=err_dist["mean"],
         base_std=err_dist["std"],
@@ -762,6 +665,7 @@ def main():
         short_w=dw_cfg.get("short_window", 2),
         long_w=dw_cfg.get("long_window", 15),
         min_consecutive=dw_cfg.get("min_consecutive_breaches", 2),
+        temperature=cal_meta.get("temperature"),
     )
 
     print("=" * 88)
@@ -770,7 +674,7 @@ def main():
     print(f"  * Deep Models      : Universal GRU + {'TCN Autoencoder' if tcn_model else 'Single'} + IsolationForest")
     print(f"  * Entity Vector    : {len(features)} universal features per (cloud_provider, service_name)")
     print(f"  * Window Buffer    : {window_size} steps | Dual-Window (Short={global_scorer.short_w}, Long={global_scorer.long_w})")
-    print(f"  * Decision Bound   : {threshold_p99:.4f} (Per-Entity Z-Score + Tempo Span Decomposition)")
+    print(f"  * Decision Bound   : {threshold_p99:.4f} | Calibrated Likelihood: {'VERIFIED' if likelihood_calibrated else 'UNVERIFIED'}")
     print("=" * 88)
 
     prom_client = PrometheusVectorClient()
@@ -785,6 +689,7 @@ def main():
         "healthy_count": 0,
         "transient_spike_count": 0,
         "alert_count": 0,
+        "likelihood_calibrated": likelihood_calibrated,
         "discovered_entities": [],
         "records": [],
     }
@@ -999,8 +904,12 @@ def main():
                 "worst_entity": worst_entity_id,
                 "instant_mse": round(max_entity_mse, 5),
                 "short_window_mse": round(dw_res["short_mean_mse"], 5),
-                "likelihood_pct": round(dw_res["likelihood"] * 100.0, 2),
+                "likelihood_pct": round(dw_res["likelihood_pct"], 2),
+                "likelihood_calibrated": likelihood_calibrated,
                 "verdict": verdict,
+                "model_alert": bool(dw_res["is_sustained_anomaly"]),
+                "guard_reasons": guard_reasons,
+                "traces_inspected": trace_summary.get("traces_inspected", 0),
                 "rca_causes": top_causes,
                 "tempo_wan_links": {k: round(v, 2) for k, v in trace_summary.get("wan_links", {}).items()},
                 "tempo_self_times": {k: round(v, 2) for k, v in trace_summary.get("self_times", {}).items()},

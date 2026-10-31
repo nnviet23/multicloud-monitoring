@@ -31,7 +31,12 @@ if ai_engine_root not in sys.path:
 
 from models.gru_autoencoder import GRUAutoencoder
 from models.tcn_autoencoder import TCNAutoencoder
-from inference.detector import compute_directional_errors
+from models.scoring import (
+    compute_directional_errors,
+    DualSlidingWindowScorer,
+    validate_likelihood_calibration,
+)
+from inference.detector import synthesize_multicloud_rca
 
 
 def parse_traffic_log(log_path, start_dt_utc):
@@ -161,100 +166,113 @@ def evaluate_run(summary_json_path, traffic_log_path="", traffic_start_iso=""):
     print("=" * 92)
 
 
-def run_fault_injection_benchmark(config_path="ai-engine/configs/model_config.yaml"):
-    with open(config_path, "r", encoding="utf-8") as f:
+def run_fault_injection_benchmark(config_path="ai-engine/configs/model_config.yaml",
+                                  scenarios_path="tests/chaos/scenarios.json", output_path=""):
+    """Replay synthetic feature windows through the trained ensemble, scorer and RCA.
+
+    This validates inference behavior; raw metrics and trace summaries are fixtures,
+    not measurements from a live fault injection.
+    """
+    with open(config_path, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
-
+    with open(scenarios_path, encoding="utf-8") as f:
+        scenarios = json.load(f)
     models_dir = cfg["training"]["save_dir"]
-    with open(os.path.join(models_dir, "threshold_config.json"), "r", encoding="utf-8") as f:
-        t_meta = json.load(f)
-
+    with open(os.path.join(models_dir, "threshold_config.json"), encoding="utf-8") as f:
+        meta = json.load(f)
     features = cfg["data"]["features"]
-    threshold = float(t_meta["recommended_threshold_p99"])
-    rca_baselines = t_meta["feature_rca_baselines"]
-    device = torch.device("cpu")
-
-    gru_model = GRUAutoencoder(input_dim=len(features)).to(device)
-    gru_model.load_state_dict(
-        torch.load(os.path.join(models_dir, "gru_autoencoder.pt"), map_location=device, weights_only=False)["model_state_dict"]
-    )
-    gru_model.eval()
-
-    tcn_model = TCNAutoencoder(input_dim=len(features)).to(device)
-    tcn_model.load_state_dict(
-        torch.load(os.path.join(models_dir, "tcn_autoencoder.pt"), map_location=device, weights_only=False)["model_state_dict"]
-    )
-    tcn_model.eval()
-
-    # Standardized z-score vectors [qps, server_latency_p95, client_latency_p95, error_rate_5xx, max_pod_cpu_pct, max_pod_ram_pct, ram_floor_2m_pct, gc_pause_rate]
-    scenarios = [
-        (
-            "1. Erratic Flash-Crowd (Healthy +1.8z QPS, Fast Latency)",
-            np.array([1.8, 0.1, 0.1, 0.0, 1.4, 0.8, 0.3, 0.1], dtype=np.float32),
-            True,
-            "HEALTHY",
-        ),
-        (
-            "2. Pod Scale-Out Warm-up (1->2 Pods, +2.1z CPU, Fast Latency)",
-            np.array([-0.3, -0.1, 0.0, 0.0, 2.1, 1.2, 0.4, 0.2], dtype=np.float32),
-            True,
-            "HEALTHY",
-        ),
-        (
-            "3. Cross-Cloud WAN Delay AWS->GCP (+6.5z Client/Server Latency)",
-            np.array([-0.5, 6.2, 6.8, 0.0, -0.2, 0.1, 0.0, 0.0], dtype=np.float32),
-            False,
-            "ALERT",
-        ),
-        (
-            "4. Azure Persistence Memory Leak (+5.8z RAM Floor & GC Spike)",
-            np.array([0.2, 3.8, 1.2, 0.0, 2.5, 5.5, 5.8, 4.9], dtype=np.float32),
-            False,
-            "ALERT",
-        ),
-        (
-            "5. Microservice CPU Saturation & HTTP 5xx (+6.0z CPU & 5xx)",
-            np.array([1.1, 5.4, 0.5, 6.0, 5.8, 1.5, 0.8, 1.2], dtype=np.float32),
-            False,
-            "ALERT",
-        ),
-    ]
-
-    print("\n" + "=" * 96)
-    print("  MULTI-SCENARIO AI V3 BENCHMARK (UNIVERSAL ENTITY Z-SCORE WINDOWS)")
-    print("=" * 96)
-    for name, z_vec, is_resp_ok, expected in scenarios:
-        win_z = np.tile(z_vec, (12, 1))
-        t_in = torch.from_numpy(win_z).unsqueeze(0).to(device)
+    threshold = float(meta["recommended_threshold_p99"])
+    model_cfg = cfg["model"]
+    common = dict(input_dim=len(features), hidden_dim=model_cfg.get("hidden_dim", 64),
+                  latent_dim=model_cfg.get("latent_dim", 16), dropout=model_cfg.get("dropout", 0.1))
+    gru = GRUAutoencoder(**common, num_layers=model_cfg.get("num_layers", 2))
+    tcn = TCNAutoencoder(**common)
+    for model, filename in [(gru, cfg["training"].get("checkpoint_name", "gru_autoencoder.pt")),
+                            (tcn, "tcn_autoencoder.pt")]:
+        checkpoint = torch.load(os.path.join(models_dir, filename), map_location="cpu", weights_only=True)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        model.eval()
+    dw = meta.get("dual_sliding_window", {})
+    cal_meta = meta.get("likelihood_calibration", {})
+    cal_verified = bool(cal_meta.get("calibration_verified", False))
+    rows = []
+    print("Synthetic AI benchmark: trained GRU + TCN, sustained scoring, entity RCA")
+    for scenario in scenarios:
+        z = np.array(scenario["z"], dtype=np.float32)
+        if z.shape != (len(features),) or not np.isfinite(z).all():
+            raise ValueError(f"Invalid feature vector in {scenario['id']}")
+        window = np.tile(z, (cfg["data"]["window_size"], 1))
+        x = torch.from_numpy(window).unsqueeze(0)
         with torch.no_grad():
-            g_mse, g_feat = compute_directional_errors(t_in, gru_model(t_in), features, is_response_healthy=is_resp_ok)
-            t_mse, t_feat = compute_directional_errors(t_in, tcn_model(t_in), features, is_response_healthy=is_resp_ok)
-            mse = 0.5 * (g_mse + t_mse)
-            feat_losses = 0.5 * (g_feat + t_feat)
-
-        verdict = "ALERT" if mse > threshold else "HEALTHY"
-        ratios = sorted(
-            [
-                (features[i], float(feat_losses[i]) / max(0.01, rca_baselines[features[i]]["rca_trigger_threshold"]))
-                for i in range(len(features))
-            ],
-            key=lambda x: x[1],
-            reverse=True,
+            gm, gf = compute_directional_errors(x, gru(x), features, scenario["response_healthy"])
+            tm, tf = compute_directional_errors(x, tcn(x), features, scenario["response_healthy"])
+        mse, losses = (gm + tm) / 2, (gf + tf) / 2
+        scorer = DualSlidingWindowScorer(
+            meta["error_distribution"]["mean"], meta["error_distribution"]["std"], threshold,
+            short_w=dw.get("short_window", 3), long_w=dw.get("long_window", 18),
+            min_consecutive=dw.get("min_consecutive_breaches", 2),
+            temperature=cal_meta.get("temperature"))
+        # Seed with healthy context, then require repeated faulty observations.
+        for _ in range(scorer.short_w):
+            scorer.update_and_score(0.0)
+        first = scorer.update_and_score(mse)
+        for _ in range(max(scorer.short_w, scorer.min_consecutive)):
+            sustained = scorer.update_and_score(mse)
+        verdict = "ALERT" if sustained["is_sustained_anomaly"] else "HEALTHY"
+        likelihood_pct = float(sustained["likelihood_pct"])
+        likelihood_consistent = (
+            (likelihood_pct > 50.0) if scenario["expected"] == "ALERT" else (likelihood_pct < 50.0)
         )
-        rca_top = ", ".join([f"{k}(x{v:.1f})" for k, v in ratios[:2] if v > 1.0]) if verdict == "ALERT" else "None"
-        match_str = "✓ PASS" if verdict == expected else "✗ FAIL"
-        print(f"  [{match_str}] {name:58s} | MSE: {mse:6.4f} | Verdict: {verdict:7s} | RCA: {rca_top}")
-    print("=" * 96)
+        raw = {name: 0.0 for name in features}
+        raw.update(scenario.get("raw", {}))
+        causes = synthesize_multicloud_rca(
+            {scenario["entity"]: {"mse": mse, "feat_losses": losses, "z_vec": z, "raw": raw}},
+            meta["feature_rca_baselines"], features, scenario.get("trace", {}),
+            scenario["response_healthy"], 50.0 if scenario["response_healthy"] else 650.0,
+        ) if verdict == "ALERT" else []
+        expected_rca = scenario.get("expected_rca", "")
+        rca_ok = not expected_rca or any(expected_rca in cause for cause in causes)
+        # After a sustained fault, a healthy score must clear the alert immediately.
+        recovered = not scorer.update_and_score(0.0)["is_sustained_anomaly"]
+        passed = (verdict == scenario["expected"] and rca_ok and recovered
+                  and not first["is_sustained_anomaly"] and np.isfinite(mse)
+                  and cal_verified and likelihood_consistent)
+        row = dict(id=scenario["id"], expected=scenario["expected"], verdict=verdict,
+                   mse=float(mse), likelihood_pct=round(likelihood_pct, 2),
+                   likelihood_consistent=bool(likelihood_consistent),
+                   rca_causes=causes, rca_ok=rca_ok,
+                   first_sample_suppressed=not first["is_sustained_anomaly"],
+                   recovered=recovered, passed=bool(passed))
+        rows.append(row)
+        print(f"  [{'PASS' if passed else 'FAIL'}] {scenario['id']:20s} MSE={mse:.4f} "
+              f"P(fault)={likelihood_pct:5.1f}% {verdict:7s} RCA={' | '.join(causes[:2]) or '-'}")
+    report = {"mode": "synthetic_feature_replay", "threshold": threshold,
+              "likelihood_calibration": cal_meta,
+              "total": len(rows), "passed": sum(row["passed"] for row in rows), "results": rows}
+    if output_path:
+        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, ensure_ascii=False)
+    print(f"Result: {report['passed']}/{report['total']} passed")
+    return report
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate AI Detector V3 against Traffic Ground Truth")
-    parser.add_argument("--summary", default="ai-engine/inference/test_runs/test1_normal_erratic.json")
+    parser.add_argument("--summary", default="", help="Detector JSON to evaluate against observed SLOs")
     parser.add_argument("--traffic-log", default="")
     parser.add_argument("--traffic-start", default="")
     parser.add_argument("--benchmark", action="store_true", help="Run multi-scenario V3 fault injection benchmark")
+    parser.add_argument("--config", default="ai-engine/configs/model_config.yaml")
+    parser.add_argument("--scenarios", default="tests/chaos/scenarios.json")
+    parser.add_argument("--output", default="", help="Write benchmark results as JSON")
     args = parser.parse_args()
+    if not args.summary and not args.benchmark:
+        parser.error("Provide --summary or --benchmark")
+    if args.summary and not os.path.isfile(args.summary):
+        parser.error(f"Summary does not exist: {args.summary}")
     if os.path.isfile(args.summary):
         evaluate_run(args.summary, args.traffic_log, args.traffic_start)
     if args.benchmark:
-        run_fault_injection_benchmark()
+        report = run_fault_injection_benchmark(args.config, args.scenarios, args.output)
+        sys.exit(0 if report["passed"] == report["total"] and report["total"] else 1)

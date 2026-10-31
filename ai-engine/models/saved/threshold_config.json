@@ -1,5 +1,7 @@
 {
   "architecture": "Universal Per-Entity GRU + TCN Autoencoder Ensemble (V3)",
+  "scoring_module": "models.scoring.compute_directional_errors",
+  "calibration_scope": "disjoint_chronological_validation_set",
   "num_features": 8,
   "features": [
     "qps",
@@ -12,12 +14,12 @@
     "gc_pause_rate"
   ],
   "error_distribution": {
-    "mean": 0.005842,
-    "std": 0.006538,
-    "p95": 0.015647,
-    "p99": 0.038354,
-    "p99_5": 0.042219,
-    "max": 0.043321
+    "mean": 0.00481,
+    "std": 0.004614,
+    "p95": 0.012647,
+    "p99": 0.020693,
+    "p99_5": 0.021299,
+    "max": 0.021904
   },
   "recommended_threshold_p99": 0.35,
   "dual_sliding_window": {
@@ -25,56 +27,70 @@
     "long_window": 18,
     "min_consecutive_breaches": 2
   },
+  "likelihood_calibration": {
+    "calibration_method": "logistic_boundary_anchored",
+    "temperature": 0.075121,
+    "threshold_anchor_prob_pct": 50.0,
+    "brier_score": 9.2e-05,
+    "expected_calibration_error": 0.009182,
+    "log_loss": 0.009228,
+    "normal_val_mean_prob_pct": 1.0,
+    "normal_val_p95_prob_pct": 1.11,
+    "normal_val_max_prob_pct": 1.19,
+    "fault_min_prob_pct": 100.0,
+    "fault_mean_prob_pct": 100.0,
+    "calibration_verified": true
+  },
   "feature_rca_baselines": {
     "qps": {
-      "mean_sq_err": 0.004112,
-      "p95_sq_err": 0.01241,
-      "p99_sq_err": 0.02824,
+      "mean_sq_err": 0.003071,
+      "p95_sq_err": 0.009211,
+      "p99_sq_err": 0.012682,
       "rca_trigger_threshold": 0.4
     },
     "server_latency_p95": {
-      "mean_sq_err": 0.007083,
-      "p95_sq_err": 0.02562,
-      "p99_sq_err": 0.111476,
+      "mean_sq_err": 0.005487,
+      "p95_sq_err": 0.033426,
+      "p99_sq_err": 0.059688,
       "rca_trigger_threshold": 0.4
     },
     "client_latency_p95": {
-      "mean_sq_err": 6.4e-05,
-      "p95_sq_err": 0.000203,
-      "p99_sq_err": 0.000339,
+      "mean_sq_err": 0.000108,
+      "p95_sq_err": 0.00033,
+      "p99_sq_err": 0.001001,
       "rca_trigger_threshold": 0.4
     },
     "error_rate_5xx": {
-      "mean_sq_err": 1.4e-05,
-      "p95_sq_err": 3.7e-05,
-      "p99_sq_err": 5e-05,
+      "mean_sq_err": 2.6e-05,
+      "p95_sq_err": 6.5e-05,
+      "p99_sq_err": 9.3e-05,
       "rca_trigger_threshold": 0.4
     },
     "max_pod_cpu_pct": {
-      "mean_sq_err": 0.002254,
-      "p95_sq_err": 0.00738,
-      "p99_sq_err": 0.011608,
+      "mean_sq_err": 0.000814,
+      "p95_sq_err": 0.002461,
+      "p99_sq_err": 0.00582,
       "rca_trigger_threshold": 0.4
     },
     "max_pod_ram_pct": {
-      "mean_sq_err": 0.020633,
-      "p95_sq_err": 0.046328,
-      "p99_sq_err": 0.105273,
+      "mean_sq_err": 0.01398,
+      "p95_sq_err": 0.042689,
+      "p99_sq_err": 0.09087,
       "rca_trigger_threshold": 0.4
     },
     "ram_floor_2m_pct": {
-      "mean_sq_err": 0.011176,
-      "p95_sq_err": 0.03537,
-      "p99_sq_err": 0.055934,
+      "mean_sq_err": 0.012294,
+      "p95_sq_err": 0.050259,
+      "p99_sq_err": 0.054462,
       "rca_trigger_threshold": 0.4
     },
     "gc_pause_rate": {
-      "mean_sq_err": 0.001398,
-      "p95_sq_err": 0.005848,
-      "p99_sq_err": 0.013158,
+      "mean_sq_err": 0.002702,
+      "p95_sq_err": 0.009136,
+      "p99_sq_err": 0.011366,
       "rca_trigger_threshold": 0.4
     }
   },
   "isolation_forest_val_normal_pct": 100.0,
-  "training_duration_sec": 100.72
+  "training_duration_sec": 90.22
 }

@@ -20,7 +20,7 @@ flowchart TD
 
     subgraph DynamicIngestion["Vectorized Entity Discovery & Trace Decomposition"]
         PROM["Prometheus Server (Port 9090)"]
-        TEMPO["Grafana Tempo Trace API (Port 3200)"]
+        TEMPO["Grafana Tempo TracZe API (Port 3200)"]
         HUB --> PROM
         HUB --> TEMPO
         DISC["Dynamic Entity Discovery\n(cloud_provider, service_name)"]
@@ -31,25 +31,25 @@ flowchart TD
     end
 
     subgraph UniversalDeepEnsemble["Universal Entity Deep Ensemble (Input: 12 x 8 Z-Score)"]
-        GRU["Universal GRU Autoencoder\n(Val Loss = 0.02769)"]
-        TCN["Universal TCN Autoencoder\n(Val Loss = 0.000029)"]
+        GRU["Universal GRU Autoencoder\n(Val Loss = 0.03567)"]
+        TCN["Universal TCN Autoencoder\n(Val Loss = 0.000048)"]
         ISO["Universal Isolation Forest\n(96-dim, 100% Val Normal Acc)"]
         CAL --> GRU
         CAL --> TCN
         CAL --> ISO
     end
 
-    subgraph ScoringAndRCA["Multi-Cloud Scoring & Trace-Guided RCA"]
-        SCORE["Directional & Recency-Weighted MSE\n+ Dual-Sliding-Window Scorer"]
+    subgraph ScoringAndRCA["Unified Scoring, Calibrated Likelihood & Trace-Guided RCA"]
+        SCORE["models/scoring.py: compute_directional_errors\n+ Calibrated DualSlidingWindowScorer"]
         GRU --> SCORE
         TCN --> SCORE
         HEALTHY["✓ HEALTHY\n(Đa đám mây hoạt động bình thường)"]
         TRANSIENT["~ TRANSIENT SPIKE SUPPRESSED\n(Dao động tức thời - Không báo động)"]
         ALERT["⚠ MULTI-CLOUD ALERT\n(Phát hiện bất thường xuyên đám mây)"]
         RCA["Multi-Cloud Trace + Metric RCA\n(CROSS_CLOUD_WAN_DELAY / CPU / MEMORY_LEAK / DB)"]
-        SCORE -->|Max Entity MSE < 0.3500| HEALTHY
+        SCORE -->|Short MSE < 0.3500 & P(fault) < 50%| HEALTHY
         SCORE -->|Single-step spike| TRANSIENT
-        SCORE -->|Sustained MSE >= 0.3500| ALERT
+        SCORE -->|Sustained MSE > 0.3500 & P(fault) > 50%| ALERT
         ALERT --> RCA
     end
 ```
@@ -95,12 +95,16 @@ Khi một request `/product` đi qua chuỗi gọi đồng bộ xuyên đám mâ
 
 ## 4. Kết quả Huấn luyện & Kiểm thử Thực nghiệm 4 Kịch bản Đa Đám Mây
 
-### 4.1. Hiệu năng Hội tụ Mô hình V3
-* **Dữ liệu huấn luyện thực tế**: `666` dòng thực thể sạch (`111 chu kỳ × 6 thực thể` trên `aws`, `azure`, `gcp`) $\to$ `2,880` cửa sổ huấn luyện (`12 × 8`) và `120` cửa sổ kiểm định độc lập.
-* **Universal GRU Autoencoder**: Best Validation SmoothL1 Loss = **`0.027690`** (Epoch 48).
-* **Universal TCN Autoencoder**: Best Validation SmoothL1 Loss = **`0.000029`** (Epoch 30).
-* **Universal Isolation Forest**: Validation Normal Accuracy = **`100.00%`**.
-* **Ngưỡng quyết định bất thường (`recommended_threshold_p99`)**: **`0.3500`** (Validation P99 = `0.03835`).
+### 4.1. Hiệu năng Hội tụ & Kiểm định Không Rò rỉ Dữ liệu (Zero-Leakage Validation & Calibration)
+* **Chia dữ liệu theo thời gian chống rò rỉ (`split_entities_chronologically`)**: `666` dòng thực thể sạch (`111 chu kỳ × 6 thực thể`) được tách theo trục thời gian cho từng thực thể **trước khi** tính baseline và **trước khi** tạo cửa sổ trượt:
+  * Tập huấn luyện (`train_df`): `534` dòng (`89` chu kỳ đầu $\times$ `6` thực thể), dùng **độc quyền** để ước lượng `entity_baselines.json` (`fit_scope = "train_only"`) và sinh `468` cửa sổ gốc $\to$ `2,808` cửa sổ huấn luyện tăng cường (`12 × 8`).
+  * Tập kiểm định (`val_df`): `132` dòng tương lai độc lập (`22` chu kỳ cuối $\times$ `6` thực thể), sinh `66` cửa sổ kiểm định (`12 × 8`) với **0 mẫu thời gian chồng lấn** (`train_timestamps ∩ val_timestamps = ∅`).
+* **Thống nhất chấm điểm Training & Inference (`models/scoring.py`)**: Cả bước hiệu chỉnh ngưỡng (`train.py`) và bước giám sát thời gian thực (`detector.py`, `evaluate_test.py`) dùng chung hàm `compute_directional_errors` và `DualSlidingWindowScorer`.
+* **Universal GRU Autoencoder**: Best Disjoint Validation SmoothL1 Loss = **`0.035668`** (Epoch 13).
+* **Universal TCN Autoencoder**: Best Disjoint Validation SmoothL1 Loss = **`0.000048`** (Epoch 40).
+* **Universal Isolation Forest**: Disjoint Validation Normal Accuracy = **`100.00%`**.
+* **Ngưỡng quyết định bất thường (`recommended_threshold_p99`)**: **`0.3500`** (Disjoint Validation P99 = `0.020693`, Max = `0.021904`).
+* **Kiểm định xác suất lỗi (`likelihood_pct`)**: Hiệu chỉnh bằng hàm logistic neo tại ngưỡng quyết định $P(\text{fault} \mid \bar{e}_{\text{short}} = \tau) = 50.0\%$ và mức cơ sở $P(\text{fault} \mid \mu_{\text{val}}) = 1.0\%$, đạt **Brier Score = `0.000092`**, **ECE = `0.009182`**, **Log-Loss = `0.009228`** (`calibration_verified = true`).
 
 ### 4.2. Kết quả Kiểm thử Thực tế trên 4 Cụm `k3d` (`AWS`, `Azure`, `GCP`, `Hub`)
 
@@ -126,7 +130,7 @@ python3.12 ai-engine/data/preprocess.py
 # 3. Huấn luyện Universal GRU + TCN Autoencoders + Isolation Forest
 python3.12 ai-engine/training/train.py
 
-# 4. Chạy bộ kiểm thử 5 kịch bản chuẩn hóa (--benchmark)
+# 4. Chạy bộ kiểm thử 11 kịch bản chuẩn hóa và RCA (--benchmark)
 python3.12 ai-engine/inference/evaluate_test.py --benchmark
 
 # 5. Khởi chạy Giám sát & Khoanh vùng Nguyên nhân Gốc rễ Xuyên Cloud Thời gian thực
@@ -134,6 +138,9 @@ python3.12 ai-engine/inference/detector.py --interval 6
 ```
 
 ---
+
+Xem [tests/chaos/README.md](../tests/chaos/README.md) để chạy test hành vi AI,
+replay có kiểm tra kết quả kỳ vọng và tiêm lỗi WAN thật với khôi phục tự động.
 
 ## 6. Cấu trúc Thư mục Module AI V3
 
@@ -145,17 +152,18 @@ ai-engine/
 │   ├── raw/
 │   │   └── multicloud_entity_baseline.csv # Dữ liệu thực thể thu thập thực tế trên 3 cloud (AWS, Azure, GCP)
 │   ├── processed/
-│   │   ├── entity_baselines.json          # Tham số chuẩn hóa (Median, IQR, Scale) cho từng (cloud, service)
-│   │   ├── train_windows.npy              # 2,880 cửa sổ huấn luyện (12 x 8)
-│   │   ├── val_windows.npy                # 120 cửa sổ kiểm định độc lập (12 x 8)
+│   │   ├── entity_baselines.json          # Tham số chuẩn hóa (Median, IQR, Scale) fit_scope="train_only"
+│   │   ├── train_windows.npy              # 2,808 cửa sổ huấn luyện (12 x 8)
+│   │   ├── val_windows.npy                # 66 cửa sổ kiểm định tương lai không chồng lấn (12 x 8)
 │   │   ├── feature_names.json             # Danh sách 8 đặc trưng thực thể chuẩn
 │   │   ├── eda_summary.png                # Biểu đồ phân tích dữ liệu đa đám mây
 │   │   ├── eda_report.md                  # Báo cáo thống kê khám phá dữ liệu
 │   │   └── training_loss.png              # Đường cong hội tụ GRU & TCN Autoencoders
 │   ├── collector.py                       # Bộ thu thập dữ liệu PromQL Vectorized tự động phát hiện thực thể
 │   ├── analyze_data.py                    # Phân tích thống kê theo từng thực thể
-│   └── preprocess.py                      # Chuẩn hóa Z-Score theo thực thể & tạo cửa sổ trượt
+│   └── preprocess.py                      # Chia thời gian trước, chuẩn hóa train-only & tạo cửa sổ tách biệt
 ├── models/
+│   ├── scoring.py                         # Module chấm điểm định hướng & hiệu chỉnh xác suất lỗi dùng chung
 │   ├── gru_autoencoder.py                 # Universal GRU Autoencoder (input_dim=8)
 │   ├── tcn_autoencoder.py                 # Universal TCN Autoencoder (input_dim=8)
 │   └── saved/

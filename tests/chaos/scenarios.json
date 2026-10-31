@@ -1,0 +1,237 @@
+[
+  {
+    "id": "normal",
+    "description": "Normal browsing",
+    "entity": "aws:teastore-webui",
+    "z": [
+      0.1,
+      0.1,
+      0.1,
+      0,
+      0.3,
+      0.2,
+      0.1,
+      0
+    ],
+    "response_healthy": true,
+    "expected": "HEALTHY"
+  },
+  {
+    "id": "flash_crowd",
+    "description": "Healthy flash crowd without latency degradation",
+    "entity": "aws:teastore-webui",
+    "z": [
+      1.8,
+      0.1,
+      0.1,
+      0,
+      1.4,
+      0.8,
+      0.3,
+      0.1
+    ],
+    "response_healthy": true,
+    "expected": "HEALTHY"
+  },
+  {
+    "id": "scale_out",
+    "description": "Healthy pod scale-out warm-up",
+    "entity": "gcp:teastore-recommender",
+    "z": [
+      -0.3,
+      -0.1,
+      0,
+      0,
+      2.1,
+      1.2,
+      0.4,
+      0.2
+    ],
+    "response_healthy": true,
+    "expected": "HEALTHY"
+  },
+  {
+    "id": "low_traffic",
+    "description": "Low traffic and resource usage",
+    "entity": "aws:teastore-image",
+    "z": [
+      -1,
+      -0.2,
+      -0.1,
+      0,
+      -0.5,
+      -0.3,
+      -0.3,
+      -0.1
+    ],
+    "response_healthy": true,
+    "expected": "HEALTHY"
+  },
+  {
+    "id": "faster_than_baseline",
+    "description": "Healthy latency improvement versus an old baseline",
+    "entity": "aws:teastore-webui",
+    "z": [
+      -2.5,
+      -7,
+      -0.1,
+      0,
+      -0.5,
+      -0.3,
+      -0.3,
+      -0.1
+    ],
+    "response_healthy": true,
+    "expected": "HEALTHY"
+  },
+  {
+    "id": "gcp_wan_delay",
+    "description": "WAN latency AWS to GCP",
+    "entity": "gcp:teastore-recommender",
+    "z": [
+      -0.5,
+      6.2,
+      6.8,
+      0,
+      -0.2,
+      0.1,
+      0,
+      0
+    ],
+    "response_healthy": false,
+    "raw": {
+      "server_latency_p95": 0.25,
+      "client_latency_p95": 0.3
+    },
+    "trace": {
+      "wan_links": {
+        "aws->gcp (gcp:teastore-recommender)": 125
+      }
+    },
+    "expected": "ALERT",
+    "expected_rca": "[CROSS_CLOUD_WAN_DELAY] aws->gcp"
+  },
+  {
+    "id": "azure_wan_delay",
+    "description": "WAN latency AWS to Azure",
+    "entity": "azure:teastore-persistence",
+    "z": [
+      -0.5,
+      5.2,
+      5.8,
+      0,
+      -0.2,
+      0.1,
+      0,
+      0
+    ],
+    "response_healthy": false,
+    "raw": {
+      "server_latency_p95": 0.22,
+      "client_latency_p95": 0.25
+    },
+    "trace": {
+      "wan_links": {
+        "aws->azure (azure:teastore-persistence)": 180
+      }
+    },
+    "expected": "ALERT",
+    "expected_rca": "[CROSS_CLOUD_WAN_DELAY] aws->azure"
+  },
+  {
+    "id": "memory_leak",
+    "description": "Azure persistence heap floor and GC stall",
+    "entity": "azure:teastore-persistence",
+    "z": [
+      0.2,
+      3.8,
+      1.2,
+      0,
+      2.5,
+      5.5,
+      5.8,
+      4.9
+    ],
+    "response_healthy": false,
+    "raw": {
+      "server_latency_p95": 0.2,
+      "ram_floor_2m_pct": 92,
+      "gc_pause_rate": 0.2
+    },
+    "expected": "ALERT",
+    "expected_rca": "[MEMORY_LEAK_GC_STALL] azure:teastore-persistence"
+  },
+  {
+    "id": "cpu_saturation",
+    "description": "GCP recommender CPU saturation and HTTP 5xx",
+    "entity": "gcp:teastore-recommender",
+    "z": [
+      1.1,
+      5.4,
+      0.5,
+      6,
+      5.8,
+      1.5,
+      0.8,
+      1.2
+    ],
+    "response_healthy": false,
+    "raw": {
+      "server_latency_p95": 0.4,
+      "max_pod_cpu_pct": 98,
+      "error_rate_5xx": 0.8
+    },
+    "trace": {
+      "self_times": {
+        "gcp:teastore-recommender": 380
+      }
+    },
+    "expected": "ALERT",
+    "expected_rca": "[SERVICE_CPU_BOTTLENECK] gcp:teastore-recommender"
+  },
+  {
+    "id": "database_slow",
+    "description": "Slow MariaDB queries on Azure",
+    "entity": "azure:teastore-persistence",
+    "z": [
+      -0.2,
+      6.2,
+      1.2,
+      0.5,
+      0.5,
+      0.4,
+      0.2,
+      0.1
+    ],
+    "response_healthy": false,
+    "raw": {
+      "server_latency_p95": 0.7
+    },
+    "trace": {
+      "db_time_ms": 450
+    },
+    "expected": "ALERT",
+    "expected_rca": "[DATABASE_BOTTLENECK] azure:teastore-persistence"
+  },
+  {
+    "id": "http_5xx",
+    "description": "AWS WebUI sustained server errors",
+    "entity": "aws:teastore-webui",
+    "z": [
+      0.1,
+      0.2,
+      0.1,
+      7,
+      0.3,
+      0.2,
+      0.1,
+      0.1
+    ],
+    "response_healthy": false,
+    "raw": {
+      "error_rate_5xx": 1
+    },
+    "expected": "ALERT",
+    "expected_rca": "[aws:teastore-webui] error_rate_5xx"
+  }
+]
