@@ -121,11 +121,18 @@ class TraceEvidence:
     def __init__(self, ttl=90.0):
         self.ttl = ttl
         self.links = {}
+        self.db = None
         self.cleared_at = {}
 
     def observe(self, summary, trace_id, observed_at, now):
         if observed_at > now + 5 or now - observed_at > self.ttl:
             return
+        db_ms = summary.get("db_time_ms", 0.0)
+        if (math.isfinite(db_ms) and db_ms >= 80.0
+                and observed_at > self.cleared_at.get("azure:teastore-persistence", -math.inf)):
+            if self.db is None or observed_at > self.db["observed_at"]:
+                self.db = {"db_time_ms": db_ms, "trace_id": trace_id,
+                           "observed_at": observed_at, "entity": "azure:teastore-persistence"}
         for link, delay in summary.get("wan_links", {}).items():
             if not math.isfinite(delay) or delay < 65.0 or " (" not in link:
                 continue
@@ -154,8 +161,24 @@ class TraceEvidence:
 
     def forget(self, entity, now=None):
         self.links = {link: value for link, value in self.links.items() if value["entity"] != entity}
+        if self.db is not None and self.db.get("entity") == entity:
+            self.db = None
         if now is not None:
             self.cleared_at[entity] = now
+
+    def active_db(self, entity_results, now):
+        if self.db is None or not (0 <= now - self.db["observed_at"] <= self.ttl):
+            self.db = None
+            return None
+        entity = entity_results.get(self.db["entity"])
+        webui = entity_results.get("aws:teastore-webui")
+        if entity is None:
+            return None
+        raw = entity["raw"]
+        webui_slow = webui is not None and webui["raw"].get("server_latency_p95", 0.0) > 0.50
+        if raw["server_latency_p95"] <= 0.05 and entity.get("mse", 0.0) <= 0.35 and not webui_slow:
+            return None
+        return {**self.db, "age_seconds": round(now - self.db["observed_at"], 1)}
 
     def active(self, entity_results, now):
         self.links = {link: value for link, value in self.links.items()

@@ -149,6 +149,18 @@ class TraceEvidenceTests(unittest.TestCase):
         entities["aws:teastore-webui"] = {"raw": {"max_pod_cpu_pct": 99}}
         self.assertEqual(cache.active(entities, 110), {})
 
+    def test_db_trace_evidence_retains_incident_and_clears_on_recovery(self):
+        cache = TraceEvidence(ttl=45)
+        cache.observe({"db_time_ms": 340.0, "wan_links": {}}, "db-trace-1", 100, 105)
+        entities = {"azure:teastore-persistence": {"mse": 2.1, "raw": {"server_latency_p95": 0.34, "client_latency_p95": 0.01}}}
+        active = cache.active_db(entities, 130)
+        self.assertIsNotNone(active)
+        self.assertEqual(active["trace_id"], "db-trace-1")
+        self.assertEqual(active["age_seconds"], 30)
+        cache.forget("azure:teastore-persistence", now=135)
+        cache.observe({"db_time_ms": 340.0, "wan_links": {}}, "db-trace-1", 100, 140)
+        self.assertIsNone(cache.active_db(entities, 140))
+
 
 class LikelihoodRecoveryTests(unittest.TestCase):
     def test_duplicate_export_cannot_confirm_a_new_anomaly(self):

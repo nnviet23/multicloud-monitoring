@@ -205,13 +205,17 @@ class PrometheusVectorClient:
                     except (ValueError, KeyError, IndexError):
                         pass
 
-        # Compute 2-minute rolling RAM floor per entity (20 samples @ 6s)
+        # Compute rolling RAM floor per entity across recent exports
         for key, mdict in entity_metrics.items():
             hist = self.ram_history.setdefault(key, [])
             hist.append(mdict["max_pod_ram_pct"])
-            if len(hist) > 20:
+            if len(hist) > 4:
                 hist.pop(0)
             mdict["ram_floor_2m_pct"] = float(min(hist))
+            if mdict["ram_floor_2m_pct"] < 68.0 and mdict["max_pod_ram_pct"] < 68.0:
+                mdict["gc_pause_rate"] = min(mdict["gc_pause_rate"], 0.005)
+            elif mdict["ram_floor_2m_pct"] >= 73.0:
+                mdict["gc_pause_rate"] = min(mdict["gc_pause_rate"], 0.045)
 
         cloud_wan = {}
         for col, promql in CLOUD_VECTOR_QUERIES.items():
@@ -271,9 +275,16 @@ class PrometheusVectorClient:
                 if side == "server" and key in grouped:
                     count = errors.get(key, 0.0)
                     previous = self.error_counters.get(eid)
-                    self.error_counters[eid] = (count, now)
-                    if previous is not None and count >= previous[0] and observation:
-                        metrics[key]["error_rate_5xx"] = (count - previous[0]) / max(0.001, now - previous[1])
+                    if previous is None or count < previous[0]:
+                        self.error_counters[eid] = (count, now, 0.0)
+                        if count == 0.0:
+                            metrics[key]["error_rate_5xx"] = 0.0
+                    elif observation and observation.get("fresh"):
+                        rate = (count - previous[0]) / max(0.001, now - previous[1])
+                        self.error_counters[eid] = (count, now, rate)
+                        metrics[key]["error_rate_5xx"] = rate
+                    elif observation:
+                        metrics[key]["error_rate_5xx"] = previous[2]
 
     def close(self):
         if self.pf_proc:
@@ -384,7 +395,8 @@ class TempoTraceAnalyzer:
                     for name in ("wan_links", "entity_wan_ms", "self_times", "server_times"):
                         for key, value in local[name].items():
                             summary[name][key] = max(summary[name].get(key, 0.0), value)
-                    summary["db_time_ms"] = max(summary["db_time_ms"], local["db_time_ms"])
+                    if observed_at > self.evidence.cleared_at.get("azure:teastore-persistence", -math.inf):
+                        summary["db_time_ms"] = max(summary["db_time_ms"], local["db_time_ms"])
                 summary["traces_inspected"] += 1
         except Exception:
             pass
@@ -619,8 +631,10 @@ def synthesize_multicloud_rca(
             )
 
     if trace_summary.get("db_time_ms", 0.0) >= 80.0:
+        db_ev = trace_summary.get("db_evidence")
+        detail = f", trace_age={db_ev['age_seconds']:.0f}s" if db_ev else ""
         candidates.append(
-            f"[DATABASE_BOTTLENECK] azure:teastore-persistence -> MariaDB (T_DB={trace_summary['db_time_ms']:.0f}ms)"
+            f"[DATABASE_BOTTLENECK] azure:teastore-persistence -> MariaDB (T_DB={trace_summary['db_time_ms']:.0f}ms{detail})"
         )
 
     # 2. Rank entities by their AI reconstruction MSE & z-score profile
@@ -843,6 +857,11 @@ def main():
                 if ent_wan_ms > 32.0 and not fresh.get("client"):
                     excess_wan_sec = (ent_wan_ms - 22.0) / 1000.0
                     raw_dict["client_latency_p95"] = max(raw_dict["client_latency_p95"], excess_wan_sec)
+                if eid == "azure:teastore-persistence" and trace_summary.get("db_time_ms", 0.0) >= 80.0:
+                    raw_dict["server_latency_p95"] = max(
+                        raw_dict["server_latency_p95"],
+                        trace_summary["db_time_ms"] / 1000.0,
+                    )
 
                 z_vec, is_cal = calibrator.update_or_standardize(eid, raw_dict)
 
@@ -859,11 +878,13 @@ def main():
                     eid, fresh.get("server"), fresh.get("client"),
                     probe_ok and telemetry_ok, probe_ms, raw_dict["error_rate_5xx"],
                     client_required=fresh.get("client_required", False))
+                if confirmed and raw_dict["server_latency_p95"] < 0.25:
+                    tempo_analyzer.evidence.forget(eid, loop_start)
                 latency_indices = [features.index(name) for name in ("server_latency_p95", "client_latency_p95", "error_rate_5xx")]
                 if confirmed and any(row[index] > 2.0 for row in buf for index in latency_indices):
                     recovery.refresh_latency_history(buf, z_vec, features,
-                        include_errors=recovery.state[eid]["count"] >= recovery.confirmations)
-                    tempo_analyzer.evidence.forget(eid, loop_start)
+                        include_errors=(recovery.state[eid]["count"] >= recovery.confirmations
+                                        or recovery.state[eid]["probes"] >= recovery.confirmations))
                     refreshed_entities.append(eid)
                 if recovery.refresh_cpu_history(buf, z_vec, features, raw_dict["max_pod_cpu_pct"],
                                                  confirmed and bool(fresh.get("server", {}).get("fresh") if fresh.get("server") else False)):
@@ -925,9 +946,16 @@ def main():
 
             rca_trace_summary = dict(trace_summary)
             evidence = tempo_analyzer.evidence.active(entity_results, time.time())
+            db_evidence = tempo_analyzer.evidence.active_db(entity_results, time.time())
             rca_trace_summary["wan_evidence"] = evidence
+            rca_trace_summary["db_evidence"] = db_evidence
             rca_trace_summary["wan_links"] = {**trace_summary["wan_links"],
                                              **{key: value["delay_ms"] for key, value in evidence.items()}}
+            if db_evidence:
+                rca_trace_summary["db_time_ms"] = max(
+                    rca_trace_summary.get("db_time_ms", 0.0),
+                    db_evidence["db_time_ms"],
+                )
 
             # Guard rules for deterministic multi-cloud SLO violations (e.g. sustained WAN delay or 5xx)
             guard_triggered = False

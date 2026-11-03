@@ -131,7 +131,7 @@ ai-engine/inference/test_runs/
 .DS_Store
 Thumbs.db
 
-# Scratch / Local notes
+# Scratch / Local notes & MCP memory graph
 test.md
-
-test.md
+docs/architecture/memory-graph.json
+**/memory-graph.json

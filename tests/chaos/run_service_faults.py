@@ -9,6 +9,7 @@ import signal
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 import ipaddress
 
@@ -26,34 +27,72 @@ def sql_command(sql, timeout=150):
 
 
 class Fault:
+    JVM_TARGETS = {
+        "cpu": ("gcp", "deploy/teastore-recommender"),
+        "memory_leak": ("azure", "deploy/teastore-persistence"),
+    }
+
     def __init__(self, name, duration):
         self.name, self.duration = name, duration
         self.pid = self.connection = self.original_replicas = self.watchdog = self.process = None
         self.evidence = {}
 
     def prepare(self):
-        if self.name == "cpu":
+        if self.name in self.JVM_TARGETS:
+            cloud, deploy = self.JVM_TARGETS[self.name]
             source = (ROOT / "tests/chaos/java/FaultAgent.java").read_text()
-            command(kubectl("gcp", "exec", "-i", "deploy/teastore-recommender", "--", "sh", "-c",
+            command(kubectl(cloud, "exec", "-i", deploy, "--", "sh", "-c",
                             "mkdir -p /tmp/ai-chaos; cat > /tmp/ai-chaos/FaultAgent.java"), input=source)
-            command(kubectl("gcp", "exec", "deploy/teastore-recommender", "--", "sh", "-c",
+            command(kubectl(cloud, "exec", deploy, "--", "sh", "-c",
                             'cd /tmp/ai-chaos && env -u JAVA_TOOL_OPTIONS javac -J-Xmx64m --add-modules jdk.attach FaultAgent.java && '
                             'printf "Agent-Class: FaultAgent\\n" > MANIFEST.MF && env -u JAVA_TOOL_OPTIONS jar -J-Xmx32m cfm fault.jar MANIFEST.MF FaultAgent.class'))
-            processes = command(kubectl("gcp", "exec", "deploy/teastore-recommender", "--", "ps", "-eo", "pid,comm,args"))
+            processes = command(kubectl(cloud, "exec", deploy, "--", "ps", "-eo", "pid,comm,args"))
             self.pid = next(line.split()[0] for line in processes.splitlines()
                             if len(line.split()) > 2 and line.split()[1] == "java" and "org.apache.catalina.startup.Bootstrap" in line)
 
     def attach(self, action):
-        return command(kubectl("gcp", "exec", "deploy/teastore-recommender", "--", "env", "-u", "JAVA_TOOL_OPTIONS", "java", "-Xmx32m", "--add-modules", "jdk.attach",
+        cloud, deploy = self.JVM_TARGETS[self.name]
+        return command(kubectl(cloud, "exec", deploy, "--", "env", "-u", "JAVA_TOOL_OPTIONS", "java", "-Xmx32m", "--add-modules", "jdk.attach",
                                "-cp", "/tmp/ai-chaos", "FaultAgent", self.pid, "/tmp/ai-chaos/fault.jar", str(action)))
 
     def start(self):
         if self.name == "cpu":
             self.attach(self.duration)
+        elif self.name == "memory_leak":
+            self.attach(f"memory:{self.duration}")
+            self.evidence = {"jvm_memory_agent_attached": True, "target": "azure:teastore-persistence"}
+        elif self.name == "http_5xx":
+            url = "http://localhost:8080/tools.descartes.teastore.webui/cartAction?addToCart=&productid=abc"
+            status = 0
+            try:
+                urllib.request.urlopen(urllib.request.Request(url, data=b"", method="POST"), timeout=5)
+            except urllib.error.HTTPError as err:
+                status = err.code
+            if status != 500:
+                raise RuntimeError(f"Expected HTTP 500 from Fault endpoint, got {status}")
+            self.evidence = {"http_500_verified": True, "status_code": 500}
+            script = (
+                "import time, urllib.request, urllib.error\n"
+                f"url = {url!r}\n"
+                f"deadline = time.monotonic() + {self.duration + 10}\n"
+                "while time.monotonic() < deadline:\n"
+                "    try:\n"
+                "        urllib.request.urlopen(urllib.request.Request(url, data=b'', method='POST'), timeout=3)\n"
+                "    except Exception:\n"
+                "        pass\n"
+                "    time.sleep(0.35)\n"
+            )
+            self.process = subprocess.Popen([sys.executable, "-c", script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         elif self.name == "db_lock":
-            sql = ("SET autocommit=0; LOCK TABLES teadb.PERSISTENCEPRODUCT WRITE, teadb.PERSISTENCECATEGORY WRITE; "
+            pulses = " ".join(
+                "LOCK TABLES teadb.PERSISTENCEPRODUCT WRITE, teadb.PERSISTENCECATEGORY WRITE; "
+                "DO SLEEP(0.35); UNLOCK TABLES; DO SLEEP(0.02);"
+                for _ in range(int((self.duration + 15) / 0.37))
+            )
+            sql = ("SET autocommit=0; SET SESSION query_cache_wlock_invalidate=ON; RESET QUERY CACHE; "
+                   "LOCK TABLES teadb.PERSISTENCEPRODUCT WRITE, teadb.PERSISTENCECATEGORY WRITE; "
                    "SELECT CONCAT('FAULT_STARTED ',CONNECTION_ID()); "
-                   f"SELECT SLEEP({self.duration + 15}); COMMIT; UNLOCK TABLES;")
+                   f"DO SLEEP(3.5); UNLOCK TABLES; {pulses} COMMIT; UNLOCK TABLES;")
             self.process = subprocess.Popen(sql_command(sql, self.duration + 25), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             selector = selectors.DefaultSelector()
             try:
@@ -80,18 +119,6 @@ class Fault:
                 with urllib.request.urlopen(request, timeout=5) as response:
                     if response.status != 200 or b"cleared" not in response.read():
                         raise RuntimeError("TeaStore catalog cache eviction failed")
-                # Recreate the local EntityManagerFactory as well: the JPA
-                # second-level cache can otherwise mask the database lock.
-                request = urllib.request.Request(
-                    f"http://{node}:31111/tools.descartes.teastore.persistence/rest/cache/emf", method="DELETE")
-                try:
-                    with urllib.request.urlopen(request, timeout=5) as response:
-                        if response.status != 200:
-                            raise RuntimeError("TeaStore EntityManagerFactory reset failed")
-                except TimeoutError:
-                    # A reset waiting on the deliberately locked DB is part of
-                    # the fault. The SQL session still has an independent limit.
-                    pass
             finally:
                 selector.close()
         else:
@@ -105,7 +132,7 @@ class Fault:
             command(kubectl("aws", "scale", "deploy/teastore-webui", "--replicas=0"))
 
     def close(self):
-        if self.name == "cpu" and self.pid:
+        if self.name in self.JVM_TARGETS and self.pid:
             self.attach("stop")
         elif self.name == "db_lock" and self.connection:
             result = subprocess.run(sql_command(f"KILL {self.connection}"), capture_output=True, text=True, timeout=15)
@@ -116,6 +143,19 @@ class Fault:
             if self.watchdog:
                 self.watchdog.terminate()
                 self.watchdog.wait(timeout=5)
+            command(kubectl("aws", "rollout", "status", "deploy/teastore-webui", "--timeout=60s"))
+            deadline = time.monotonic() + 60
+            ok_streak = 0
+            while time.monotonic() < deadline and ok_streak < 2:
+                try:
+                    with urllib.request.urlopen("http://localhost:8080/tools.descartes.teastore.webui/product?id=7", timeout=4) as resp:
+                        if 200 <= resp.status < 400:
+                            ok_streak += 1
+                        else:
+                            ok_streak = 0
+                except Exception:
+                    ok_streak = 0
+                time.sleep(2)
         if self.process:
             if self.process.poll() is None:
                 self.process.terminate()
@@ -124,8 +164,9 @@ class Fault:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--scenarios", nargs="+", choices=["cpu", "db_lock", "webui_outage"],
-                        default=["cpu", "db_lock", "webui_outage"])
+    parser.add_argument("--scenarios", nargs="+",
+                        choices=["cpu", "db_lock", "memory_leak", "http_5xx", "webui_outage"],
+                        default=["cpu", "db_lock", "memory_leak", "http_5xx", "webui_outage"])
     parser.add_argument("--fault", type=int, default=60)
     parser.add_argument("--recovery", type=int, default=120)
     parser.add_argument("--users", type=int, default=6)
@@ -225,9 +266,15 @@ def main():
             passed = passed and any(r.get("model_alert") for r in selected) and any(
                 "gcp:teastore-recommender" in cause and ("cpu" in cause.lower()) for cause in causes)
         if event["id"] == "db_lock":
-            # SQL spans finish when locks release; retain the post-release evidence.
             incident = [r for r in records if epoch(event["start"]) <= epoch(r["timestamp"]) < epoch(event["end"]) + 30]
-            passed = passed and any("DATABASE_BOTTLENECK" in c for r in incident for c in r.get("rca_causes", []))
+            passed = passed and any(r.get("model_alert") for r in selected) and any(
+                "DATABASE_BOTTLENECK" in c for r in incident for c in r.get("rca_causes", []))
+        if event["id"] == "memory_leak":
+            passed = passed and any(r.get("model_alert") for r in selected) and any(
+                "MEMORY_LEAK_GC_STALL" in c and "azure:teastore-persistence" in c for c in causes)
+        if event["id"] == "http_5xx":
+            passed = passed and any(r.get("model_alert") for r in selected) and any(
+                "aws:teastore-webui" in c and "error_rate_5xx" in c for c in causes)
         if event["id"] == "webui_outage":
             # Missing JVM telemetry is expected for the deliberately stopped
             # service. Availability must still alert via independent HTTP probes.
