@@ -1,0 +1,7 @@
+entity_type,signal,canonical_field,type,unit,source,required_status,observed_status,missing_reason,cardinality_risk,notes
+service,resource,service.name,string,,OTel resource,required,unknown,,low,
+service,resource,cloud.provider,string,,provider adapter,optional,unknown,,low,Do not infer from local cluster label
+cluster,resource,cluster.id,string,,Kubernetes metadata,required,unknown,,low,
+instance,metric,process.cpu.utilization,number,1,HostMetrics or app instrumentation,optional,unknown,,medium,Verify semantic meaning and unit
+instance,metric,system.memory.usage,number,By,HostMetrics,optional,unknown,,medium,
+dependency,trace,dependency.target_id,string,,trace attributes or discovery,optional,unknown,,high,Do not use as metric label without review

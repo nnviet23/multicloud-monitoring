@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pyrra
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: pyrra
+rules:
+  - apiGroups: ["pyrra.dev"]
+    resources: ["servicelevelobjectives", "servicelevelobjectives/status"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: ["prometheusrules"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: pyrra
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: pyrra
+subjects:
+  - kind: ServiceAccount
+    name: pyrra
+    namespace: monitoring
+

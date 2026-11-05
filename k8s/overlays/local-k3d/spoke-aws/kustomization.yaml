@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../../base/teastore/namespace
+  - ../../../base/teastore/registry
+  - ../../../base/teastore/auth
+  - ../../../base/teastore/image-provider
+  - ../../../base/teastore/recommender
+  - ../../../base/teastore/webui
+  - ../../../base/otel-collector/edge
+
+patches:
+  - path: patches/patch-cluster-identity.yaml

@@ -1,0 +1,44 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../../base/storage-minio
+  - ../../../base/metrics-thanos
+  - ../../../base/logs-loki
+  - ../../../base/traces-tempo
+  - ../../../base/visualization-grafana
+  - ../../../base/slo-pyrra
+  - ../../../base/smart-alerting-robusta
+  - ../../../base/otel-collector/gateway
+
+secretGenerator:
+  - name: minio-creds
+    namespace: storage
+    envs:
+      - .env
+    options:
+      disableNameSuffixHash: true
+  - name: grafana-admin-creds
+    namespace: monitoring
+    envs:
+      - .env
+    options:
+      disableNameSuffixHash: true
+  - name: loki-s3-creds
+    namespace: monitoring
+    envs:
+      - .env
+    options:
+      disableNameSuffixHash: true
+  - name: tempo-s3-creds
+    namespace: monitoring
+    envs:
+      - .env
+    options:
+      disableNameSuffixHash: true
+  - name: robusta-secrets
+    namespace: monitoring
+    envs:
+      - .env
+    options:
+      disableNameSuffixHash: true

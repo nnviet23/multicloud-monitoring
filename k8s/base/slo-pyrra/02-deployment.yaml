@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pyrra
+  namespace: monitoring
+  labels:
+    app: pyrra
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pyrra
+  template:
+    metadata:
+      labels:
+        app: pyrra
+    spec:
+      serviceAccountName: pyrra
+      containers:
+        - name: pyrra-api
+          image: ghcr.io/pyrra-dev/pyrra:v0.7.3
+          imagePullPolicy: IfNotPresent
+          args:
+            - api
+            - --prometheus-url=http://thanos-query.monitoring.svc.cluster.local:9090
+            - --api-url=http://localhost:9099
+          ports:
+            - containerPort: 9099
+              name: http
+          resources:
+            requests:
+              cpu: 30m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9099
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 9099
+            initialDelaySeconds: 10
+            periodSeconds: 10

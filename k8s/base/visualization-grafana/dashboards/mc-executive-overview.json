@@ -1,0 +1,184 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "Active Cloud Clusters",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "count(count by (k8s_cluster_name) (up))",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 3 }] }
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "id": 2,
+      "title": "Global System Availability",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "clamp_max(100 - (sum(rate(traces_service_graph_request_failed_total[5m])) / (sum(rate(traces_service_graph_request_total[5m])) + 0.0001) * 100), 100)",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "percent",
+          "decimals": 2,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 99.0 }, { "color": "green", "value": 99.5 }] }
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "id": 3,
+      "title": "Global Total Throughput (QPS)",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "sum(rate(traces_service_graph_request_total[1m]))",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "continuous-GrYlRd" },
+          "unit": "reqps",
+          "decimals": 1
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "id": 4,
+      "title": "Cross-Cloud WAN Traffic Ratio",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "(sum(rate(traces_service_graph_request_total{client_cloud_provider!=server_cloud_provider}[1m])) / (sum(rate(traces_service_graph_request_total[1m])) + 0.0001)) * 100",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "percent",
+          "decimals": 1
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "id": 5,
+      "title": "Multi-Cloud Service Traffic Distribution (by Cluster)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "sum by (server_k8s_cluster_name) (rate(traces_service_graph_request_total[1m]))",
+          "legendFormat": "Cluster: {{server_k8s_cluster_name}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "fillOpacity": 20, "lineWidth": 2 }, "unit": "reqps" }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "id": 6,
+      "title": "Inter-Cloud WAN Response Time (P95 Latency ms)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le, client, server) (rate(traces_service_graph_request_server_seconds_bucket{client_cloud_provider!=server_cloud_provider}[1m]))) * 1000",
+          "legendFormat": "WAN: {{client}} -> {{server}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "lineWidth": 2 }, "unit": "ms" }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 12 },
+      "id": 7,
+      "title": "Cloud Cluster Fleet Health Matrix",
+      "type": "table",
+      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "sum by (k8s_cluster_name, cloud_provider) (system_memory_usage_bytes{state=\"used\"}) / (1024*1024*1024)",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto" },
+          "unit": "gbytes"
+        }
+      }
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": ["multicloud", "executive", "fleet", "overview"],
+  "templating": { "list": [] },
+  "time": { "from": "now-15m", "to": "now" },
+  "timezone": "browser",
+  "title": "Multi-Cloud Executive Fleet Overview (Global Health & SLAs)",
+  "uid": "mc-executive-overview",
+  "version": 1
+}
+

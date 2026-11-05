@@ -1,0 +1,19 @@
+apiVersion: pyrra.dev/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: teastore-webui-availability
+  namespace: monitoring
+  labels:
+    app: teastore-webui
+    tier: compute
+spec:
+  target: "99.5"
+  window: "28d"
+  description: "TeaStore WebUI cross-cloud request availability must be at least 99.5% over a 28-day rolling window."
+  indicator:
+    ratio:
+      errors:
+        metric: traces_service_graph_request_failed_total{server="teastore-webui"}
+      total:
+        metric: traces_service_graph_request_total{server="teastore-webui"}
+

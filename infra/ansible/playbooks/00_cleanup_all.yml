@@ -1,16 +1,19 @@
 ---
-- name: Clean up existing k3d clusters and Docker resources
+- name: 00 - Clean up existing k3d clusters, Docker network, and volumes
   hosts: localhost
   connection: local
   gather_facts: false
+  vars:
+    network_name: mc-monitoring-net
+    pki_dir: "{{ playbook_dir }}/../../../security/pki"
   tasks:
-    - name: Attempt graceful deletion of all k3d clusters
+    - name: Gracefully delete all k3d clusters
       command: k3d cluster delete --all
       register: k3d_del
       failed_when: false
       changed_when: false
 
-    - name: Force remove all lingering k3d containers
+    - name: Force remove any lingering k3d containers
       shell: |
         CONTAINERS=$(docker ps -a -q --filter "name=k3d-")
         if [ -n "$CONTAINERS" ]; then
@@ -18,8 +21,8 @@
         fi
       changed_when: false
 
-    - name: Remove multi-cloud-wan Docker network
-      command: docker network rm multi-cloud-wan
+    - name: Remove Docker bridge network
+      command: docker network rm {{ network_name }}
       register: net_del
       failed_when: false
       changed_when: net_del.rc == 0
@@ -28,19 +31,15 @@
       command: docker volume prune -f
       changed_when: false
 
-    - name: Clean up generated mTLS certificates directory
-      file:
-        path: "{{ playbook_dir }}/certs"
-        state: absent
-
-    - name: Clean up temporary Helm values files
+    - name: Clean up temporary generated certificates
       file:
         path: "{{ item }}"
         state: absent
       loop:
-        - /tmp/loki-values.yaml
-        - /tmp/prometheus-values.yaml
+        - "{{ pki_dir }}/certs-hub"
+        - "{{ pki_dir }}/certs-spoke1"
+        - "{{ pki_dir }}/certs-spoke2"
 
-    - name: Confirm cleanup completion
+    - name: Display cleanup summary
       debug:
-        msg: "Cleaned up all k3d clusters, Docker containers, networks, volumes, and temporary certificates successfully."
+        msg: "Cleaned up all k3d clusters, Docker containers, network {{ network_name }}, and generated certs successfully."

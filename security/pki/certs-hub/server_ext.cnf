@@ -1,0 +1,26 @@
+[req]
+req_extensions = v3_req
+distinguished_name = req_distinguished_name
+prompt = no
+
+[req_distinguished_name]
+C = VN
+ST = HCM
+O = MultiCloud-Monitoring
+CN = otel-collector-hub
+
+[v3_req]
+basicConstraints = CA:FALSE
+keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth, clientAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = otel-collector-hub
+DNS.2 = otel-collector-hub.monitoring.svc.cluster.local
+DNS.3 = k3d-hub-k3d-serverlb
+DNS.4 = k3d-hub-k3d-server-0
+DNS.5 = localhost
+IP.1 = 127.0.0.1
+IP.2 = 172.28.0.3
+IP.3 = 172.28.0.2

@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - 01-config-datasources.yaml
+  - 02-config-providers.yaml
+  - 03-deployment.yaml
+  - 04-service.yaml
+
+configMapGenerator:
+  - name: grafana-dashboards
+    namespace: monitoring
+    files:
+      - dashboards/mc-executive-overview.json
+      - dashboards/system-topology.json
+      - dashboards/red-metrics.json
+      - dashboards/k8s-infrastructure.json
+      - dashboards/slo-governance.json
+      - dashboards/wan-telemetry.json
+      - dashboards/logs-traces-deepdive.json

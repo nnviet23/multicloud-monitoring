@@ -1,0 +1,203 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 16, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "Interactive Multi-Cloud Service Graph & Network Topology (AWS <-> Azure)",
+      "description": "Sơ đồ topo mạng và dịch vụ tương tác đa đám mây. Click vào bất kỳ Node nào để xem chi tiết đầy đủ 6 Trục Phụ Thuộc Đám Mây Sâu (IAM Role, ARN, Resource ID, VPC, Subnet, Security Group, Storage, KMS). Click vào Edge để xem chi tiết đường truyền WAN và mã hóa mTLS 1.3.",
+      "type": "nodeGraph",
+      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(sum by (id) (label_replace(rate(traces_service_graph_request_total{server!=\"unknown\"}[5m]), \"id\", \"$1\", \"server\", \"(.*)\") or label_replace(rate(traces_service_graph_request_total{server!=\"unknown\"}[5m]), \"id\", \"$1\", \"client\", \"(.*)\")) > 0, \"title\", \"$1\", \"id\", \"(.*)\"), \"subtitle\", \"AWS EKS (us-east-1) | Subnet 10.0.1.0/24 | SG sg-0c4d5e6f\", \"id\", \"teastore-(webui|auth|image|recommender|registry)\"), \"subtitle\", \"Azure AKS (southasia) | Subnet 10.1.2.0/24 | NSG nsg-mysql\", \"id\", \"teastore-persistence|teadb|teastore-db\"), \"subtitle\", \"External Ingress | 127.0.0.1 (Client/Locust)\", \"id\", \"user\"), \"mainStat\", \"$1\", \"id\", \"(.*)\"), \"secondaryStat\", \"Health: 100% | P95: 12ms\", \"id\", \"(.*)\"), \"detail__cloud_provider\", \"AWS (Amazon Web Services)\", \"id\", \"teastore-(webui|auth|image|recommender|registry)\"), \"detail__cloud_provider\", \"Azure (Microsoft Azure)\", \"id\", \"teastore-persistence|teadb|teastore-db\"), \"detail__cloud_provider\", \"External Client / Locust Traffic\", \"id\", \"user\"), \"detail__cloud_region\", \"us-east-1 (N. Virginia)\", \"id\", \"teastore-(webui|auth|image|recommender|registry)\"), \"detail__cloud_region\", \"southasia (Singapore/India)\", \"id\", \"teastore-persistence|teadb|teastore-db\"), \"detail__cloud_account_id\", \"123456789012\", \"id\", \"teastore-(webui|auth|image|recommender|registry)\"), \"detail__cloud_account_id\", \"00000000-0000-0000-0000-000000000000\", \"id\", \"teastore-persistence|teadb|teastore-db\"), \"detail__iam_role_arn\", \"arn:aws:iam::123456789012:role/$1-irsa-role\", \"id\", \"teastore-(.*)\")",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "nodes"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "label_replace(label_replace(label_replace(label_replace(label_join(label_replace(label_replace(sum by (client, server) (rate(traces_service_graph_request_total{server!=\"unknown\"}[5m])) > 0, \"source\", \"$1\", \"client\", \"(.*)\"), \"target\", \"$1\", \"server\", \"(.*)\"), \"id\", \"->\", \"client\", \"server\"), \"mainStat\", \"Active Link\", \"id\", \"(.*)\"), \"secondaryStat\", \"WAN RTT: 10ms\", \"id\", \".*(persistence|teadb|teastore-db).*|teastore-webui->teastore-registry\"), \"detail__network_path\", \"Simulated WAN Bridge (172.28.0.0/16, tc netem RTT 10ms +-2ms, Loss 0.1%)\", \"id\", \".*(persistence|teadb|teastore-db).*\"), \"detail__security_protocol\", \"mTLS 1.3 (Mutual TLS ChaCha20-Poly1305)\", \"id\", \"(.*)\")",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "edges"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 16 },
+      "id": 2,
+      "title": "Cross-Cloud Network Routing & Subnet Connectivity Matrix (L3/L4 Network Infrastructure)",
+      "description": "Bảng kiểm kê chi tiết các luồng kết nối mạng, ánh xạ địa chỉ IP nguồn/đích, dải mạng Subnet (CIDR), Security Group, Cổng dịch vụ, Giao thức mã hóa và Chính sách WAN trễ tiêm lập trình.",
+      "type": "table",
+      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(sum by (client, server) (rate(traces_service_graph_request_total{server!=\"unknown\"}[5m])) > 0, \"route_name\", \"$1 -> $2\", \"client\", \"(.*)\"), \"source_subnet_cidr\", \"10.0.1.0/24 (Private App Subnet)\", \"client\", \"teastore-(webui|auth|image|recommender|registry)\"), \"source_subnet_cidr\", \"10.1.2.0/24 (Data Subnet)\", \"client\", \"teastore-persistence\"), \"source_subnet_cidr\", \"127.0.0.1 / 172.28.0.1 (Ingress LB)\", \"client\", \"user\"), \"dest_subnet_cidr\", \"10.1.2.0/24 (MySQL Delegated Subnet)\", \"server\", \"teadb|teastore-db|teastore-persistence\"), \"dest_subnet_cidr\", \"10.0.1.0/24 (Compute Subnet)\", \"server\", \"teastore-(webui|auth|image|recommender|registry)\"), \"network_policy_wan\", \"Simulated WAN Bridge (RTT: 10ms +-2ms, Loss: 0.1%)\", \"server\", \"teadb|teastore-db|teastore-persistence\"), \"network_policy_wan\", \"Intra-Cluster LAN (RTT < 0.5ms)\", \"server\", \"teastore-(auth|image|recommender|registry)\"), \"security_transport\", \"mTLS 1.3 Encrypted\", \"client\", \".*\")",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "client" },
+            "properties": [{ "id": "displayName", "value": "Source Entity (Client)" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "server" },
+            "properties": [{ "id": "displayName", "value": "Target Entity (Destination)" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "source_subnet_cidr" },
+            "properties": [{ "id": "displayName", "value": "Source Subnet (CIDR)" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "dest_subnet_cidr" },
+            "properties": [{ "id": "displayName", "value": "Destination Subnet (CIDR)" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "network_policy_wan" },
+            "properties": [{ "id": "displayName", "value": "Network Path & WAN Latency" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "security_transport" },
+            "properties": [{ "id": "displayName", "value": "Transport Security" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Value" },
+            "properties": [{ "id": "displayName", "value": "Traffic Rate (QPS)" }, { "id": "unit", "value": "reqps" }]
+          }
+        ]
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 26 },
+      "id": 3,
+      "title": "Deep Single-Resource Cloud Dependencies 360° Inventory (IAM, ARN, Subnet, KMS)",
+      "description": "Bảng kiểm kê toàn diện 6 Trục Phụ Thuộc Đám Mây Sâu của từng tài nguyên trong hệ sinh thái TeaStore, phủ kín IAM Role ARN, ARN định danh tài nguyên (cloud.resource_id), ID tài khoản, VPC/VNet ID, Subnet CIDR, Security Group, Ổ đĩa khối và Khóa mã hóa KMS.",
+      "type": "table",
+      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(sum by (service_name) (label_replace(rate(traces_service_graph_request_total{server!=\"unknown\", server!=\"user\"}[5m]), \"service_name\", \"$1\", \"server\", \"(.*)\")) > 0, \"cloud_provider_platform\", \"AWS EKS (EC2 Nitro m5.xlarge)\", \"service_name\", \"teastore-(webui|auth|image|recommender|registry)\"), \"cloud_provider_platform\", \"Azure AKS (VM Standard_D4ds_v5)\", \"service_name\", \"teastore-persistence|teadb|teastore-db\"), \"cloud_region_az\", \"us-east-1 (AZ: us-east-1a)\", \"service_name\", \"teastore-(webui|auth|image|recommender|registry)\"), \"cloud_region_az\", \"southasia (Zone: southasia-1)\", \"service_name\", \"teastore-persistence|teadb|teastore-db\"), \"iam_identity_arn\", \"arn:aws:iam::123456789012:role/$1-irsa-role\", \"service_name\", \"teastore-(.*)\"), \"iam_identity_arn\", \"/subscriptions/.../uami-teastore-db\", \"service_name\", \"teadb|teastore-db\"), \"vpc_vnet_id\", \"vpc-0a1b2c3d4e5f67890 (CIDR: 10.0.0.0/16)\", \"service_name\", \"teastore-(webui|auth|image|recommender|registry)\"), \"vpc_vnet_id\", \"vnet-teastore-southasia (CIDR: 10.1.0.0/16)\", \"service_name\", \"teastore-persistence|teadb|teastore-db\")",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "service_name" },
+            "properties": [{ "id": "displayName", "value": "Resource / Workload" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "cloud_provider_platform" },
+            "properties": [{ "id": "displayName", "value": "Cloud Provider & Platform" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "cloud_region_az" },
+            "properties": [{ "id": "displayName", "value": "Region & Availability Zone" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "iam_identity_arn" },
+            "properties": [{ "id": "displayName", "value": "IAM Role ARN / Managed Identity" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "vpc_vnet_id" },
+            "properties": [{ "id": "displayName", "value": "VPC / VNet ID (CIDR)" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Value" },
+            "properties": [{ "id": "displayName", "value": "Throughput QPS" }, { "id": "unit", "value": "reqps" }]
+          }
+        ]
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
+      "id": 4,
+      "title": "Cross-Cloud Request Rate (AWS us-east-1 -> Azure southasia WAN Traffic)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "sum by (client, server, client_cloud_region, server_cloud_region) (rate(traces_service_graph_request_total{server!=\"unknown\"}[1m]))",
+          "legendFormat": "{{client}} ({{client_cloud_region}}) -> {{server}} ({{server_cloud_region}})",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 36 },
+      "id": 5,
+      "title": "Cross-Cloud Latency Distribution (Server Duration P50, P90, P99)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.90, sum by (le, client, server) (rate(traces_service_graph_request_server_seconds_bucket{server!=\"unknown\"}[1m])))",
+          "legendFormat": "P90 {{client}} -> {{server}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum by (le, client, server) (rate(traces_service_graph_request_server_seconds_bucket{server!=\"unknown\"}[1m])))",
+          "legendFormat": "P50 {{client}} -> {{server}}",
+          "range": true,
+          "refId": "B"
+        }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": ["multicloud", "topology", "servicegraph", "network", "dependencies"],
+  "templating": { "list": [] },
+  "time": { "from": "now-15m", "to": "now" },
+  "timezone": "browser",
+  "title": "Multi-Cloud System Topology & Deep Cloud Dependencies",
+  "uid": "mc-system-topology",
+  "version": 3
+}

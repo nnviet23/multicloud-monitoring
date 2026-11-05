@@ -1,0 +1,52 @@
+schema_version: "1.0"
+experiment_id: "YYYYMMDD_teastore_baseline_run01"
+status: "planned" # planned | valid | invalid | incomplete
+started_at_utc: null
+ended_at_utc: null
+
+repository:
+  commit: null
+  dirty: null
+
+workload:
+  application: "TeaStore"
+  version_or_image_digest: null
+  scenario: "baseline"
+  load_tool: null
+  load_tool_version: null
+  concurrency: null
+  ramp_up_seconds: null
+  duration_seconds: null
+  warmup_seconds: null
+  cooldown_seconds: null
+
+environment:
+  clusters: ["aws-k3d", "azure-k3d", "hub-k3d"]
+  node_profile: null
+  resource_limits_snapshot: null
+  network_profile: "baseline"
+  network_impairment:
+    rtt_ms: null
+    jitter_ms: null
+    packet_loss_percent: null
+    bandwidth_mbps: null
+
+telemetry:
+  collector_version: null
+  backend_versions: {}
+  config_hashes: {}
+  transport_security: "mtls"
+  sampling_policy: "none"
+  filter_policy: null
+  batch_settings: null
+
+artifacts:
+  raw: []
+  processed: []
+  logs: []
+  notes: []
+
+quality:
+  validity_reason: null
+  missing_data_notes: []
+  deviations: []

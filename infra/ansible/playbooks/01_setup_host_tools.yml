@@ -1,50 +1,30 @@
 ---
-- name: Verify and Setup Host Environment
+- name: 01 - Verify and Setup Host Tools Environment
   hosts: localhost
   connection: local
   gather_facts: true
   tasks:
-    - name: Install prerequisite system packages
-      become: true
-      apt:
-        name:
-          - curl
-          - iproute2
-          - bridge-utils
-          - jq
-          - tar
-        state: present
-        update_cache: true
-
-    - name: Check if k3d is installed
-      command: which k3d
-      register: k3d_check
-      failed_when: false
+    - name: Check prerequisite command line tools
+      command: which {{ item }}
+      loop:
+        - docker
+        - k3d
+        - kubectl
+        - helm
+      register: tool_check
+      failed_when: tool_check.rc != 0
       changed_when: false
 
-    - name: Download and install k3d CLI (if not installed)
-      become: true
-      shell: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
-      when: k3d_check.rc != 0
-
-    - name: Check if helm is installed
-      command: which helm
-      register: helm_check
-      failed_when: false
-      changed_when: false
-
-    - name: Download and install Helm CLI (if not installed)
-      become: true
-      shell: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-      when: helm_check.rc != 0
-
-    - name: Display tool versions
+    - name: Capture tool versions
       shell: |
-        k3d version
-        helm version --short
+        echo "=== Docker ===" && docker --version
+        echo "=== k3d ===" && k3d version
+        echo "=== kubectl ===" && kubectl version --client --output=yaml | head -n 5
+        echo "=== helm ===" && helm version --short
       register: tool_versions
       changed_when: false
 
-    - name: Show installed versions
+    - name: Display verified host environment
       debug:
-        var: tool_versions.stdout_lines
+        msg: "{{ tool_versions.stdout_lines }}"
+

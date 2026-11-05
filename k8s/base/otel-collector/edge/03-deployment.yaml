@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector-spoke
+  namespace: monitoring
+  labels:
+    app: otel-collector-spoke
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector-spoke
+  template:
+    metadata:
+      labels:
+        app: otel-collector-spoke
+    spec:
+      serviceAccountName: otel-collector-spoke
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:0.114.0
+          imagePullPolicy: IfNotPresent
+          args: ["--config=/etc/otelcol/config.yaml"]
+          env:
+            - name: CLUSTER_NAME
+              value: "spoke-cluster"
+            - name: CLOUD_PROVIDER
+              value: "spoke-cloud"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otelcol
+            - name: certs
+              mountPath: /etc/otelcol/certs
+              readOnly: true
+            - name: varlogpods
+              mountPath: /var/log/pods
+              readOnly: true
+          ports:
+            - containerPort: 4317
+              name: otlp-grpc
+            - containerPort: 4318
+              name: otlp-http
+            - containerPort: 8889
+              name: metrics
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-spoke-config
+        - name: certs
+          secret:
+            secretName: otel-spoke-certs
+        - name: varlogpods
+          hostPath:
+            path: /var/log/pods

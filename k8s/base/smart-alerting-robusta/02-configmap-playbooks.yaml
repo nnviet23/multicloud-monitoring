@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: robusta-config
+  namespace: monitoring
+data:
+  active_playbooks.yaml: |
+    global_config:
+      cluster_name: hub-k3d
+      prometheus_url: "http://thanos-query.monitoring.svc.cluster.local:9090"
+
+    playbook_repos: {}
+
+    sinks_config: []
+
+    custom_playbooks:
+      - name: "Pod Crash Loop Enrichment"
+        triggers:
+          - on_pod_crash_loop: {}
+        actions:
+          - report_crash_loop: {}
+          - pod_events_enricher: {}
+
+      - name: "Pod OOM Killed Investigation"
+        triggers:
+          - on_pod_oom_killed: {}
+        actions:
+          - node_allocatable_resources_enricher: {}
+          - pod_events_enricher: {}

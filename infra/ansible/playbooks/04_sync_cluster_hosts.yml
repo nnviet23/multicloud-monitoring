@@ -1,0 +1,77 @@
+---
+- name: 04 - Synchronize Inter-Cluster DNS NodeHosts
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    host_gateway_ip: "{{ lookup('env', 'DOCKER_HOST_GATEWAY_IP') | default('192.168.65.254', true) }}"
+    clusters:
+      - name: hub-k3d
+        context: k3d-hub-k3d
+      - name: aws-k3d
+        context: k3d-aws-k3d
+      - name: azure-k3d
+        context: k3d-azure-k3d
+    target_containers:
+      - k3d-hub-k3d-server-0
+      - k3d-hub-k3d-serverlb
+      - k3d-aws-k3d-server-0
+      - k3d-aws-k3d-serverlb
+      - k3d-azure-k3d-server-0
+      - k3d-azure-k3d-serverlb
+
+  tasks:
+    - name: Inspect current container IPv4 addresses
+      ansible.builtin.command:
+        argv:
+          - docker
+          - inspect
+          - --format
+          - "{% raw %}{{range $net, $conf := .NetworkSettings.Networks}}{{$conf.IPAddress}}{{end}}{% endraw %}"
+          - "{{ item }}"
+      loop: "{{ target_containers }}"
+      register: ip_queries
+      changed_when: false
+
+    - name: Assemble unified NodeHosts content
+      ansible.builtin.set_fact:
+        node_hosts_content: |
+          {{ host_gateway_ip }} host.k3d.internal
+          {% for r in ip_queries.results %}
+          {{ r.stdout.strip() }} {{ r.item }}
+          {% endfor %}
+
+    - name: Display calculated NodeHosts mapping
+      ansible.builtin.debug:
+        var: node_hosts_content
+
+    - name: Patch CoreDNS ConfigMap with unified NodeHosts
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --context
+          - "{{ item.context }}"
+          - -n
+          - kube-system
+          - patch
+          - configmap
+          - coredns
+          - --type
+          - merge
+          - -p
+          - "{{ {'data': {'NodeHosts': node_hosts_content}} | to_json }}"
+      loop: "{{ clusters }}"
+      register: patch_result
+      changed_when: "'patched' in patch_result.stdout"
+
+    - name: Restart CoreDNS deployment to apply updated hosts
+      ansible.builtin.command:
+        cmd: "kubectl --context {{ item.context }} -n kube-system rollout restart deployment coredns"
+      loop: "{{ clusters }}"
+      changed_when: true
+
+    - name: Wait for CoreDNS deployment rollout
+      ansible.builtin.command:
+        cmd: "kubectl --context {{ item.context }} -n kube-system rollout status deployment coredns --timeout=60s"
+      loop: "{{ clusters }}"
+      changed_when: false

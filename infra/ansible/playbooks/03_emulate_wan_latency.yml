@@ -1,0 +1,36 @@
+---
+- name: 03 - Emulate Cross-Cloud WAN Network Characteristics (Latency & Loss)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    latency: 10ms
+    jitter: 2ms
+    loss: 0.1%
+    spoke_containers:
+      - k3d-aws-k3d-server-0
+      - k3d-azure-k3d-server-0
+
+  tasks:
+    - name: Apply tc netem latency and loss via privileged helper container
+      command: >
+        docker run --rm --privileged --net=container:{{ item }}
+        alpine:3.20 sh -c "apk add --no-cache iproute2 >/dev/null 2>&1 && tc qdisc replace dev eth0 root netem delay {{ latency }} {{ jitter }} loss {{ loss }}"
+      loop: "{{ spoke_containers }}"
+      register: tc_exec
+      changed_when: tc_exec.rc == 0
+
+    - name: Verify active tc qdisc status on spoke nodes
+      command: >
+        docker run --rm --privileged --net=container:{{ item }}
+        alpine:3.20 sh -c "apk add --no-cache iproute2 >/dev/null 2>&1 && tc qdisc show dev eth0"
+      loop: "{{ spoke_containers }}"
+      register: tc_status
+      changed_when: false
+
+    - name: Display active queue discipline
+      debug:
+        msg: "{{ item.item }}: {{ item.stdout }}"
+      loop: "{{ tc_status.results }}"
+      when: item.stdout is defined
+

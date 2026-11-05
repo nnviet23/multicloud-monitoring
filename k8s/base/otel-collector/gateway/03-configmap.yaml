@@ -1,0 +1,168 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-hub-config
+  namespace: monitoring
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+            tls:
+              cert_file: /etc/otelcol/certs/server.crt
+              key_file: /etc/otelcol/certs/server.key
+              client_ca_file: /etc/otelcol/certs/ca.crt
+          http:
+            endpoint: 0.0.0.0:4318
+            tls:
+              cert_file: /etc/otelcol/certs/server.crt
+              key_file: /etc/otelcol/certs/server.key
+              client_ca_file: /etc/otelcol/certs/ca.crt
+
+    connectors:
+      servicegraph:
+        latency_histogram_buckets: [10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2.5s, 5s]
+        dimensions:
+          - cloud.provider
+          - cloud.region
+          - k8s.cluster.name
+        store:
+          ttl: 2s
+          max_items: 5000
+
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 75
+        spike_limit_percentage: 20
+
+      transform/normalize_cloud:
+        error_mode: ignore
+        log_statements:
+          - context: resource
+            statements:
+              - set(attributes["cloud.provider"], "aws") where attributes["k8s.cluster.name"] == "aws-k3d" or attributes["cloud.provider"] == "amazon"
+              - set(attributes["cloud.provider"], "azure") where attributes["k8s.cluster.name"] == "azure-k3d" or attributes["cloud.provider"] == "microsoft"
+              - set(attributes["cloud.region"], "us-east-1") where attributes["cloud.provider"] == "aws" or attributes["k8s.cluster.name"] == "aws-k3d"
+              - set(attributes["cloud.region"], "southasia") where attributes["cloud.provider"] == "azure" or attributes["k8s.cluster.name"] == "azure-k3d"
+              - set(attributes["cloud.region"], "local-datacenter") where attributes["cloud.provider"] == "hub" or attributes["k8s.cluster.name"] == "hub-k3d"
+              - set(attributes["cloud.account.id"], "123456789012") where attributes["cloud.provider"] == "aws"
+              - set(attributes["cloud.account.id"], "00000000-0000-0000-0000-000000000000") where attributes["cloud.provider"] == "azure"
+              - set(attributes["cloud.platform"], "aws_eks") where attributes["cloud.provider"] == "aws"
+              - set(attributes["cloud.platform"], "azure_aks") where attributes["cloud.provider"] == "azure"
+              - set(attributes["network.vpc.id"], "vpc-0a1b2c3d4e5f67890") where attributes["cloud.provider"] == "aws"
+              - set(attributes["network.vnet.id"], "vnet-teastore-southasia") where attributes["cloud.provider"] == "azure"
+              - set(attributes["network.subnet.id"], "subnet-0e1f2a3b4c5d6e7f8") where attributes["cloud.provider"] == "aws"
+              - set(attributes["network.subnet.id"], "snet-mysql-delegated") where attributes["cloud.provider"] == "azure"
+              - set(attributes["network.security_group.id"], "sg-0c4d5e6f7a8b9c0d1") where attributes["cloud.provider"] == "aws"
+              - set(attributes["network.security_group.id"], "nsg-mysql-internal") where attributes["cloud.provider"] == "azure"
+              - set(attributes["cloud.identity.arn"], Concat(["arn:aws:iam::123456789012:role/", attributes["service.name"], "-irsa-role"], "")) where attributes["cloud.provider"] == "aws" and attributes["service.name"] != nil
+              - set(attributes["cloud.identity.arn"], Concat(["/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-teastore-southasia/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-", attributes["service.name"]], "")) where attributes["cloud.provider"] == "azure" and attributes["service.name"] != nil
+              - set(attributes["cloud.resource_id"], Concat(["arn:aws:eks:us-east-1:123456789012:pod/teastore-cluster/", attributes["k8s.namespace.name"], "/", attributes["k8s.pod.name"]], "")) where attributes["cloud.provider"] == "aws" and attributes["k8s.pod.name"] != nil
+              - set(attributes["cloud.resource_id"], Concat(["/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-teastore-southasia/providers/Microsoft.ContainerService/managedClusters/teastore-aks/pods/", attributes["k8s.pod.name"]], "")) where attributes["cloud.provider"] == "azure" and attributes["k8s.pod.name"] != nil
+              - set(attributes["telemetry.hub.received_time"], UnixMilli(Now()))
+        trace_statements:
+          - context: resource
+            statements:
+              - set(attributes["cloud.provider"], "aws") where attributes["k8s.cluster.name"] == "aws-k3d" or attributes["cloud.provider"] == "amazon"
+              - set(attributes["cloud.provider"], "azure") where attributes["k8s.cluster.name"] == "azure-k3d" or attributes["cloud.provider"] == "microsoft"
+              - set(attributes["cloud.region"], "us-east-1") where attributes["cloud.provider"] == "aws" or attributes["k8s.cluster.name"] == "aws-k3d"
+              - set(attributes["cloud.region"], "southasia") where attributes["cloud.provider"] == "azure" or attributes["k8s.cluster.name"] == "azure-k3d"
+              - set(attributes["cloud.region"], "local-datacenter") where attributes["cloud.provider"] == "hub" or attributes["k8s.cluster.name"] == "hub-k3d"
+              - set(attributes["cloud.account.id"], "123456789012") where attributes["cloud.provider"] == "aws"
+              - set(attributes["cloud.account.id"], "00000000-0000-0000-0000-000000000000") where attributes["cloud.provider"] == "azure"
+              - set(attributes["cloud.platform"], "aws_eks") where attributes["cloud.provider"] == "aws"
+              - set(attributes["cloud.platform"], "azure_aks") where attributes["cloud.provider"] == "azure"
+              - set(attributes["network.vpc.id"], "vpc-0a1b2c3d4e5f67890") where attributes["cloud.provider"] == "aws"
+              - set(attributes["network.vnet.id"], "vnet-teastore-southasia") where attributes["cloud.provider"] == "azure"
+              - set(attributes["network.subnet.id"], "subnet-0e1f2a3b4c5d6e7f8") where attributes["cloud.provider"] == "aws"
+              - set(attributes["network.subnet.id"], "snet-mysql-delegated") where attributes["cloud.provider"] == "azure"
+              - set(attributes["network.security_group.id"], "sg-0c4d5e6f7a8b9c0d1") where attributes["cloud.provider"] == "aws"
+              - set(attributes["network.security_group.id"], "nsg-mysql-internal") where attributes["cloud.provider"] == "azure"
+              - set(attributes["cloud.identity.arn"], Concat(["arn:aws:iam::123456789012:role/", attributes["service.name"], "-irsa-role"], "")) where attributes["cloud.provider"] == "aws" and attributes["service.name"] != nil
+              - set(attributes["cloud.identity.arn"], Concat(["/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-teastore-southasia/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-", attributes["service.name"]], "")) where attributes["cloud.provider"] == "azure" and attributes["service.name"] != nil
+              - set(attributes["cloud.resource_id"], Concat(["arn:aws:eks:us-east-1:123456789012:pod/teastore-cluster/", attributes["k8s.namespace.name"], "/", attributes["k8s.pod.name"]], "")) where attributes["cloud.provider"] == "aws" and attributes["k8s.pod.name"] != nil
+              - set(attributes["cloud.resource_id"], Concat(["/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-teastore-southasia/providers/Microsoft.ContainerService/managedClusters/teastore-aks/pods/", attributes["k8s.pod.name"]], "")) where attributes["cloud.provider"] == "azure" and attributes["k8s.pod.name"] != nil
+              - set(attributes["telemetry.hub.received_time"], UnixMilli(Now()))
+          - context: span
+            statements:
+              # 1. Khớp theo server.address hoặc url.full hoặc net.peer.name cho Registry
+              - set(attributes["peer.service"], "teastore-registry") where attributes["peer.service"] == nil and (IsMatch(attributes["server.address"], ".*registry.*") or IsMatch(attributes["url.full"], ".*registry.*") or attributes["net.peer.name"] == "teastore-registry" or attributes["net.peer.port"] == 1099 or attributes["net.peer.port"] == 31112)
+              # 2. Khớp cho Database
+              - set(attributes["peer.service"], "teastore-db") where attributes["peer.service"] == nil and (attributes["db.system"] == "mysql" or IsMatch(attributes["server.address"], ".*teastore-db.*") or attributes["net.peer.name"] == "teastore-db" or attributes["net.peer.port"] == 3306 or attributes["server.port"] == 3306)
+              # 3. Khớp cho Persistence
+              - set(attributes["peer.service"], "teastore-persistence") where attributes["peer.service"] == nil and (IsMatch(attributes["server.address"], ".*persistence.*") or IsMatch(attributes["url.full"], ".*persistence.*") or attributes["net.peer.name"] == "teastore-persistence" or attributes["net.peer.port"] == 31111 or attributes["server.port"] == 31111)
+              # 4. Khớp cho Auth
+              - set(attributes["peer.service"], "teastore-auth") where attributes["peer.service"] == nil and (IsMatch(attributes["server.address"], ".*auth.*") or IsMatch(attributes["url.full"], ".*auth.*") or attributes["net.peer.name"] == "teastore-auth")
+              # 5. Khớp cho Image
+              - set(attributes["peer.service"], "teastore-image") where attributes["peer.service"] == nil and (IsMatch(attributes["server.address"], ".*image.*") or IsMatch(attributes["url.full"], ".*image.*") or attributes["net.peer.name"] == "teastore-image")
+              # 6. Khớp cho Recommender
+              - set(attributes["peer.service"], "teastore-recommender") where attributes["peer.service"] == nil and (IsMatch(attributes["server.address"], ".*recommender.*") or IsMatch(attributes["url.full"], ".*recommender.*") or attributes["net.peer.name"] == "teastore-recommender")
+              # 7. Khớp cho WebUI
+              - set(attributes["peer.service"], "teastore-webui") where attributes["peer.service"] == nil and (IsMatch(attributes["server.address"], ".*webui.*") or IsMatch(attributes["url.full"], ".*webui.*") or attributes["net.peer.name"] == "teastore-webui")
+              # 8. Fallback cho client spans: trích xuất từ server.address hoặc net.peer.name
+              - set(attributes["peer.service"], attributes["server.address"]) where attributes["peer.service"] == nil and attributes["server.address"] != nil
+              - set(attributes["peer.service"], attributes["net.peer.name"]) where attributes["peer.service"] == nil and attributes["net.peer.name"] != nil
+        metric_statements:
+          - context: resource
+            statements:
+              - set(attributes["cloud.provider"], "aws") where attributes["k8s.cluster.name"] == "aws-k3d" or attributes["cloud.provider"] == "amazon"
+              - set(attributes["cloud.provider"], "azure") where attributes["k8s.cluster.name"] == "azure-k3d" or attributes["cloud.provider"] == "microsoft"
+              - set(attributes["cloud.region"], "us-east-1") where attributes["cloud.provider"] == "aws" or attributes["k8s.cluster.name"] == "aws-k3d"
+              - set(attributes["cloud.region"], "southasia") where attributes["cloud.provider"] == "azure" or attributes["k8s.cluster.name"] == "azure-k3d"
+              - set(attributes["cloud.region"], "local-datacenter") where attributes["cloud.provider"] == "hub" or attributes["k8s.cluster.name"] == "hub-k3d"
+              - set(attributes["cloud.account.id"], "123456789012") where attributes["cloud.provider"] == "aws"
+              - set(attributes["cloud.account.id"], "00000000-0000-0000-0000-000000000000") where attributes["cloud.provider"] == "azure"
+              - set(attributes["cloud.platform"], "aws_eks") where attributes["cloud.provider"] == "aws"
+              - set(attributes["cloud.platform"], "azure_aks") where attributes["cloud.provider"] == "azure"
+              - set(attributes["cluster"], attributes["k8s.cluster.name"])
+              - set(attributes["cloud"], attributes["cloud.provider"])
+              - set(attributes["region"], attributes["cloud.region"])
+              - set(attributes["telemetry.hub.received_time"], UnixMilli(Now()))
+
+      batch:
+        send_batch_size: 512
+        timeout: 1s
+
+    exporters:
+      debug:
+        verbosity: basic
+      prometheus:
+        endpoint: 0.0.0.0:8889
+        resource_to_telemetry_conversion:
+          enabled: true
+      otlp/tempo:
+        endpoint: tempo.monitoring.svc.cluster.local:4317
+        tls:
+          insecure: true
+      loki:
+        endpoint: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
+      awss3:
+        s3uploader:
+          endpoint: http://minio.storage.svc.cluster.local:9000
+          s3_bucket: raw-telemetry
+          region: us-east-1
+          s3_force_path_style: true
+          disable_ssl: true
+        marshaler: otlp_json
+
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, transform/normalize_cloud, batch]
+          exporters: [servicegraph, otlp/tempo, awss3, debug]
+        metrics:
+          receivers: [otlp]
+          processors: [memory_limiter, transform/normalize_cloud, batch]
+          exporters: [prometheus, awss3, debug]
+        metrics/servicegraph:
+          receivers: [servicegraph]
+          processors: [batch]
+          exporters: [prometheus, debug]
+        logs:
+          receivers: [otlp]
+          processors: [memory_limiter, transform/normalize_cloud, batch]
+          exporters: [loki, awss3, debug]

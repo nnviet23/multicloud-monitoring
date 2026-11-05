@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 10s
+      evaluation_interval: 10s
+      external_labels:
+        prometheus_instance: hub-prometheus
+        replica: prometheus-0
+
+    scrape_configs:
+      - job_name: 'otel-collector-hub'
+        scrape_interval: 5s
+        honor_labels: true
+        static_configs:
+          - targets: ['otel-collector-hub.monitoring.svc.cluster.local:8889']
+            labels:
+              app: otel-collector-hub
+          - targets: ['otel-collector-hub.monitoring.svc.cluster.local:8888']
+            labels:
+              app: otel-collector-internal
+              k8s_cluster_name: hub-k3d
+              cloud_provider: hub
+
+      - job_name: 'tempo'
+        static_configs:
+          - targets: ['tempo.monitoring.svc.cluster.local:3200']
+            labels:
+              k8s_cluster_name: hub-k3d
+              cloud_provider: hub
+
+      - job_name: 'loki'
+        static_configs:
+          - targets: ['loki.monitoring.svc.cluster.local:3100']
+            labels:
+              k8s_cluster_name: hub-k3d
+              cloud_provider: hub
+
+      - job_name: 'minio'
+        metrics_path: /minio/v2/metrics/cluster
+        static_configs:
+          - targets: ['minio.storage.svc.cluster.local:9000']
+            labels:
+              k8s_cluster_name: hub-k3d
+              cloud_provider: hub
+

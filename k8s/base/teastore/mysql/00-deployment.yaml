@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: teastore-db
+  labels:
+    app: teastore-db
+    tier: data
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: teastore-db
+  template:
+    metadata:
+      labels:
+        app: teastore-db
+        tier: data
+    spec:
+      containers:
+        - name: teastore-db
+          image: descartesresearch/teastore-db:1.4.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3306
+              name: mysql
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 384Mi
+          readinessProbe:
+            tcpSocket:
+              port: 3306
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 3306
+            initialDelaySeconds: 30
+            periodSeconds: 15
+

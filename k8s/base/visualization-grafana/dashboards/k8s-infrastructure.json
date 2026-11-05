@@ -1,0 +1,105 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "System Memory Usage by Cluster (Used vs Free GB)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "sum by (k8s_cluster_name, state) (system_memory_usage_bytes{state=~\"used|free|cached\"})",
+          "legendFormat": "{{k8s_cluster_name}} ({{state}})",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "fillOpacity": 15, "lineWidth": 2 }, "unit": "bytes" }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "title": "Network Throughput (Total Bytes Received/Transmitted per Cluster)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "sum by (k8s_cluster_name, direction) (rate(system_network_io_bytes_total[1m]))",
+          "legendFormat": "{{k8s_cluster_name}} ({{direction}})",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "lineWidth": 2 }, "unit": "Bps" }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "title": "Network Connection States (TCP Active Connections)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "sum by (k8s_cluster_name, state) (system_network_connections)",
+          "legendFormat": "{{k8s_cluster_name}} - {{state}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "lineWidth": 2 }, "unit": "short" }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "title": "CPU Core Utilization & Saturation",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "sum by (k8s_cluster_name, state) (rate(system_cpu_time_seconds_total[1m]))",
+          "legendFormat": "{{k8s_cluster_name}} ({{state}})",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "lineWidth": 2 }, "unit": "s" }
+      }
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": ["multicloud", "kubernetes", "capacity", "infrastructure"],
+  "templating": { "list": [] },
+  "time": { "from": "now-15m", "to": "now" },
+  "timezone": "browser",
+  "title": "Multi-Cloud Kubernetes Infrastructure & Capacity",
+  "uid": "mc-k8s-infrastructure",
+  "version": 1
+}
+

@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: robusta-runner
+  namespace: monitoring
+  labels:
+    app: robusta-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: robusta-runner
+  template:
+    metadata:
+      labels:
+        app: robusta-runner
+    spec:
+      serviceAccountName: robusta-runner-service-account
+      containers:
+        - name: runner
+          image: robustadev/robusta-runner:0.53.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: ROBUSTA_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: PLAYBOOKS_CONFIG_FILE_PATH
+              value: "/etc/robusta/config/active_playbooks.yaml"
+            - name: ROBUSTA_CONFIG_PATH
+              value: "/etc/robusta/config/active_playbooks.yaml"
+            - name: ENABLE_TELEMETRY
+              value: "false"
+            - name: TELEGRAM_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: robusta-secrets
+                  key: telegram_bot_token
+            - name: TELEGRAM_CHAT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: robusta-secrets
+                  key: telegram_chat_id
+          volumeMounts:
+            - name: config
+              mountPath: /etc/robusta/config
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 384Mi
+      volumes:
+        - name: config
+          configMap:
+            name: robusta-config

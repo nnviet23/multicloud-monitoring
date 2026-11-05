@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: teastore-persistence
+  labels:
+    app: teastore-persistence
+    tier: data
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: teastore-persistence
+  template:
+    metadata:
+      labels:
+        app: teastore-persistence
+        tier: data
+    spec:
+      initContainers:
+        - name: opentelemetry-auto-instrumentation
+          image: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java:2.10.0
+          imagePullPolicy: IfNotPresent
+          command: ["cp", "/javaagent.jar", "/otel-auto-instrumentation/javaagent.jar"]
+          volumeMounts:
+            - name: otel-auto-instrumentation
+              mountPath: /otel-auto-instrumentation
+      containers:
+        - name: teastore-persistence
+          image: descartesresearch/teastore-persistence:1.4.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: SERVICE_PORT
+              value: "31111"
+            - name: HOST_NAME
+              value: "k3d-azure-k3d-server-0"
+            - name: REGISTRY_HOST
+              value: "k3d-aws-k3d-server-0"
+            - name: REGISTRY_PORT
+              value: "31112"
+            - name: DB_HOST
+              value: "teastore-db.teastore.svc.cluster.local"
+            - name: DB_PORT
+              value: "3306"
+            - name: CATALINA_OPTS
+              value: "-javaagent:/otel-auto-instrumentation/javaagent.jar -Dkieker.monitoring.skipDefaultAOPConfiguration=true -Xms96m -Xmx256m -XX:+UseSerialGC"
+            - name: OTEL_SERVICE_NAME
+              value: "teastore-persistence"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "grpc"
+            - name: OTEL_TRACES_EXPORTER
+              value: "otlp"
+            - name: OTEL_METRICS_EXPORTER
+              value: "otlp"
+            - name: OTEL_LOGS_EXPORTER
+              value: "otlp"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: otel-auto-instrumentation
+              mountPath: /otel-auto-instrumentation
+          startupProbe:
+            httpGet:
+              path: /tools.descartes.teastore.persistence/rest/categories
+              port: 8080
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /tools.descartes.teastore.persistence/rest/categories
+              port: 8080
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /tools.descartes.teastore.persistence/rest/categories
+              port: 8080
+            periodSeconds: 15
+      volumes:
+        - name: otel-auto-instrumentation
+          emptyDir: {}
+

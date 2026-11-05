@@ -1,11 +1,8 @@
 ---
+# Master Playbook for Local Multi-Cloud Infrastructure & Networking Provisioning
 - import_playbook: 01_setup_host_tools.yml
 - import_playbook: 02_provision_k3d_clusters.yml
-- import_playbook: 05_deploy_hub_storage.yml
-- import_playbook: 06_deploy_hub_observability.yml
-- import_playbook: 07_generate_mtls_certs.yml
-- import_playbook: 08_deploy_hub_visualization.yml
-- import_playbook: 09_deploy_hub_otel_gateway.yml
-- import_playbook: 10_deploy_spoke_otel_agents.yml
-- import_playbook: 11_deploy_teastore_workload.yml
-- import_playbook: 04_emulate_wan_latency.yml
+- import_playbook: 03_emulate_wan_latency.yml
+- import_playbook: 04_sync_cluster_hosts.yml
+- import_playbook: 05_verify_clusters.yml
+- import_playbook: 06_distribute_mtls_secrets.yml

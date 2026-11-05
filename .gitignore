@@ -1,12 +1,34 @@
+# Python & Environment
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .env
+*.env
+!.env.example
 .venv
 env/
 venv/
 ENV/
+
+# Agent & Prompting metadata
+.agent/
+.agent/**
+*.agent/
+
+# Benchmark application source (huge Descartes TeaStore repository)
+Benchmark-app/
+Benchmark-app/**
+
+# Documents: PDF reference materials (only keep .md and other text documents)
+docs/other-reference/*.pdf
+docs/other-reference/**/*.pdf
+docs/research/*.pdf
+docs/research/**/*.pdf
+
+# Decisions folder (ignored as requested)
+docs/decisions/
+docs/decisions/**
 
 # Distribution / packaging
 build/
@@ -25,13 +47,17 @@ wheels/
 .installed.cfg
 *.egg
 
-# Secrets & PKI certificates (không commit private keys)
+# Secrets & PKI certificates (không commit private keys & runtime certs)
 *.key
 *.pem
 security/certs/*.crt
 security/certs/*.key
 security/certs/*.csr
 security/certs/*.srl
+security/pki/**/*.key
+security/pki/**/*.crt
+security/pki/**/*.csr
+security/pki/**/*.srl
 
 # Temporary logs & test artifacts
 *.log
