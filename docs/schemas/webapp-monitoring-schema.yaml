@@ -1,0 +1,154 @@
+schema_version: "1.0"
+resource_type: "web_application"
+target_system: "TeaStore Microservices"
+methodology: "RED_GOLDEN_SIGNALS"
+
+identity_attributes:
+  service_name:
+    canonical_name: "service.name"
+    type: "string"
+    allowed_values:
+      - "teastore-webui"
+      - "teastore-auth"
+      - "teastore-image"
+      - "teastore-recommender"
+      - "teastore-persistence"
+      - "teastore-registry"
+  service_version:
+    canonical_name: "service.version"
+    type: "string"
+    default: "1.4.1"
+  orchestration:
+    cluster_name: "k8s_cluster_name"
+    namespace: "k8s.namespace.name"
+    pod_name: "k8s.pod.name"
+    node_name: "k8s.node.name"
+  cloud_identity:
+    provider: "cloud.provider"
+    region: "cloud.region"
+    account_id: "cloud.account.id"
+    iam_role_arn: "cloud.identity.arn"
+    resource_id: "cloud.resource_id"
+
+dependencies:
+  application:
+    runtime:
+      type: "jvm"
+      version: "openjdk-11"
+      heap_min_mb: 96
+      heap_max_mb: 256
+      gc_collector: "SerialGC"
+    upstream_services:
+      - name: "client/locust"
+        protocol: "HTTP/1.1"
+        port: 8080
+    downstream_services:
+      - name: "teastore-registry"
+        protocol: "RMI"
+        port: 1099
+        cluster: "aws-k3d"
+      - name: "teastore-auth"
+        protocol: "HTTP/REST"
+        port: 8080
+        cluster: "aws-k3d"
+      - name: "teastore-image"
+        protocol: "HTTP/REST"
+        port: 8080
+        cluster: "aws-k3d"
+      - name: "teastore-recommender"
+        protocol: "HTTP/REST"
+        port: 8080
+        cluster: "aws-k3d"
+      - name: "teastore-persistence"
+        protocol: "HTTP/REST"
+        port: 8080
+        cluster: "azure-k3d"
+      - name: "teastore-db"
+        protocol: "JDBC/MySQL"
+        port: 3306
+        cluster: "azure-k3d"
+  system:
+    cgroup:
+      cpu_request_millicores: 100
+      cpu_limit_millicores: 500
+      memory_request_mb: 128
+      memory_limit_mb: 256
+    file_descriptors:
+      limit: 65535
+    tcp_backlog: 100
+  cloud:
+    hosting_cluster: "${CLUSTER_NAME}"
+    region: "${CLOUD_REGION}"
+    network_path: "mc-monitoring-net (WAN Emulation RTT 10ms +-2ms, Loss 0.1%)"
+    transport_security: "mTLS 1.3"
+
+telemetry_signals:
+  metrics:
+    rate:
+      metric_name: "traces_service_graph_request_total"
+      type: "counter"
+      unit: "reqps"
+      promql: "sum by (server) (rate(traces_service_graph_request_total[1m]))"
+    errors:
+      metric_name: "traces_service_graph_request_failed_total"
+      type: "counter"
+      unit: "reqps"
+      promql: "sum by (server) (rate(traces_service_graph_request_failed_total[1m]))"
+    duration:
+      metric_name: "traces_service_graph_request_server_seconds_bucket"
+      type: "histogram"
+      unit: "ms"
+      promql_p50: "histogram_quantile(0.50, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000"
+      promql_p90: "histogram_quantile(0.90, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000"
+      promql_p95: "histogram_quantile(0.95, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000"
+      promql_p99: "histogram_quantile(0.99, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000"
+    saturation:
+      jvm_heap_used_mb:
+        metric_name: "jvm_memory_used_bytes"
+        alternate_name: "process_runtime_jvm_memory_usage_bytes"
+        type: "gauge"
+        unit: "MBytes"
+        promql: "sum by (service_name) (jvm_memory_used_bytes{jvm_memory_type=\"heap\"} or process_runtime_jvm_memory_usage_bytes{type=\"heap\"}) / (1024*1024)"
+      jvm_threads:
+        metric_name: "jvm_thread_count"
+        alternate_name: "process_runtime_jvm_threads_count"
+        type: "gauge"
+        unit: "count"
+        promql: "sum by (service_name) (jvm_thread_count or process_runtime_jvm_threads_count)"
+      jvm_gc_time:
+        metric_name: "jvm_gc_duration_seconds_sum"
+        type: "counter"
+        unit: "seconds"
+        promql: "sum by (service_name) (rate(jvm_gc_duration_seconds_sum[1m]))"
+
+  logs:
+    format: "OTLP LogRecord / stdout"
+    parser: "regex_parser"
+    logql_error_stream: '{exporter="OTLP", service_name=~"teastore-.*"} |~ "(?i)(error|exception|fail|timeout)"'
+    retention_days: 30
+
+  traces:
+    format: "W3C TraceContext (traceparent, tracestate)"
+    sampling_rate: 0.20
+    error_sampling_rate: 1.00
+    high_latency_sampling_rate: 1.00
+    exporter: "OTLP gRPC :4317 -> Tempo"
+
+slo_targets:
+  availability:
+    objective_percent: 99.5
+    compliance_window_days: 30
+    error_budget_percent: 0.5
+  latency:
+    target_p95_ms: 250
+    target_p99_ms: 500
+  multi_window_burn_rate_alerts:
+    page_1h_burn_rate: 14.4
+    ticket_6h_burn_rate: 6.0
+
+correlation_keys:
+  to_traces: "trace_id"
+  to_logs: ["trace_id", "service.name"]
+  to_compute_instance: ["k8s_cluster_name", "k8s.node.name"]
+  to_cloud_perimeter: ["network.subnet.id", "network.vpc.id"]
+

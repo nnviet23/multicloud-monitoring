@@ -4,7 +4,7 @@
   },
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
+  "graphTooltip": 1,
   "id": null,
   "links": [],
   "liveNow": false,
@@ -36,7 +36,13 @@
           "range": true,
           "refId": "A"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2 },
+          "unit": "reqps"
+        }
+      }
     },
     {
       "collapsed": false,
@@ -65,7 +71,14 @@
           "range": true,
           "refId": "A"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "red", "mode": "fixed" },
+          "custom": { "lineWidth": 2 },
+          "unit": "reqps"
+        }
+      }
     },
     {
       "collapsed": false,
@@ -76,7 +89,7 @@
         "y": 0
       },
       "id": 3,
-      "title": "Duration (P95 Latency ms)",
+      "title": "Duration (Latency Percentiles P50, P90, P99 ms)",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -89,17 +102,206 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000",
-          "legendFormat": "P95 {{server}} (ms)",
+          "expr": "histogram_quantile(0.99, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000",
+          "legendFormat": "P99 {{server}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.90, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000",
+          "legendFormat": "P90 {{server}}",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000",
+          "legendFormat": "P50 {{server}}",
+          "range": true,
+          "refId": "C"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2 },
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 4,
+      "title": "Saturation: Host CPU I/O Wait (%wa) & Active TCP Connections",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "(sum by (k8s_cluster_name) (rate(system_cpu_time_seconds_total{state=\"wait\"}[1m])) / (sum by (k8s_cluster_name) (rate(system_cpu_time_seconds_total[1m])) + 0.0001)) * 100",
+          "legendFormat": "{{k8s_cluster_name}} I/O Wait (%wa)",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "sum by (k8s_cluster_name) (system_network_connections{state=\"ESTABLISHED\"})",
+          "legendFormat": "{{k8s_cluster_name}} Active Sockets (ESTABLISHED)",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2 },
+          "unit": "percent"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byFrameRefID", "options": "B" },
+            "properties": [
+              { "id": "custom.axisPlacement", "value": "right" },
+              { "id": "unit", "value": "short" }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 5,
+      "title": "Database & RMI Backend Call Latency (Persistence -> DB & Registry)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le, client, server) (rate(traces_service_graph_request_server_seconds_bucket{server=~\"teadb|teastore-db|teastore-registry|teastore-persistence\"}[1m]))) * 1000",
+          "legendFormat": "P95 {{client}} -> {{server}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum by (le, client, server) (rate(traces_service_graph_request_server_seconds_bucket{server=~\"teadb|teastore-db|teastore-registry|teastore-persistence\"}[1m]))) * 1000",
+          "legendFormat": "P50 {{client}} -> {{server}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2 },
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "id": 6,
+      "title": "Application Runtime Saturation: JVM Memory Heap Usage & Thread Count",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "sum by (service_name) (jvm_memory_used_bytes{jvm_memory_type=\"heap\"} or process_runtime_jvm_memory_usage_bytes{type=\"heap\"} or process_runtime_jvm_memory_usage_bytes) / (1024*1024)",
+          "legendFormat": "{{service_name}} Heap Used (MB)",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "sum by (service_name) (jvm_thread_count or process_runtime_jvm_threads_count)",
+          "legendFormat": "{{service_name}} Threads",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2 },
+          "unit": "mbytes"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byFrameRefID", "options": "B" },
+            "properties": [
+              { "id": "custom.axisPlacement", "value": "right" },
+              { "id": "unit", "value": "short" }
+            ]
+          }
+        ]
+      }
     }
   ],
   "refresh": "5s",
   "schemaVersion": 39,
-  "tags": ["multicloud", "red", "metrics"],
+  "tags": [
+    "multicloud",
+    "red-metrics",
+    "golden-signals",
+    "teastore"
+  ],
   "templating": {
     "list": []
   },
@@ -107,10 +309,8 @@
     "from": "now-15m",
     "to": "now"
   },
-  "timepicker": {},
   "timezone": "browser",
-  "title": "TeaStore RED Metrics (Rate, Errors, Duration)",
+  "title": "Multi-Cloud RED Metrics & Four Golden Signals",
   "uid": "mc-red-metrics",
-  "version": 1
+  "version": 2
 }
-

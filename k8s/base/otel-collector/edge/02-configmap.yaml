@@ -17,7 +17,11 @@ data:
         collection_interval: 15s
         scrapers:
           cpu:
+          load:
           memory:
+          paging:
+          disk:
+          filesystem:
           network:
 
       filelog:

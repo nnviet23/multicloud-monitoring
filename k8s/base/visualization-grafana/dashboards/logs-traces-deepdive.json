@@ -49,8 +49,28 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 6 },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 6 },
       "id": 3,
+      "title": "Infrastructure, Database & Connection Anomaly Logs Count",
+      "type": "timeseries",
+      "datasource": { "type": "loki", "uid": "loki-ds" },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki-ds" },
+          "editorMode": "code",
+          "expr": "sum by (job) (count_over_time({exporter=\"OTLP\"} |~ \"(?i)(aborted|timeout|refused|oom|killed|io|error|fail|slow)\" [1m]))",
+          "legendFormat": "Anomaly: {{job}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "fixedColor": "red", "mode": "fixed" }, "custom": { "lineWidth": 2 }, "unit": "short" }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 12 },
+      "id": 4,
       "title": "Centralized Multi-Cloud Live Logs Stream (AWS & Azure)",
       "type": "logs",
       "datasource": { "type": "loki", "uid": "loki-ds" },
@@ -59,6 +79,28 @@
           "datasource": { "type": "loki", "uid": "loki-ds" },
           "editorMode": "code",
           "expr": "{exporter=\"OTLP\"}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showLabels": true,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 12 },
+      "id": 5,
+      "title": "Database & Persistence Layer Diagnostic Log Stream (Azure Data Services)",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "loki-ds" },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki-ds" },
+          "editorMode": "code",
+          "expr": "{exporter=\"OTLP\"} |~ \"(?i)(persistence|mysql|mariadb|innodb|deadlock|lock|db|teadb)\"",
           "refId": "A"
         }
       ],
@@ -78,6 +120,5 @@
   "timezone": "browser",
   "title": "Centralized Multi-Cloud Logs & Tracing Correlation",
   "uid": "mc-logs-traces-deepdive",
-  "version": 1
+  "version": 2
 }
-

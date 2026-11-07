@@ -1,0 +1,182 @@
+schema_version: "1.0"
+resource_type: "compute_instance"
+target_system: "Kubernetes Worker Nodes / Multi-Cloud Cloud VMs"
+methodology: "USE_METHOD"
+
+identity_attributes:
+  cluster_name:
+    canonical_name: "k8s_cluster_name"
+    type: "string"
+    allowed_values:
+      - "aws-k3d"
+      - "azure-k3d"
+      - "hub-k3d"
+  host_id:
+    canonical_name: "host.id"
+    type: "string"
+  host_name:
+    canonical_name: "host.name"
+    type: "string"
+  cloud_identity:
+    provider: "cloud.provider"
+    region: "cloud.region"
+    account_id: "cloud.account.id"
+    instance_sku: "host.type"
+    vpc_id: "network.vpc.id"
+    subnet_id: "network.subnet.id"
+    security_group_id: "network.security_group.id"
+
+dependencies:
+  application:
+    hosted_workloads:
+      - "teastore-webui"
+      - "teastore-auth"
+      - "teastore-image"
+      - "teastore-recommender"
+      - "teastore-persistence"
+      - "teastore-db"
+    infrastructure_daemons:
+      - "kubelet"
+      - "containerd"
+      - "coredns"
+      - "otel-collector-spoke"
+  system:
+    os: "Linux (Alpine/Ubuntu Container Host Kernel 5.x/6.x)"
+    cpu_scheduler: "Linux CFS (Completely Fair Scheduler)"
+    memory_manager: "Linux Virtual Memory System & Paging (/proc/meminfo)"
+    vfs_storage: "Virtual File System (ext4 / overlay2, /proc/diskstats)"
+    network_stack: "Linux TCP/IP Stack, netfilter, tc netem traffic control"
+  cloud:
+    compute_profile:
+      aws_simulation_sku: "m5.xlarge (4 vCPU, 16 GiB RAM)"
+      azure_simulation_sku: "Standard_D4ds_v5 (4 vCPU, 16 GiB RAM)"
+    network_profile:
+      cidr: "172.28.0.0/16 (Docker Bridge mc-monitoring-net)"
+      wan_emulation: "tc qdisc netem delay 10ms 2ms loss 0.1%"
+    storage_profile:
+      type: "Block Storage (EBS gp3 / Azure Managed Disks)"
+
+telemetry_signals:
+  metrics:
+    cpu:
+      utilization:
+        metric_name: "system_cpu_time_seconds_total"
+        type: "counter"
+        unit: "seconds"
+        promql: "sum by (k8s_cluster_name, state) (rate(system_cpu_time_seconds_total{state=~\"user|system\"}[1m]))"
+      saturation_load:
+        metric_name: "system_cpu_load_average_1m"
+        type: "gauge"
+        unit: "threads"
+        promql: "system_cpu_load_average_1m"
+      saturation_wait:
+        metric_name: "system_cpu_time_seconds_total"
+        type: "gauge"
+        unit: "percent"
+        promql: "(sum by (k8s_cluster_name) (rate(system_cpu_time_seconds_total{state=\"wait\"}[1m])) / (sum by (k8s_cluster_name) (rate(system_cpu_time_seconds_total[1m])) + 1e-4)) * 100"
+      errors_steal:
+        metric_name: "system_cpu_time_seconds_total"
+        type: "counter"
+        unit: "seconds"
+        promql: "rate(system_cpu_time_seconds_total{state=\"steal\"}[1m])"
+
+    memory:
+      utilization:
+        metric_name: "system_memory_usage_bytes"
+        type: "gauge"
+        unit: "bytes"
+        promql: "sum by (k8s_cluster_name, state) (system_memory_usage_bytes{state=~\"used|free|cached|buffered\"})"
+      saturation_paging_ops:
+        metric_name: "system_paging_operations_total"
+        type: "counter"
+        unit: "ops/s"
+        promql: "sum by (k8s_cluster_name, direction) (rate(system_paging_operations_total[1m]))"
+      errors_paging_faults:
+        metric_name: "system_paging_faults_total"
+        type: "counter"
+        unit: "faults/s"
+        promql: "sum by (k8s_cluster_name, type) (rate(system_paging_faults_total[1m])) or sum by (k8s_cluster_name, type) (rate(system_paging_operations_total[1m]))"
+
+    disk_and_storage:
+      utilization_throughput:
+        metric_name: "system_disk_io_bytes_total"
+        type: "counter"
+        unit: "Bps"
+        promql: "sum by (k8s_cluster_name, direction) (rate(system_disk_io_bytes_total[1m]))"
+      utilization_iops:
+        metric_name: "system_disk_operations_total"
+        type: "counter"
+        unit: "iops"
+        promql: "sum by (k8s_cluster_name, direction) (rate(system_disk_operations_total[1m]))"
+      saturation_queue_length:
+        metric_name: "system_disk_pending_operations"
+        type: "gauge"
+        unit: "count"
+        promql: "sum by (k8s_cluster_name) (system_disk_pending_operations)"
+      saturation_latency_ms:
+        metric_name: "system_disk_operation_time_seconds_total"
+        type: "gauge"
+        unit: "ms"
+        promql: "(sum by (k8s_cluster_name) (rate(system_disk_operation_time_seconds_total[1m])) / (sum by (k8s_cluster_name) (rate(system_disk_operations_total[1m])) + 1e-4)) * 1000"
+
+    filesystem:
+      utilization_space_percent:
+        metric_name: "system_filesystem_usage_bytes"
+        type: "gauge"
+        unit: "percent"
+        promql: "(sum by (k8s_cluster_name, mountpoint) (system_filesystem_usage_bytes{state=\"used\"}) / sum by (k8s_cluster_name, mountpoint) (system_filesystem_usage_bytes)) * 100"
+      saturation_inode_percent:
+        metric_name: "system_filesystem_inodes_usage"
+        type: "gauge"
+        unit: "percent"
+        promql: "(sum by (k8s_cluster_name, mountpoint) (system_filesystem_inodes_usage{state=\"used\"}) / (sum by (k8s_cluster_name, mountpoint) (system_filesystem_inodes_usage) + 1e-4)) * 100"
+
+    network:
+      utilization_throughput:
+        metric_name: "system_network_io_bytes_total"
+        type: "counter"
+        unit: "Bps"
+        promql: "sum by (k8s_cluster_name, direction) (rate(system_network_io_bytes_total[1m]))"
+      utilization_packet_rate:
+        metric_name: "system_network_packets_total"
+        type: "counter"
+        unit: "pps"
+        promql: "sum by (k8s_cluster_name, direction) (rate(system_network_packets_total[1m]))"
+      saturation_tcp_sockets:
+        metric_name: "system_network_connections"
+        type: "gauge"
+        unit: "count"
+        promql: "sum by (k8s_cluster_name, state) (system_network_connections{state=~\"ESTABLISHED|TIME_WAIT|CLOSE_WAIT\"})"
+      errors_packet_errors:
+        metric_name: "system_network_errors_total"
+        type: "counter"
+        unit: "errors/s"
+        promql: "sum by (k8s_cluster_name, direction) (rate(system_network_errors_total[1m]))"
+      errors_packet_drops:
+        metric_name: "system_network_dropped_total"
+        type: "counter"
+        unit: "drops/s"
+        promql: "sum by (k8s_cluster_name, direction) (rate(system_network_dropped_total[1m]))"
+
+slo_targets:
+  infrastructure_health_thresholds:
+    cpu_io_wait_warning_percent: 10
+    cpu_io_wait_critical_percent: 25
+    load_avg_ratio_to_cores_warning: 1.0
+    load_avg_ratio_to_cores_critical: 2.0
+    memory_used_warning_percent: 80
+    memory_used_critical_percent: 90
+    disk_space_used_warning_percent: 75
+    disk_space_used_critical_percent: 90
+    inode_used_warning_percent: 75
+    inode_used_critical_percent: 90
+    disk_latency_ms_warning: 20
+    disk_latency_ms_critical: 50
+    packet_drops_pps_warning: 1
+    packet_drops_pps_critical: 10
+
+correlation_keys:
+  to_hosted_webapps: "k8s_cluster_name"
+  to_network_topology: ["network.subnet.id", "network.vpc.id"]
+  to_raw_telemetry_lake: ["cloud.provider", "cloud.region"]
+

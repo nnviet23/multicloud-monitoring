@@ -15,7 +15,9 @@
 | **Phase 1** | Hạ tầng 3 cụm k3d (`hub-k3d`, `aws-k3d`, `azure-k3d`), mạng WAN mô phỏng `netem`, PKI mTLS 1.3 | **Hoàn thành** | 100% | 3 cụm Kubernetes hoạt động, RTT WAN 10ms ±2ms, chứng chỉ mTLS hợp lệ |
 | **Phase 2** | Triển khai TeaStore Compute (`aws-k3d`), Data (`azure-k3d`), OTel Java Agent v2.10, Edge OTel Collector | **Hoàn thành** | 100% | 7 service TeaStore `Running`, WebUI truy cập được, mTLS streaming OTLP sang Hub |
 | **Phase 3** | Hub Observability: MinIO Object Storage, Prometheus + Thanos, Loki, Tempo, Grafana, Pyrra, Robusta | **Hoàn thành** | 100% | MinIO 4 buckets, Thanos Query PromQL, Tempo Traces, Loki Logs, Grafana Topology & RED Dashboards |
-| **Phase 4** | Workload Testing (Locust), AI/ML Sampling & Anomaly Detection, SLO Validation | *Chờ thực hiện* | 0% | Lên lịch sau khi nghiệm thu Phase 3 |
+| **Phase 3.5** | Full-Stack Infrastructure Observability (OS, Kernel, Storage, Network USE) & Nâng cấp toàn diện Bộ 7 Grafana Dashboards | **Hoàn thành** | 100% | OTel Collector 7 Hostmetrics scrapers, 7 Grafana SRE Dashboards (USE Method, 4 Golden Signals, Dynamic Topo, Log Anomaly) |
+| **Phase 3.6** | Unified Resource Monitoring Schemas (Web App & Compute Instance), JVM Runtime Completeness & Cross-Layer RCA Tree | **Hoàn thành** | 100% | `RESOURCE_MONITORING_SCHEMAS.md`, `webapp-monitoring-schema.yaml`, `instance-monitoring-schema.yaml`, JVM Heap/Threads Panel 6 trên `red-metrics.json` |
+| **Phase 4** | Workload Testing (Locust), AI/ML Sampling & Anomaly Detection, SLO Validation | *Chờ thực hiện* | 0% | Lên lịch sau khi nghiệm thu Phase 3.6 |
 
 ---
 
@@ -42,6 +44,8 @@ Dưới đây là danh mục toàn bộ sự cố kỹ thuật ghi nhận trong 
 | **INC-P3-12** | Phase 3 | Telemetry Normalization | Thiếu định danh Region (`cloud.region`) và xuất hiện node `unknown` trong Service Graph | Medium | **Đã giải quyết** | Thiết lập `cloud.region` (`us-east-1` cho AWS, `southasia` cho Azure) và áp dụng OTTL Peer Service Enrichment xóa bỏ triệt để `unknown_service`. |
 | **INC-P3-13** | Phase 3 | Cloud Dependencies | Thiếu chiều sâu phụ thuộc đám mây của tài nguyên (IAM, ARN ID, Resource ID, VPC, Subnet) | High | **Đã giải quyết** | Xây dựng mô hình 6 Trục Phụ Thuộc Đám Mây Sâu trong `docs/progress/03_resource_monitor.md` và inject đầy đủ qua bộ xử lý OTTL Hub Collector. |
 | **INC-P3-14** | Phase 3 | Grafana Visualization | Panel Topology chỉ hiển thị mainstat/title, thiếu thuộc tính phụ thuộc đám mây sâu và subnet | High | **Đã giải quyết** | Nâng cấp toàn diện `system-topology.json` (v3): Interactive Node Graph với đầy đủ subtitle, mainStat, secondaryStat, và 10+ trường `detail__*` (IAM Role, ARN, Subnet, VPC, SG, KMS); bổ sung Bảng Ma trận kết nối mạng L3/L4 và Bảng Kiểm kê 360° Phụ thuộc tài nguyên. |
+| **INC-P3-15** | Phase 3.5 | Observability & Dashboards | Thiếu hụt chỉ số hạ tầng sâu (OS/Kernel/Storage/USE) và bộ Dashboards chưa chuẩn 4 Golden Signals / USE Method | High | **Đã giải quyết** | Kích hoạt trọn bộ 7 OTel hostmetrics scrapers (cpu, load, memory, paging, disk, filesystem, network) trên cả Edge và Hub; nâng cấp toàn diện bộ 7 Dashboards SRE (k8s-infrastructure 10 panels/4 rows, wan-telemetry 8 panels, red-metrics 4 Golden Signals, logs-traces-deepdive anomaly & persistence stream, topology dynamic metrics & node health table, executive fleet matrix). |
+| **INC-P3-16** | Phase 3.6 | Resource Schemas & JVM Completeness | Thiếu chuẩn đặc tả giám sát thống nhất cho từng loại tài nguyên (Web App vs Compute Instance) và thiếu JVM Runtime Saturation trên RED Dashboard | Medium | **Đã giải quyết** | Ban hành tài liệu đặc tả `RESOURCE_MONITORING_SCHEMAS.md`, khởi tạo 2 tệp YAML Schemas chuẩn máy đọc được (`webapp-monitoring-schema.yaml`, `instance-monitoring-schema.yaml`), và bổ sung Panel 6 (JVM Memory Heap & Thread Count) vào `red-metrics.json`. |
 
 ---
 
@@ -87,4 +91,15 @@ Toàn bộ các thành phần hạ tầng và giám sát trên cả 3 cụm Kube
    - Node Graph tương tác: Click vào Node xem chi tiết 10+ trường phụ thuộc sâu (IAM Role, ARN, Resource ID, Subnet, Security Group, Storage, KMS). Click vào Edge xem thông số WAN (10ms RTT, loss 0.1%, mTLS 1.3).
    - Bảng Ma trận kết nối mạng L3/L4 (Cross-Cloud Network Routing & Subnet Matrix): Ánh xạ rõ nét từng tuyến IP nguồn, IP đích, Subnet CIDR (10.0.1.0/24 vs 10.1.2.0/24), Security Group và QPS thực tế.
    - Bảng Kiểm kê phụ thuộc 360° (Deep Cloud Dependencies 360° Inventory) của từng workload.
+9. **Nâng Cấp Toàn Diện Bộ 7 Dashboards SRE & USE Method (Phase 3.5)**:
+   - `k8s-infrastructure.json`: Mở rộng từ 4 lên 10 panels phân tầng theo 4 Rows chuẩn phương pháp USE (Compute & Load Avg, Memory & Paging, Disk I/O & Inode Saturation, Network Interface & TCP Sockets).
+   - `wan-telemetry.json`: Nâng cấp lên 8 panels tích hợp packet drops thực tế (`system_network_dropped_total`), packet rate và socket saturation.
+   - `system-topology.json`: Loại bỏ chuỗi tĩnh giả lập, đồng bộ hóa Node Graph với dữ liệu động thực tế và bổ sung Panel 6 (Cluster Node Resource & Network Health Summary Table).
+   - `red-metrics.json`: Hoàn thiện 4 Golden Signals với độ bão hòa hệ thống (Saturation) và trễ Database/RMI Backend Call Latency.
+   - `logs-traces-deepdive.json`: Tích hợp bộ đếm lỗi hạ tầng bất thường (regex anomaly filter) và luồng log chuyên sâu tầng Database Persistence tại `azure-k3d`.
+   - `mc-executive-overview.json`: Bảng Fleet Health Matrix đa chiều tổng hợp Memory, CPU Load 1m, Network Drops, Disk IOPS.
+10. **Chuẩn Hóa Bộ Unified Resource Monitoring Schemas (Phase 3.6)**:
+    - Ban hành đặc tả kiến trúc `docs/schemas/RESOURCE_MONITORING_SCHEMAS.md` phân định rõ 3 tầng phụ thuộc (Application, System, Cloud) và cơ chế thu thập tương ứng (IMDS vs K8s API vs IaC/OTTL Enrichment).
+    - Tạo 2 tệp Schema chuẩn máy đọc được `docs/schemas/webapp-monitoring-schema.yaml` và `docs/schemas/instance-monitoring-schema.yaml`.
+    - Bổ sung Panel 6 (Application Runtime Saturation: JVM Memory Heap Usage & Thread Count) vào `red-metrics.json` với cơ chế trục Y kép (Dual Y-Axis).
 

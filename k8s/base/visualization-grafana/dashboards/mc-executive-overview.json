@@ -148,11 +148,17 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 12 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 12 },
       "id": 7,
       "title": "Cloud Cluster Fleet Health Matrix",
       "type": "table",
       "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        }
+      ],
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
@@ -161,13 +167,62 @@
           "format": "table",
           "instant": true,
           "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "sum by (k8s_cluster_name, cloud_provider) (system_cpu_load_average_1m)",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "sum by (k8s_cluster_name, cloud_provider) (rate(system_network_dropped_total[1m]))",
+          "format": "table",
+          "instant": true,
+          "refId": "C"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "sum by (k8s_cluster_name, cloud_provider) (rate(system_disk_operations_total[1m]))",
+          "format": "table",
+          "instant": true,
+          "refId": "D"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": { "align": "auto" },
-          "unit": "gbytes"
-        }
+          "custom": { "align": "auto" }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "k8s_cluster_name" },
+            "properties": [{ "id": "displayName", "value": "Cluster Name" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "cloud_provider" },
+            "properties": [{ "id": "displayName", "value": "Provider" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Value #A" },
+            "properties": [{ "id": "displayName", "value": "Memory Used (GB)" }, { "id": "unit", "value": "gbytes" }, { "id": "decimals", "value": 2 }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Value #B" },
+            "properties": [{ "id": "displayName", "value": "CPU Load Avg (1m)" }, { "id": "decimals", "value": 2 }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Value #C" },
+            "properties": [{ "id": "displayName", "value": "Network Drops/sec" }, { "id": "unit", "value": "pps" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Value #D" },
+            "properties": [{ "id": "displayName", "value": "Disk I/O Ops/sec" }, { "id": "unit", "value": "iops" }]
+          }
+        ]
       }
     }
   ],
@@ -179,6 +234,5 @@
   "timezone": "browser",
   "title": "Multi-Cloud Executive Fleet Overview (Global Health & SLAs)",
   "uid": "mc-executive-overview",
-  "version": 1
+  "version": 2
 }
-

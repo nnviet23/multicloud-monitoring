@@ -29,6 +29,10 @@
   - [INC-P3-12: Thiếu định danh Region và xuất hiện node "unknown" trong Service Graph](#inc-p3-12-thiếu-định-danh-region-và-xuất-hiện-node-unknown-trong-service-graph)
   - [INC-P3-13: Mở rộng mô hình Cloud Dependencies chuyên sâu cho từng tài nguyên (Deep Single-Resource Cloud Dependencies Model & OTTL Injection)](#inc-p3-13-mở-rộng-mô-hình-cloud-dependencies-chuyên-sâu-cho-từng-tài-nguyên-deep-single-resource-cloud-dependencies-model--ottl-injection)
   - [INC-P3-14: Trực quan hóa toàn diện 6 Trục Phụ Thuộc Đám Mây Sâu và Ma Trận Kết Nối Mạng L3/L4 trên Grafana Topology](#inc-p3-14-trực-quan-hóa-toàn-diện-6-trục-phụ-thuộc-đám-mây-sâu-và-ma-trận-kết-nối-mạng-l3l4-trên-grafana-topology)
+- [Phase 3.5: Giám Sát Hạ Tầng Full-Stack & Nâng Cấp Dashboards SRE](#phase-35-giám-sát-hạ-tầng-full-stack--nâng-cấp-dashboards-sre)
+  - [INC-P3-15: Thiếu hụt chỉ số hạ tầng sâu tầng OS/Kernel/Storage/USE và nâng cấp toàn diện bộ 7 Dashboards Grafana chuẩn SRE](#inc-p3-15-thiếu-hụt-chỉ-số-hạ-tầng-sâu-tầng-oskernelstorageuse-và-nâng-cấp-toàn-diện-bộ-7-dashboards-grafana-chuẩn-sre)
+- [Phase 3.6: Chuẩn Hóa Unified Resource Schemas & JVM Runtime Completeness](#phase-36-chuẩn-hóa-unified-resource-schemas--jvm-runtime-completeness)
+  - [INC-P3-16: Chuẩn hóa bộ đặc tả Unified Resource Monitoring Schemas (Web App & Compute Instance) và bổ sung độ phủ JVM Runtime Saturation](#inc-p3-16-chuẩn-hóa-bộ-đặc-tả-unified-resource-monitoring-schemas-web-app--compute-instance-và-bổ-sung-độ-phủ-jvm-runtime-saturation)
 
 ---
 
@@ -393,6 +397,72 @@
 - **Kết quả xác thực (Verification Outcome):**
   1. Grafana API xác thực dashboard `mc-system-topology` phiên bản v3 đã được provisioned với 5 panel chuyên sâu.
   2. Truy cập web UI `http://localhost:3000/d/mc-system-topology` hiển thị trực quan toàn bộ sơ đồ đồ thị mạng, click vào từng node/edge hiển thị chi tiết phụ thuộc sâu, giải quyết trọn vẹn yêu cầu về độ phủ và trực quan hóa.
+
+---
+
+## Phase 3.5: Giám Sát Hạ Tầng Full-Stack & Nâng Cấp Dashboards SRE
+
+### INC-P3-15: Thiếu hụt chỉ số hạ tầng sâu tầng OS/Kernel/Storage/USE và nâng cấp toàn diện bộ 7 Dashboards Grafana chuẩn SRE
+
+- **Triệu chứng (Symptoms):**
+  1. Giám sát hạ tầng máy chủ Kubernetes chỉ có 3 nhóm chỉ số cơ bản (CPU, Memory, Network I/O), hoàn toàn thiếu vắng các chỉ số tầng nhân OS/Kernel then chốt theo chuẩn phương pháp USE của Brendan Gregg: độ bão hòa CPU I/O wait (`%wa`), thời gian chờ hàng đợi đĩa (Disk I/O latency & Queue Length), hiện tượng phân trang/hoán đổi bộ nhớ (Paging Operations & Faults), tỷ lệ chiếm dụng Inode Filesystem, cũng như tỷ lệ rớt gói tin mạng (Packet Drops) và trạng thái kết nối TCP sockets (`ESTABLISHED`, `TIME_WAIT`, `CLOSE_WAIT`).
+  2. Bộ Dashboards Grafana bộc lộ nhiều điểm hạn chế:
+     - `k8s-infrastructure.json` chỉ có 4 panels sơ sài, thiếu phân tầng logic theo tài nguyên.
+     - `wan-telemetry.json` chứa các giá trị giả lập tĩnh `vector(10.0)`, thiếu các chỉ số đo lường mạng WAN thực tế phát sinh trong môi trường mạng giả lập `netem`.
+     - `system-topology.json` chứa chuỗi tĩnh giả định `secondaryStat: "Health: 100% | P95: 12ms"` và thiếu bảng tổng hợp sức khỏe tài nguyên phần cứng các nút cụm.
+     - `red-metrics.json` thiếu tín hiệu độ bão hòa (Saturation) của 4 Golden Signals và trễ giao tiếp backend DB/RMI.
+     - `logs-traces-deepdive.json` thiếu khả năng phát hiện tự động các mẫu bất thường hạ tầng (Connection Aborted, Timeout, Refused, OOM, Deadlock).
+     - `mc-executive-overview.json` có bảng Fleet Matrix chưa tổng hợp đa chiều các chỉ số trọng yếu.
+- **Nguyên nhân gốc rễ (Root Cause):**
+  1. Cấu hình bộ thu `hostmetrics` trong `k8s/base/otel-collector/edge/02-configmap.yaml` chỉ kích hoạt 3 bộ scrapers (`cpu`, `memory`, `network`), chưa khai báo các bộ thu `load`, `paging`, `disk`, và `filesystem`. Đồng thời bộ thu `hostmetrics` chưa được bật trên Hub Gateway Collector để giám sát cụm trung tâm `hub-k3d`.
+  2. Bố cục bảng điều khiển Grafana chưa được chuẩn hóa theo các phương pháp luận vận hành chuẩn mực (USE Method và 4 Golden Signals), dẫn đến các bảng điều khiển chỉ dừng ở mức hiển thị số liệu thô mà chưa hỗ trợ phân tích nguyên nhân sự cố nhanh chóng.
+- **Giải pháp xử lý (Solution):**
+  1. **Cấu hình toàn diện OTel Collector Hostmetrics:**
+     - Mở rộng đầy đủ 7 bộ scrapers trong `edge/02-configmap.yaml`: `cpu`, `load`, `memory`, `paging`, `disk`, `filesystem`, `network`.
+     - Kích hoạt `hostmetrics` trên `gateway/03-configmap.yaml` tại Hub Collector, đồng bộ hóa nhãn chuẩn hóa OTTL (`k8s_cluster_name`, `cloud_provider`, `cloud_region`).
+  2. **Nâng cấp toàn diện Bộ 7 Dashboards Grafana:**
+     - `k8s-infrastructure.json` (UID: `mc-k8s-infrastructure`): Mở rộng từ 4 lên 10 panels chuyên sâu chia thành 4 Rows logic theo chuẩn USE (Row 1: Compute & Load Avg; Row 2: Memory & Paging Saturation; Row 3: Disk I/O & Inode Saturation; Row 4: Network Stack & TCP Sockets).
+     - `wan-telemetry.json` (UID: `mc-wan-telemetry`): Nâng cấp lên 8 panels, tích hợp chỉ số rớt gói tin thực tế (`system_network_dropped_total`), lỗi truyền tin (`system_network_errors_total`), tốc độ gói tin (`system_network_packets_total`), và độ bão hòa socket TCP trên cầu nối WAN.
+     - `system-topology.json` (UID: `mc-system-topology`): Loại bỏ triệt để chuỗi tĩnh giả định `secondaryStat: "Health: 100% | P95: 12ms"`, tinh gọn chuỗi PromQL nodeGraph, bảo tồn nguyên vẹn 2 bảng Ma trận L3/L4 và Kiểm kê 360°, đồng thời bổ sung Panel 6 (Cluster Node Resource & Network Health Summary Table).
+     - `red-metrics.json` (UID: `mc-red-metrics`): Hoàn thiện chuẩn 4 Golden Signals (Rate, Errors, Duration, Saturation), nâng cấp trễ phân vị P50/P90/P99, Panel 4 Saturation (CPU I/O wait, active sockets), và Panel 5 trễ backend database & RMI.
+     - `logs-traces-deepdive.json` (UID: `mc-logs-traces-deepdive`): Thêm Panel 3 đếm log bất thường hạ tầng theo regex `(?i)(aborted|timeout|refused|oom|killed|io|error|fail|slow)` và Panel 5 luồng log chẩn đoán chuyên biệt cho tầng Database & Persistence tại `azure-k3d`.
+     - `mc-executive-overview.json` (UID: `mc-executive-overview`): Nâng cấp Panel 7 (Cloud Cluster Fleet Health Matrix) hiển thị đầy đủ Memory Used GB, CPU Load Avg 1m, Network Drops/sec, Disk I/O Ops/sec.
+- **Kết quả xác thực (Verification Outcome):**
+  1. Kiểm tra JSON syntax: Toàn bộ 7/7 tệp dashboard JSON trong `k8s/base/visualization-grafana/dashboards/` đạt 100% Valid JSON.
+  2. Kiểm tra Kustomize Overlay: Lệnh `kubectl kustomize` cho cả 3 cụm (`k8s/overlays/local-k3d/hub`, `spoke-aws`, `spoke-azure`) sinh manifest hoàn toàn hợp lệ, sẵn sàng áp dụng trực tiếp lên cụm khi khởi động.
+  3. **Hotfix Schema v39 Rendering**:
+     - Đồng bộ nhãn nhóm `(k8s_cluster_name, cloud_provider)` và bổ sung transformation `merge` cho các bảng multi-query (`mc-executive-overview.json` Panel 7, `system-topology.json` Panel 6, `k8s-infrastructure.json` Panel 8) giúp ghép các target A, B, C, D thành các cột trên cùng một hàng.
+     - Thiết lập Dual Y-Axis (`custom.axisPlacement: "right"`) qua `byFrameRefID` cho các panel chứa 2 đại lượng khác đơn vị đo (`k8s-infrastructure.json` Panel 6 Throughput/IOPS, Panel 7 Latency/Queue, Panel 9 Throughput/Packets; `red-metrics.json` Panel 4 I/O Wait %/Active Sockets).
+     - Đảm bảo tính linh hoạt cho metric Page Faults trong Panel 5 với fallback PromQL: `system_paging_faults_total or system_paging_operations_total`.
+
+---
+
+## Phase 3.6: Chuẩn Hóa Unified Resource Schemas & JVM Runtime Completeness
+
+### INC-P3-16: Chuẩn hóa bộ đặc tả Unified Resource Monitoring Schemas (Web App & Compute Instance) và bổ sung độ phủ JVM Runtime Saturation
+
+- **Triệu chứng (Symptoms):**
+  1. Thiếu một chuẩn đặc tả giám sát thống nhất (Unified Monitoring Schema) được phân định rõ ràng giữa các loại thực thể cốt lõi trong hệ thống: **Web Application Resource** (các microservices Java/Tomcat của TeaStore) và **Compute Instance Resource** (các máy chủ Kubernetes Worker Nodes / Cloud VMs).
+  2. Chưa phân định minh bạch cơ chế thu thập dữ liệu qua 3 tầng phụ thuộc: những gì có thể thu thập trực tiếp từ runtime (Local IMDS / Container Kubelet), và những gì cần nạp qua IaC Metadata Injection & OTTL Enrichment (để phòng tránh bão hòa rate limit và chi phí API trên đám mây thực tế).
+  3. Bảng điều khiển `red-metrics.json` ban đầu chỉ hiển thị tài nguyên ở mức Host (CPU I/O Wait, Active Sockets), thiếu mảnh ghép độ bão hòa tài nguyên nội tại của ứng dụng (Application Runtime Saturation: JVM Memory Heap Usage & Thread Concurrency), khiến việc phân biệt lỗi giữa tầng App và tầng Node chưa thể thực hiện trực quan trên cùng một dashboard.
+- **Nguyên nhân gốc rễ (Root Cause):**
+  1. Các tài liệu thiết kế ban đầu (`03_resource_monitor.md`) tập trung mô tả mô hình khái niệm chung mà chưa đóng gói thành các bản đặc tả máy đọc được (Machine-Readable YAML Schemas) có cấu trúc chuẩn tắc phục vụ tự động hóa kiểm thử ở Phase 4.
+  2. Cấu hình OTel Javaagent v2.10 trên TeaStore đã xuất đầy đủ các metrics JVM sang OTLP (`OTEL_METRICS_EXPORTER: "otlp"`), nhưng trên Grafana RED Metrics chưa có panel riêng biệt để khai thác luồng dữ liệu này.
+- **Giải pháp xử lý (Solution):**
+  1. **Xây dựng Đặc Tả Kiến Trúc & Hợp Đồng SRE Toàn Diện:**
+     - Soạn thảo tài liệu `docs/schemas/RESOURCE_MONITORING_SCHEMAS.md` trình bày mô hình Completeness Triad (Identity, Health/USE/RED, Failure Signals), cơ chế thu thập 3 tầng phụ thuộc (Local IMDS vs Downward API vs IaC/OTTL Enrichment), và ma trận khóa liên kết (`service.name -> k8s_cluster_name / k8s.node.name`).
+     - Xây dựng Cây quyết định chẩn đoán RCA liên tầng (Cross-Layer RCA Tree từ Web App xuống Instance) và Cây phân tích bán kính ảnh hưởng (Bottom-Up Impact Analysis Tree từ Instance lên Web App).
+  2. **Khởi Tạo 2 Tệp YAML Schemas Chuẩn Máy Đọc Được:**
+     - `docs/schemas/webapp-monitoring-schema.yaml`: Quy định rõ ràng cấu trúc 4 khối cho Web Application (Identity, Dependencies, Telemetry Signals với câu lệnh PromQL/LogQL chuẩn, SLO targets, Correlation keys).
+     - `docs/schemas/instance-monitoring-schema.yaml`: Quy định rõ ràng cấu trúc 4 khối cho Compute Instance theo phương pháp USE (Utilization, Saturation, Errors cho CPU, Memory, Disk, Filesystem, Network) và ngưỡng cảnh báo Warning/Critical.
+  3. **Hoàn Thiện Bảng Điều Khiển RED Metrics với JVM Runtime Saturation:**
+     - Bổ sung **Panel 6: Application Runtime Saturation: JVM Memory Heap Usage & Thread Count** vào `k8s/base/visualization-grafana/dashboards/red-metrics.json` (`gridPos: {h: 8, w: 24, x: 0, y: 16}`).
+     - Truy vấn song song `jvm_memory_used_bytes{jvm_memory_type="heap"}` (trục Y bên trái, đơn vị MBytes) và `jvm_thread_count` (trục Y kép bên phải `byFrameRefID: B`, đơn vị short).
+- **Kết quả xác thực (Verification Outcome):**
+  1. Cú pháp YAML: Kiểm tra qua Python Safe Loader xác nhận 2 tệp `webapp-monitoring-schema.yaml` và `instance-monitoring-schema.yaml` đạt 100% Valid YAML.
+  2. Cú pháp Grafana JSON: Toàn bộ 7/7 tệp dashboard JSON đạt 100% Valid JSON.
+  3. Kustomize Build: `kubectl kustomize k8s/overlays/local-k3d/hub` sinh manifest hợp lệ và đã đồng bộ toàn bộ bộ lọc và bảng điều khiển mới vào hệ thống.
+
 
 
 

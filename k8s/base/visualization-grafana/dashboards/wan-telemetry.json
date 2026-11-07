@@ -136,6 +136,68 @@
       "fieldConfig": {
         "defaults": { "custom": { "fillOpacity": 15, "lineWidth": 2 }, "unit": "Bps" }
       }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "id": 7,
+      "title": "Actual Network Packet Drops & Transmission Errors",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "sum by (k8s_cluster_name, direction) (rate(system_network_dropped_total[1m]))",
+          "legendFormat": "{{k8s_cluster_name}} Drops ({{direction}})",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "sum by (k8s_cluster_name, direction) (rate(system_network_errors_total[1m]))",
+          "legendFormat": "{{k8s_cluster_name}} Errors ({{direction}})",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2 },
+          "unit": "pps",
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "id": 8,
+      "title": "Cross-Cluster Packet Rates & TCP Socket Saturation",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "sum by (k8s_cluster_name, direction) (rate(system_network_packets_total[1m]))",
+          "legendFormat": "{{k8s_cluster_name}} Packets ({{direction}})",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "editorMode": "code",
+          "expr": "sum by (k8s_cluster_name, state) (system_network_connections{state=~\"ESTABLISHED|TIME_WAIT|CLOSE_WAIT\"})",
+          "legendFormat": "{{k8s_cluster_name}} Sockets ({{state}})",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "lineWidth": 2 }, "unit": "short" }
+      }
     }
   ],
   "refresh": "5s",
@@ -146,6 +208,5 @@
   "timezone": "browser",
   "title": "Simulated WAN Network Emulation & Latency",
   "uid": "mc-wan-telemetry",
-  "version": 1
+  "version": 2
 }
-
