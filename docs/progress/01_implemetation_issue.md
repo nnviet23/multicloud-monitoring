@@ -463,6 +463,36 @@
   2. Cú pháp Grafana JSON: Toàn bộ 7/7 tệp dashboard JSON đạt 100% Valid JSON.
   3. Kustomize Build: `kubectl kustomize k8s/overlays/local-k3d/hub` sinh manifest hợp lệ và đã đồng bộ toàn bộ bộ lọc và bảng điều khiển mới vào hệ thống.
 
+---
+
+### INC-P3-17: Lệch Pha SemConv PromQL, Xung Đột Kịch Bản Chaos 3 Cụm k3d & Thiếu Phản Hồi Closed-Loop AIOps
+- **Thời gian ghi nhận:** 2026-11-07
+- **Phân loại thành phần:** `ai-engine/`, `tests/chaos/`, `Prometheus Scraper`, `Grafana Dashboards`
+- **Mức độ nghiêm trọng:** High
+- **Hiện tượng & Nguyên nhân gốc rễ (Root Cause):**
+  1. Sau khi hợp nhất nhánh `AI`, các câu lệnh PromQL trong `collector.py` và `detector.py` sử dụng nhãn OTel SemConv v1.x (`jvm_*`, `http_response_status_code`), có nguy cơ trả về rỗng nếu OTel Java Agent v2.10 phát ra SemConv v2.x (`process_runtime_jvm_*`). Ngoài ra, mệnh đề `and on (cloud_provider, service_name, host_name)` có thể triệt tiêu kết quả nếu `host_name` không khớp giữa các metrics.
+  2. Các kịch bản chaos (`run_live.py`, `run_service_faults.py`) còn sót lại tham chiếu tới cụm `gcp` không tồn tại trong thiết kế 3 cụm k3d chuẩn (`aws`, `azure`, `hub`), khiến việc chạy kiểm thử tự động thất bại do `docker inspect k3d-gcp-k3d-server-0` trả về mã lỗi.
+  3. Động cơ `ai-engine` phát hiện bất thường nhưng chỉ in log console ra stdout mà chưa xuất ngược các chỉ số AI (`ai_anomaly_likelihood_percent`, `ai_reconstruction_error`, `ai_rca_component_latency_ms`) về Prometheus TSDB, chưa hiển thị trên Grafana và chưa có kênh bắn cảnh báo tự động về Telegram.
+- **Giải pháp xử lý (Solution):**
+  1. **Chuẩn hóa PromQL Dual SemConv Fallback:**
+     - Nâng cấp `ACTIVE_JVM_PODS` và `ENTITY_VECTOR_QUERIES` trong `collector.py` và `detector.py` hỗ trợ toán tử `or` cho cả SemConv 1.x (`jvm_*`) và SemConv 2.x (`process_runtime_jvm_*`), kèm fallback tự động nếu `host_name` không khớp.
+     - Hỗ trợ song song cả nhãn `http_response_status_code` và `http_status_code`.
+  2. **Chuẩn hóa 100% Kịch Bản Chaos Với 3 Cụm k3d:**
+     - Trong `run_live.py`: đặt kịch bản mặc định `--scenarios azure_wan_delay` (180ms delay) mô phỏng liên kết WAN giữa AWS WebUI và Azure Persistence; bổ sung `aws_wan_delay` (200ms).
+     - Trong `run_service_faults.py`: chuyển dịch vụ `recommender` về đúng cụm `"aws"` (`deploy/teastore-recommender`) và xác nhận RCA `aws:teastore-recommender`.
+     - Phân tích và chứng minh `FaultAgent.java` nạp qua Java Dynamic Attach API không can thiệp vào `ClassFileTransformer`, không gây xung đột với OpenTelemetry Java Agent trong `CATALINA_OPTS`.
+  3. **Thiết Kế Vòng Lặp Closed-Loop AIOps Toàn Diện:**
+     - Tích hợp máy chủ HTTP mini `PrometheusMetricsServer` lắng nghe cổng `:9108/metrics` trong `detector.py`, xuất trực tiếp các chỉ số AI chuẩn OpenMetrics.
+     - Bổ sung cấu hình scrape job `ai-engine` tại `01-configmap-prometheus.yaml` trong `k8s/base/metrics-thanos/`.
+     - Bổ sung **Panel 7: AIOps Proactive Anomaly Likelihood & Distributed Trace RCA Decomposition** (Dual Y-Axis: `percent` / `ms`) trên `red-metrics.json`.
+     - Tích hợp module `TelegramAlertSink` gửi cảnh báo Markdown giàu ngữ cảnh kèm phân rã RCA về Telegram Bot khi phát hiện `ALERT`, có cơ chế cooldown 60s/entity.
+- **Kết quả xác thực (Verification Outcome):**
+  1. Unit tests: `python -m unittest tests/chaos/test_live_evaluation.py` vượt qua 100% (4/4 tests OK).
+  2. Cú pháp Python: Toàn bộ các script `collector.py`, `detector.py`, `run_live.py`, `run_service_faults.py` vượt qua `py_compile`.
+  3. Cú pháp Grafana: Toàn bộ 7/7 tệp dashboard JSON hợp lệ.
+  4. Kustomize overlays: Cả 3 cụm `hub`, `spoke-aws`, `spoke-azure` đều build manifest thành công.
+
+
 
 
 

@@ -1,9 +1,9 @@
 # Kế Hoạch Kiến Trúc Hệ Thống & Đánh Giá Benchmark Ứng Dụng (System Architecture Plan & Benchmark Evaluation)
 
 > **Tài liệu:** `docs/architecture/01_SystemArchitecturePlan.md`  
-> **Phiên bản:** 1.0 (Phase 0 — Baseline Architecture Plan)  
-> **Trạng thái:** Kế hoạch kiến trúc phê duyệt (Approved Architecture Plan)  
-> **Quyết định nền tảng:** Triển khai theo **Phương án A** (Edge-Filtered Ingestion with Centralized Processing & Batch Ingestion). Tạm thời chưa tích hợp streaming AI inference ở phase này (sẽ tích hợp ở phase sau). Tỷ lệ lấy mẫu vết (trace sampling rate) khởi điểm là **20%** và sẽ giảm dần theo các kịch bản tối ưu hóa.
+> **Phiên bản:** 3.0 (Final Architecture Plan & Closed-Loop AIOps Integration)  
+> **Trạng thái:** Kế hoạch kiến trúc phê duyệt chính thức (Approved Master Plan)  
+> **Quyết định nền tảng:** Triển khai theo **Phương án A** (Edge-Filtered Ingestion with Centralized Processing & Batch Ingestion) kết hợp **AI Anomaly Detection Engine V3** & **Vòng lặp Closed-Loop AIOps**. Tỷ lệ lấy mẫu vết (trace sampling rate) khởi điểm là **20%** tại biên (100% giữ lại trace lỗi và latency cao) và tiền tổng hợp đồ thị Topology (`traces_service_graph_*`) tại Hub OTel Gateway. Toàn bộ hạ tầng được điều phối tự động bằng **Makefile** và cấu hình bảo mật tập trung qua **.env**.
 
 ---
 
@@ -87,15 +87,23 @@ flowchart TB
             ThanosRuler["Thanos Ruler"]
             Alertmgr["Alertmanager"]
             Robusta["Robusta Engine"]
-            TelegramBot["Telegram / Discord Sink"]
+            TelegramBot["Telegram Alert Sink"]
         end
 
-        Grafana["Grafana Central Dashboard (Single Pane of Glass)"]
+        subgraph AIOpsClosedLoop ["Vòng Lặp Phát Hiện Bất Thường AI (Closed-Loop AIOps)"]
+            AIEngine["AI Anomaly Detector (detector.py)\n- Universal Autoencoder (GRU + TCN)\n- Dual Sliding Window Scorer\n- Tempo Trace RCA Decomposition"]
+            MetricsExporter["Embedded Prometheus Exporter (:9108)"]
+            AIEngine -->|Update Metrics| MetricsExporter
+            MetricsExporter -->|Scrape 5s| ThanosRecv
+            AIEngine -->|Alert Markdown + RCA| TelegramBot
+        end
+
+        Grafana["Grafana Central Dashboard (7 SRE Dashboards + Panel 7 AI Anomaly)"]
     end
 
     %% Connections
-    EdgeCol1_Exp ==>|OTLP over mTLS| WAN_Net
-    EdgeCol2_Exp ==>|OTLP over mTLS| WAN_Net
+    EdgeCol1_Exp ==>|OTLP over mTLS 1.3| WAN_Net
+    EdgeCol2_Exp ==>|OTLP over mTLS 1.3| WAN_Net
     WAN_Net ==> Ingress
     Ingress --> Hub_Recv
     
@@ -117,6 +125,9 @@ flowchart TB
     Robusta -.->|Query Pod Logs/Events| HubCluster
     Robusta -->|Enriched Alert Message| TelegramBot
     
+    AIEngine -->|Vectorized PromQL: 8 features| ThanosQuery
+    Tempo -->|Trace Spans Analysis: T_WAN + T_self + T_DB| AIEngine
+
     Grafana -->|PromQL| ThanosQuery
     Grafana -->|LogQL| Loki
     Grafana -->|TraceQL| Tempo
@@ -124,14 +135,17 @@ flowchart TB
 
 ---
 
-### 1.2. Giải Thích Chi Tiết 4 Phase Triển Khai
+### 1.2. Giải Thích Chi Tiết Các Phase Triển Khai Thực Tế
 
-| Giai đoạn (Phase) | Mục tiêu trọng tâm | Chi tiết kỹ thuật & Tiêu chí hoàn thành (Exit Criteria) |
-|---|---|---|
-| **Phase 1: Local Infrastructure & Network Baseline** | Thiết lập hạ tầng cụm cục bộ và mô phỏng mạng WAN | - Sử dụng **Ansible** tự động hóa tạo 3 cụm k3d (`aws-k3d`, `azure-k3d`, `hub-k3d`) gắn trên Docker bridge `mc-monitoring-net`.<br>- Sử dụng Linux `tc` (Traffic Control) và `netem` tiêm suy hao mạng WAN: trễ khứ hồi (RTT) 10ms, jitter 2ms, tỉ lệ mất gói (packet loss) 0.1%.<br>- Khởi tạo hạ tầng khóa công khai PKI (CA nội bộ), phát hành chứng chỉ x509 cho Traefik Ingress và OTel Collectors phục vụ mTLS.<br>- *Exit criteria:* 3 cụm giao tiếp thông suốt qua FQDN nội bộ; DNS phân giải đúng; mạng WAN bị giới hạn đúng tham số mô phỏng. |
-| **Phase 2: Workload & Telemetry Collection (Spoke Layer)** | Triển khai TeaStore và thu thập viễn trắc tại biên | - Triển khai các vi dịch vụ tính toán của TeaStore trên `aws-k3d` và tầng lưu trữ MySQL trên `azure-k3d`.<br>- Tích hợp OTel Java Auto-Instrumentation Agent vào tất cả container Java.<br>- Cấu hình OTel Edge Collector tại từng Spoke: áp dụng thứ tự xử lý `Memory Limiter -> Filter -> Batch`.<br>- Cấu hình tỷ lệ lấy mẫu vết ban đầu ở mức **20% (Head-based sampling)** đối với traffic bình thường; giữ lại 100% trace lỗi và latency cao.<br>- *Exit criteria:* Dữ liệu viễn trắc được OTel Edge Collector thu nhận đầy đủ và đẩy thành công qua kênh mTLS sang Hub. |
-| **Phase 3: Central Hub Aggregation, Storage & Alerting** | Hoàn thiện tầng trung tâm tiếp nhận, lưu trữ và cảnh báo | - Triển khai OTel Collector Gateway tại `hub-k3d` để làm giàu dữ liệu (enrichment), gán nhãn định danh và chuẩn hóa timestamp về UTC.<br>- Triển khai Thanos Receive/Query, Grafana Loki, Grafana Tempo gắn kết với MinIO Object Storage (3 bucket riêng biệt).<br>- Tích hợp Grafana tạo dashboard liên kết 3 trụ cột (Trace-to-Logs và Metrics-to-Traces correlation).<br>- Cấu hình Pyrra quản lý SLO-as-code, Thanos Ruler sinh cảnh báo, Alertmanager và Robusta đẩy sự cố kèm ngữ cảnh pod về Telegram.<br>- *Exit criteria:* Dữ liệu hiển thị trực quan trên Grafana; alert gửi thành công về Telegram khi kích hoạt lỗi mô phỏng. |
-| **Phase 4: Benchmark, Evaluation & Cloud Transition** | Thực nghiệm đo lường hiệu năng và chuẩn bị lên Cloud | - Chạy kịch bản benchmark chuẩn với Locust (`locustfile.py`: ramp-up, steady-state, cooldown).<br>- Đo lường độ bao phủ (coverage), độ chính xác (accuracy so với ground truth), độ trễ end-to-end và phụ phí mã hóa (mTLS overhead).<br>- Lưu trữ dữ liệu thô bất biến (raw telemetry immutability) gắn với `experiment_id`.<br>- Xây dựng các module Terraform để chuẩn bị di chuyển hạ tầng lên AWS EKS, Azure AKS thực tế sau khi hoàn thành phase cục bộ.<br>- *Exit criteria:* Báo cáo thực nghiệm hoàn chỉnh, có biểu đồ phân phối p50/p95/p99 và dữ liệu tái lập được 100%. |
+| Giai đoạn (Phase) | Mục tiêu trọng tâm | Trạng thái | Chi tiết kỹ thuật & Tiêu chí hoàn thành (Exit Criteria) |
+|---|---|---|---|
+| **Phase 1: Local Infrastructure & Network Baseline** | Thiết lập hạ tầng cụm cục bộ và mô phỏng mạng WAN | **HOÀN THÀNH** | - Sử dụng **Makefile** và **Ansible** tự động hóa tạo 3 cụm k3d (`aws-k3d`, `azure-k3d`, `hub-k3d`) gắn trên Docker bridge `mc-monitoring-net: 172.28.0.0/16`.<br>- Sử dụng Linux `tc` và `netem` tiêm suy hao mạng WAN: trễ khứ hồi (RTT) 10ms, jitter 2ms, tỉ lệ mất gói 0.1%.<br>- Khởi tạo PKI CA nội bộ, phát hành chứng chỉ x509 SAN cho Traefik Ingress và OTel Collectors mTLS 1.3.<br>- *Kết quả:* 3 cụm kết nối an toàn, phân giải DNS thông suốt qua mạng WAN giả lập. |
+| **Phase 2: Workload & Telemetry Collection (Spoke Layer)** | Triển khai TeaStore và thu thập viễn trắc tại biên | **HOÀN THÀNH** | - Triển khai các vi dịch vụ tính toán của TeaStore trên `aws-k3d` và tầng lưu trữ MySQL trên `azure-k3d`.<br>- Tích hợp OTel Java Auto-Instrumentation Agent v2.10 vào tất cả container Tomcat.<br>- Cấu hình OTel Edge Collector tại từng Spoke: áp dụng thứ tự xử lý `Memory Limiter -> Filter -> Batch`.<br>- Cấu hình tỷ lệ lấy mẫu vết ban đầu ở mức **20% (Head-based sampling)** đối với traffic bình thường; giữ lại 100% trace lỗi và latency cao.<br>- *Kết quả:* Đẩy viễn trắc an toàn qua mTLS 1.3 sang Hub. |
+| **Phase 3: Central Hub Aggregation, Storage & Alerting** | Hoàn thiện tầng trung tâm tiếp nhận, lưu trữ và cảnh báo | **HOÀN THÀNH** | - Triển khai OTel Collector Gateway tại `hub-k3d` làm giàu dữ liệu (enrichment), gán nhãn định danh và chuẩn hóa timestamp UTC.<br>- Tiền tổng hợp Topology mạng bằng `servicegraphconnector` sinh chỉ số `traces_service_graph_request_total`.<br>- Triển khai Thanos, Loki, Tempo gắn kết với MinIO Object Storage (3 bucket riêng biệt).<br>- Tích hợp Pyrra quản lý SLO-as-code, Thanos Ruler sinh cảnh báo, Robusta đẩy sự cố pod về Telegram.<br>- *Kết quả:* Hệ thống lưu trữ và cảnh báo hoạt động ổn định. |
+| **Phase 3.5: Full-Stack Hostmetrics & SRE Dashboards Upgrade** | Giám sát hạ tầng toàn diện & nâng cấp 7 Dashboards Grafana | **HOÀN THÀNH** | - Bổ sung toàn bộ 7 scrapers `hostmetrics` (`cpu`, `load`, `memory`, `paging`, `disk`, `filesystem`, `network`) tại Edge và Gateway.<br>- Nâng cấp toàn diện bộ 7 Dashboards Grafana chuẩn SRE (USE method, Dual Y-Axis `byFrameRefID`, chuyển đổi `merge` cho bảng đa truy vấn).<br>- *Kết quả:* 100% dashboard hiển thị sống động dữ liệu tài nguyên thực tế. |
+| **Phase 3.6: Unified Resource Monitoring Schemas** | Chuẩn hóa lược đồ tài nguyên Web App & Compute Instance | **HOÀN THÀNH** | - Xây dựng tài liệu đặc tả kiến trúc `RESOURCE_MONITORING_SCHEMAS.md` với cơ chế thu thập 3 tầng (IMDS vs Downward API vs OTTL Enrichment).<br>- Xuất bản 2 bản đặc tả máy đọc được `webapp-monitoring-schema.yaml` và `instance-monitoring-schema.yaml`.<br>- Bổ sung Panel 6 đo lường độ bão hòa JVM Runtime trên Dashboard `red-metrics.json`. |
+| **Phase 3.7: AI Anomaly Detection Engine V3 & Closed-Loop AIOps** | Tích hợp học sâu phát hiện bất thường & bóc tách vết RCA | **HOÀN THÀNH** | - Hợp nhất module `ai-engine/` (Universal GRU + TCN Autoencoders + Isolation Forest) với 8 đặc trưng PromQL $O(1)$.<br>- Bóc tách vết thực thi phân tán qua Tempo (`TempoTraceAnalyzer`) thành $T_{\text{WAN}}$, $T_{\text{self}}$, $T_{\text{DB}}$.<br>- Thiết lập vòng lặp Closed-Loop AIOps: Embedded Prometheus Exporter (`:9108`), Panel 7 Grafana, và Telegram Alert Sink rate-limited 60s.<br>- Chuẩn hóa kịch bản chaos (`tests/chaos/`) tương thích 100% với 3 cụm k3d và xác thực không xung đột giữa `FaultAgent.java` và `CATALINA_OPTS`. |
+| **Phase 4: Workload Testing, Chaos Benchmark & Final Evaluation** | Thực nghiệm đo lường hiệu năng và đánh giá khoa học | **SẴN SÀNG THỰC THI** | - Chạy kịch bản tải thực tế với Locust (`tests/locust/locustfile.py`).<br>- Tiêm lỗi hỗn loạn tự động (`tests/chaos/run_live.py`, `run_service_faults.py`).<br>- Đo lường Recall, Precision, MTTD, False Positive Rate và độ phủ giám sát đa đám mây.<br>- Xuất báo cáo khoa học tổng kết đồ án tốt nghiệp. |
 
 ---
 
@@ -460,10 +474,68 @@ flowchart LR
 
 ---
 
-## 4. Tóm Tắt Kế Hoạch Triển Khai Tiếp Theo
+## 4. Kiến Trúc AI Anomaly Detection Engine V3 & Vòng Lặp Closed-Loop AIOps
 
-1. **Hoàn thiện cấu hình manifest Kustomize:** Phân tách rõ ràng thư mục manifests `k8s/base/` và `k8s/overlays/local-k3d/`.
-2. **Kích hoạt kịch bản Ansible:** Khởi tạo hạ tầng 3 cụm k3d, cấu hình mạng WAN mô phỏng `tc/netem` và kiểm tra kênh mTLS thông suốt.
-3. **Triển khai ứng dụng TeaStore:** Bật OTel Java Agent và kiểm tra đồ thị phân tán vi dịch vụ trên Grafana Tempo với chính sách lấy mẫu 20%.
-4. **Thực hiện bài đo kiểm chuẩn đầu tiên:** Xuất báo cáo đánh giá thực nghiệm tuân thủ nghiêm ngặt quy tắc liêm chính dữ liệu viễn trắc.
+Nhằm nâng cấp nền tảng từ mức độ giám sát phản ứng thụ động (Reactive Monitoring) lên mức chủ động dự báo sự cố (Proactive AIOps), hệ sinh thái đã tích hợp hoàn thiện module học sâu phát hiện bất thường và bóc tách nguyên nhân gốc rễ tự động:
+
+```mermaid
+flowchart TB
+    subgraph DataPlane ["1. Tầng Thu Thập & Chuẩn Hóa Vectorized Telemetry (O(1) PromQL)"]
+        ThanosEngine["Thanos Query (:9090)"]
+        Features["8 Features: QPS, Server Latency P95, Client Latency P95, 5xx Rate,\nMax Pod CPU %, Max Pod RAM %, RAM Floor 2m %, GC Pause Rate"]
+        ScaleFloors["Physical Scale Floors (Ngưỡng sàn chống nổ Z-Score)"]
+        ThanosEngine --> Features --> ScaleFloors
+    end
+
+    subgraph ModelPlane ["2. Tầng Học Sâu Tự Động Hóa (Universal Ensemble)"]
+        GRU["Universal GRU Autoencoder"]
+        TCN["Temporal Convolutional Network (TCN) Autoencoder"]
+        IsoForest["Isolation Forest Baseline"]
+        DualWindow["Bộ Chấm Điểm 2 Cửa Sổ Trượt (Dual Sliding Window Scorer)\n- Cửa sổ ngắn: 3 mẫu (30s) phản ứng nhanh\n- Cửa sổ dài: 18 mẫu (180s) xu hướng suy thoái\n- Tối thiểu 2 vi phạm liên tiếp triệt tiêu nhiễu mạng"]
+        
+        ScaleFloors --> GRU & TCN & IsoForest --> DualWindow
+    end
+
+    subgraph RCAPlane ["3. Tầng Bóc Tách Vết Phân Tán (Tempo Distributed Trace RCA)"]
+        TempoEngine["Grafana Tempo (:3200 / W3C TraceContext)"]
+        TraceDecomp["Phân rã độ trễ: Delta T = T_WAN + T_self + T_DB"]
+        TWAN["T_WAN: Trễ mạng WAN liên cụm AWS <-> Azure"]
+        TSelf["T_self: Thời gian tự thân vi dịch vụ"]
+        TDB["T_DB: Thời gian chờ câu lệnh MySQL"]
+        
+        DualWindow -->|Khi Likelihood % > Ngưỡng P99| TempoEngine
+        TempoEngine --> TraceDecomp --> TWAN & TSelf & TDB
+    end
+
+    subgraph FeedbackPlane ["4. Tầng Vòng Lặp Phản Hồi Khép Kín (Closed-Loop Feedback)"]
+        MetricsServer["Embedded Prometheus Exporter (:9108/metrics)\n- ai_anomaly_likelihood_percent\n- ai_reconstruction_error\n- ai_rca_component_latency_ms\n- ai_detector_verdict"]
+        TelegramSink["TelegramAlertSink (Rich Markdown Card + 60s Cooldown)"]
+        GrafanaUI["Grafana Panel 7 (red-metrics.json - Dual Y-Axis)"]
+        
+        TraceDecomp --> MetricsServer & TelegramSink
+        MetricsServer --> ThanosEngine
+        ThanosEngine --> GrafanaUI
+    end
+```
+
+### 4.1. Đặc Tính Kỹ Thuật Nổi Bật Của AI Engine V3:
+1. **Khám phá thực thể động (Dynamic Entity Discovery):** Truy vấn động $O(1)$ mọi cặp `(cloud_provider, service_name)` từ Thanos mà không cần cấu hình cứng danh sách dịch vụ.
+2. **Bất biến khi mở rộng Pod (Pod Scale-Out Invariance):** Sử dụng các chỉ số `max_pod_*` kết hợp bộ giảm chấn phản hồi, đảm bảo việc tăng giảm số lượng Pod từ 1 lên $N$ bản sao không bao giờ kích hoạt báo động sai.
+3. **Hiệu chuẩn động trực tuyến (Online Auto-Calibration):** Khi một Cloud Provider hoặc Microservice mới gia nhập hệ thống, module tự động thu thập 30 mẫu đầu tiên để tự học đường cơ sở (Baseline) mà không cần huấn luyện lại toàn bộ mô hình từ đầu.
+4. **Phân rã vết thực thi chính xác:** Khi phát hiện bất thường, module tự động bóc tách vết thực thi phân tán từ Grafana Tempo thành $T_{\text{WAN}}$, $T_{\text{self}}$, $T_{\text{DB}}$, giúp kỹ sư SRE biết ngay sự cố thuộc về đường truyền liên cụm hay dịch vụ nội bộ.
+5. **Cầu nối vòng lặp khép kín (Closed-Loop AIOps):**
+   - Tích hợp máy chủ HTTP mini xuất các chỉ số AI sang cổng `9108` để Prometheus Hub scrape định kỳ 5s.
+   - Trực quan hóa tương quan giữa Likelihood bất thường (%) và các thành phần trễ RCA (ms) trên Grafana Dashboard `red-metrics.json` (Panel 7).
+   - Tự động bắn cảnh báo chất lượng cao về kênh Telegram khi phát hiện trạng thái `ALERT`, tích hợp bộ đệm Cooldown 60s để chống tràn tin nhắn.
+
+---
+
+## 5. Tóm Tắt & Kết Luận Kế Hoạch Kiến Trúc
+
+Kiến trúc Master Plan của đồ án đã hoàn thiện 100% các mục tiêu thiết kế và sẵn sàng bước vào giai đoạn thực nghiệm khoa học:
+1. **Hạ tầng phân tán 3 cụm k3d:** Vận hành tối ưu trên Docker Desktop thông qua **Makefile** duy nhất và bảo mật **mTLS 1.3**.
+2. **Thu thập Full-Stack OpenTelemetry:** Bao phủ toàn diện từ phần cứng host (7 scrapers `hostmetrics`) đến mã nguồn ứng dụng Java (OTel Java Agent v2.10) và tiền tổng hợp đồ thị dịch vụ liên đám mây.
+3. **Lưu trữ & Trực quan hóa hợp nhất:** 3 backend chuyên dụng (Thanos, Loki, Tempo) liên kết trên MinIO Object Storage, phục vụ 7 bộ Grafana SRE Dashboards.
+4. **Trí tuệ nhân tạo AIOps khép kín:** Kết hợp tương hỗ giữa cảnh báo sự cố K8s cứng (Robusta) và cảnh báo suy thoái mềm (AI Anomaly Detection V3 + Tempo Trace RCA).
+5. **Hệ thống kiểm chuẩn tải & hỗn loạn sẵn sàng:** Kịch bản Locust và bộ công cụ Chaos Injection chuẩn bị cho các bài đo lường trong Phase 4.
 

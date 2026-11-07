@@ -2,7 +2,7 @@
 
 > **Tài liệu:** `docs/progress/00_result_progress.md`  
 > **Dự án:** Multi-Cloud Monitoring Platform (TeaStore Hub-Spoke Observability)  
-> **Cập nhật lần cuối:** 2026-11-04  
+> **Cập nhật lần cuối:** 2026-11-07  
 > **Quy chuẩn:** Báo cáo tiến độ các Phase, tổng quan các lỗi phát sinh, trạng thái giải quyết và kết quả kiểm thử thực tế.
 
 ---
@@ -17,7 +17,8 @@
 | **Phase 3** | Hub Observability: MinIO Object Storage, Prometheus + Thanos, Loki, Tempo, Grafana, Pyrra, Robusta | **Hoàn thành** | 100% | MinIO 4 buckets, Thanos Query PromQL, Tempo Traces, Loki Logs, Grafana Topology & RED Dashboards |
 | **Phase 3.5** | Full-Stack Infrastructure Observability (OS, Kernel, Storage, Network USE) & Nâng cấp toàn diện Bộ 7 Grafana Dashboards | **Hoàn thành** | 100% | OTel Collector 7 Hostmetrics scrapers, 7 Grafana SRE Dashboards (USE Method, 4 Golden Signals, Dynamic Topo, Log Anomaly) |
 | **Phase 3.6** | Unified Resource Monitoring Schemas (Web App & Compute Instance), JVM Runtime Completeness & Cross-Layer RCA Tree | **Hoàn thành** | 100% | `RESOURCE_MONITORING_SCHEMAS.md`, `webapp-monitoring-schema.yaml`, `instance-monitoring-schema.yaml`, JVM Heap/Threads Panel 6 trên `red-metrics.json` |
-| **Phase 4** | Workload Testing (Locust), AI/ML Sampling & Anomaly Detection, SLO Validation | *Chờ thực hiện* | 0% | Lên lịch sau khi nghiệm thu Phase 3.6 |
+| **Phase 3.7** | AI Anomaly Detection Engine V3 & Closed-Loop AIOps Pipeline (Tempo Trace RCA, Embedded Exporter :9108, Telegram Sink) | **Hoàn thành** | 100% | Hợp nhất nhánh AI, PromQL Dual SemConv, Tempo Trace RCA, Prometheus scrape :9108, Panel 7 Grafana `red-metrics.json`, Telegram Alert Sink |
+| **Phase 4** | Workload Testing (Locust), Live Chaos Evaluation, SLO Validation & Final Scientific Report | *Sẵn sàng thực thi* | 0% | Toàn bộ script Locust & Chaos Engineering đã sẵn sàng khởi chạy |
 
 ---
 
@@ -46,6 +47,7 @@ Dưới đây là danh mục toàn bộ sự cố kỹ thuật ghi nhận trong 
 | **INC-P3-14** | Phase 3 | Grafana Visualization | Panel Topology chỉ hiển thị mainstat/title, thiếu thuộc tính phụ thuộc đám mây sâu và subnet | High | **Đã giải quyết** | Nâng cấp toàn diện `system-topology.json` (v3): Interactive Node Graph với đầy đủ subtitle, mainStat, secondaryStat, và 10+ trường `detail__*` (IAM Role, ARN, Subnet, VPC, SG, KMS); bổ sung Bảng Ma trận kết nối mạng L3/L4 và Bảng Kiểm kê 360° Phụ thuộc tài nguyên. |
 | **INC-P3-15** | Phase 3.5 | Observability & Dashboards | Thiếu hụt chỉ số hạ tầng sâu (OS/Kernel/Storage/USE) và bộ Dashboards chưa chuẩn 4 Golden Signals / USE Method | High | **Đã giải quyết** | Kích hoạt trọn bộ 7 OTel hostmetrics scrapers (cpu, load, memory, paging, disk, filesystem, network) trên cả Edge và Hub; nâng cấp toàn diện bộ 7 Dashboards SRE (k8s-infrastructure 10 panels/4 rows, wan-telemetry 8 panels, red-metrics 4 Golden Signals, logs-traces-deepdive anomaly & persistence stream, topology dynamic metrics & node health table, executive fleet matrix). |
 | **INC-P3-16** | Phase 3.6 | Resource Schemas & JVM Completeness | Thiếu chuẩn đặc tả giám sát thống nhất cho từng loại tài nguyên (Web App vs Compute Instance) và thiếu JVM Runtime Saturation trên RED Dashboard | Medium | **Đã giải quyết** | Ban hành tài liệu đặc tả `RESOURCE_MONITORING_SCHEMAS.md`, khởi tạo 2 tệp YAML Schemas chuẩn máy đọc được (`webapp-monitoring-schema.yaml`, `instance-monitoring-schema.yaml`), và bổ sung Panel 6 (JVM Memory Heap & Thread Count) vào `red-metrics.json`. |
+| **INC-P3-17** | Phase 3.7 | AI Engine & AIOps Closed-Loop | Lệch pha tên SemConv PromQL, xung đột kịch bản chaos với 3 cụm k3d, thiếu phản hồi Closed-Loop và kênh cảnh báo Telegram | High | **Đã giải quyết** | Chuẩn hóa PromQL Dual SemConv fallback trong `collector.py` & `detector.py`, chuyển hướng toàn bộ scripts chaos sang 3 cụm chuẩn k3d (AWS, Azure, Hub), xây dựng máy chủ Prometheus Exporter nhúng cổng `:9108`, bổ sung Panel 7 Grafana (Dual Y-Axis) và tích hợp Telegram Alert Sink kèm bộ đệm chống spam 60s. |
 
 ---
 

@@ -113,7 +113,7 @@ Mở Terminal trên Linux hoặc trong WSL2:
 ```bash
 git clone https://github.com/nnviet23/multicloud-monitoring.git
 cd multicloud-monitoring
-git checkout feat/infra-ansible-k3d
+git checkout feat/integrate-infra-ai-anomaly
 ```
 
 ### Bước 2: Thiết lập môi trường & Tải trước Container Images (`make setup`)
@@ -183,7 +183,8 @@ Toàn bộ các cổng dịch vụ đã được ánh xạ tự động ra máy 
 | Dịch vụ (Service) | Cụm K8s | URL Truy Cập Trình Duyệt | Tài khoản | Mật khẩu | Mục đích sử dụng |
 |---|---|---|---|---|---|
 | **TeaStore WebUI** | `aws-k3d` | [http://localhost:8080/tools.descartes.teastore.webui/](http://localhost:8080/tools.descartes.teastore.webui/) | *(Không)* | *(Không)* | Giao diện mua sắm kiểm chuẩn, duyệt danh mục, đặt hàng |
-| **Grafana Dashboards** | `hub-k3d` | [http://localhost:3000](http://localhost:3000) | `admin` | `MultiCloudSecurePassword2026!` | 7 Dashboards SRE: System Topology, RED Metrics, SLO, WAN |
+| **Grafana Dashboards** | `hub-k3d` | [http://localhost:3000](http://localhost:3000) | `admin` | `MultiCloudSecurePassword2026!` | 7 Dashboards SRE (RED, Topology, SLO, WAN, Panel 7 AI Anomaly) |
+| **AI Metrics Exporter** | Host / k3d | [http://localhost:9108/metrics](http://localhost:9108/metrics) | *(Không)* | *(Không)* | Metrics AI thời gian thực (Likelihood %, Reconstruction MSE, Tempo RCA) |
 | **MinIO Console** | `hub-k3d` | [http://localhost:9001](http://localhost:9001) | `admin` | `MultiCloudSecurePassword2026!` | Quản lý 4 S3 buckets (`thanos-metrics`, `loki-data`, `tempo-traces`, `raw-telemetry`) |
 | **MinIO S3 API** | `hub-k3d` | [http://localhost:9000](http://localhost:9000) | `admin` | `MultiCloudSecurePassword2026!` | S3 API endpoint cho Prometheus Sidecar, Loki, Tempo |
 | **Thanos Query UI** | `hub-k3d` | `http://localhost:9090` *(xem lệnh mở bên dưới)* | *(Không)* | *(Không)* | Giao diện PromQL federated query toàn hệ thống |
@@ -209,7 +210,47 @@ Các thành phần nội bộ được bảo vệ trong ClusterIP, khi cần xem
 
 ---
 
-## 5. Quy Trình Dọn Dẹp & Xóa Sạch Hệ Thống Khi Cần Gỡ Bỏ (Teardown & Cleanup)
+## 5. Vận Hành Tải, Kỹ Thuật Hỗn Loạn & Động Cơ AI (Workload, Chaos & AIOps)
+
+Sau khi cụm Kubernetes và các ứng dụng đã hoạt động, bạn có thể thực hiện kiểm chuẩn khoa học theo các bước:
+
+### 5.1. Kích hoạt bộ sinh tải người dùng (Locust Traffic Generator)
+Mở một terminal riêng để sinh tải mua sắm liên tục vào TeaStore:
+```bash
+# Lựa chọn 1: Sinh tải tự động 4 giai đoạn với traffic_generator (Zero external dependencies)
+python tests/locust/traffic_generator.py --duration 1800 --min-users 10 --max-users 40
+
+# Lựa chọn 2: Sinh tải bằng Locust CLI chuẩn
+locust -f tests/locust/locustfile.py --headless -u 20 -r 2 --run-time 30m --host http://localhost:8080
+```
+
+### 5.2. Khởi chạy Động cơ AI Anomaly Detection V3
+Mở một terminal riêng để kích hoạt vòng lặp phát hiện bất thường:
+```bash
+python ai-engine/inference/detector.py --interval 6
+```
+Động cơ sẽ tự động:
+1. Thu thập 8 đặc trưng PromQL từ Thanos Query.
+2. Đưa qua mô hình Universal GRU + TCN Autoencoders để chấm điểm Z-score và Likelihood (%).
+3. Khởi tạo máy chủ Prometheus Exporter tại `http://localhost:9108/metrics` để Thanos Hub scrape.
+4. Khi phát hiện bất thường (`ALERT`), tự động phân rã vết thực thi qua Tempo thành $T_{\text{WAN}}$, $T_{\text{self}}$, $T_{\text{DB}}$ và bắn tin cảnh báo Markdown giàu ngữ cảnh về Telegram Bot.
+
+### 5.3. Tiêm lỗi hỗn loạn thực tế (Live Chaos Engineering)
+Để đánh giá độ nhạy và độ chính xác của AI Engine:
+```bash
+# Kịch bản 1: Tiêm suy hao mạng WAN giữa AWS và Azure (180ms delay)
+python tests/chaos/run_live.py --scenarios azure_wan_delay
+
+# Kịch bản 2: Tiêm lỗi rò rỉ bộ nhớ Heap và ép GC trong pod TeaStore Persistence
+python tests/chaos/run_service_faults.py --scenarios memory_leak
+
+# Kịch bản 3: Tiêm lỗi khóa bảng cơ sở dữ liệu MySQL (Database Lock)
+python tests/chaos/run_service_faults.py --scenarios db_lock
+```
+
+---
+
+## 6. Quy Trình Dọn Dẹp & Xóa Sạch Hệ Thống Khi Cần Gỡ Bỏ (Teardown & Cleanup)
 
 Khi cần giải phóng toàn bộ tài nguyên CPU/RAM hoặc thiết lập lại hệ thống từ đầu:
 

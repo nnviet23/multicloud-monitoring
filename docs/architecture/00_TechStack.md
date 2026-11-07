@@ -1,9 +1,9 @@
 # Quyết Định Tech Stack Giám Sát Đa Đám Mây (Multi-Cloud Observability Tech Stack Decision)
 
 > **Tài liệu:** `docs/architecture/00_TechStack.md`  
-> **Phiên bản:** 1.0 (Phase 0 — Baseline Architecture)  
+> **Phiên bản:** 3.0 (Final Architecture Baseline & Closed-Loop AIOps Integration)  
 > **Trạng thái:** Quyết định phê duyệt (Approved Architecture Decision)  
-> **Chiến lược cốt lõi:** Áp dụng **Phương án A** (Edge-Filtered Ingestion with Centralized Processing & Batch Ingestion). Tạm thời chưa tích hợp streaming AI inference ở phase này (dành cho phase sau). Tỷ lệ lấy mẫu vết (trace sampling) khởi điểm là **20%** và sẽ giảm dần theo lộ trình tối ưu hóa.
+> **Chiến lược cốt lõi:** Áp dụng **Phương án A** (Edge-Filtered Ingestion with Centralized Processing & Batch Ingestion) kết hợp **AI Anomaly Detection Engine V3** & **Vòng lặp Closed-Loop AIOps**. Tỷ lệ lấy mẫu vết (trace sampling) khởi điểm là **20%** tại edge collector (giữ lại 100% trace lỗi và trễ cao) và tiền tổng hợp đồ thị Topology (`traces_service_graph_*`) tại Hub OTel Gateway. Toàn bộ hạ tầng được điều phối tự động bằng **Makefile** và cấu hình bảo mật tập trung qua **.env**.
 
 ---
 
@@ -25,22 +25,25 @@ Hệ thống được thiết kế theo 2 giai đoạn môi trường rõ rệt:
 
 | Lớp kiến trúc (Layer) | Công nghệ / Công cụ | Vai trò & Mục đích sử dụng | Phạm vi áp dụng |
 |---|---|---|---|
+| **Entrypoint & Orchestration** | GNU Make (Makefile) | Điều phối toàn diện vòng đời hạ tầng (setup, infra, certs, deploy, emulate-wan, ai-inference) qua 1 lệnh. | Toàn bộ dự án |
 | **Container & Runtime** | Docker Engine, containerd, runc | Nền tảng đóng gói container, quản lý cgroups, namespace, volume và mạng cầu nối cục bộ. | Toàn bộ Host & Lab nodes |
 | **Cluster Orchestration** | Kubernetes (k3d / k3s) | Điều phối container siêu nhẹ (lightweight K8s), tạo lập 3 cụm biệt lập `aws-k3d`, `azure-k3d`, `hub-k3d` trên một Docker daemon. | Local Lab Infrastructure |
 | **Infrastructure as Code (IaC)** | Ansible | Tự động hóa khởi tạo cụm k3d, cấu hình mạng WAN mô phỏng (`tc/netem`), gán nhãn node và chuẩn bị môi trường. | Local Lab Provisioning |
 | **Cloud IaC (Phase sau)** | Terraform | Định nghĩa và cấp phát hạ tầng đám mây thực tế (AWS, Azure, GCP) có quản lý state độc lập. | Real Cloud Phase |
-| **GitOps & Manifests** | Kustomize | Quản lý cấu hình Kubernetes khai báo (declarative configuration) không dùng template, phân tách base và overlays. | Quản lý Manifests K8s |
-| **GitOps Delivery (Tùy chọn)** | ArgoCD | Tự động đồng bộ khai báo từ Git sang các cụm K8s (sử dụng khi cần tự động hóa Continuous Delivery). | GitOps Pipeline |
-| **Telemetry Ingestion & Pipeline** | OpenTelemetry (OTel Agent, Collector Contrib, Gateway) | Thu thập, làm giàu (enrich), chuyển đổi (OTTL), lọc tại biên (edge-filter), lấy mẫu (20% trace sampling), và chuyển tiếp OTLP qua mTLS. | Spoke 1, Spoke 2 & Hub |
+| **GitOps & Manifests** | Kustomize (Base vs Overlays) | Quản lý cấu hình Kubernetes khai báo theo nguyên tắc SRP (1 resource/file), phân tách base và overlays. | Quản lý Manifests K8s |
+| **Configuration & Secrets** | Centralized `.env` | Tập trung toàn bộ bí mật, token, credentials, pass qua Kustomize secretGenerator. | Toàn dự án |
+| **Telemetry Ingestion & Pipeline** | OpenTelemetry (OTel Agent v2.10, Collector Contrib v0.114, Gateway) | Thu thập Full-Stack 7 `hostmetrics` scrapers, lọc tại biên, lấy mẫu (20% trace sampling), mTLS 1.3 và chuẩn hóa OTTL. | Spoke 1, Spoke 2 & Hub |
 | **Metrics Storage & TSDB** | Prometheus + Thanos (Receive, Query, Store, Compact) | Thu thập metric ngắn hạn (Prometheus) và tổng hợp, lưu trữ metric dài hạn không giới hạn (Thanos). | Hub Cluster |
 | **Logs Storage** | Grafana Loki | Lưu trữ nhật ký hệ thống (logs) theo kiến trúc chunk-based tối ưu chi phí, lập chỉ mục theo labels. | Hub Cluster |
 | **Distributed Tracing** | Grafana Tempo | Lưu trữ và truy vấn phân tán dấu vết thực thi (distributed traces) quy mô lớn với chi phí thấp (Object Storage). | Hub Cluster |
 | **Object Storage (S3-compatible)** | MinIO | Lưu trữ đối tượng tương thích S3 tại local lab cho 3 bucket riêng biệt (`thanos-bucket`, `loki-bucket`, `tempo-bucket`). | Hub Cluster |
-| **Trực quan hóa (Visualization)** | Grafana | Giao diện quản trị tập trung (Single Pane of Glass) kết nối tương quan chéo giữa Metrics, Logs và Traces. | Hub Cluster |
+| **Trực quan hóa (Visualization)** | Grafana (7 SRE Dashboards) | 7 bộ Dashboards chuyên sâu (Infrastructure, WAN, Topology, RED Metrics, Logs/Traces, Executive, SLO). | Hub Cluster |
 | **SLO Management** | Pyrra | Quản lý Mục tiêu Mức độ Dịch vụ dưới dạng mã (SLO-as-code), tự động sinh PromQL Multi-Burn-Rate alerting rules. | Hub Cluster |
-| **Alert Routing & Automation** | Thanos Ruler + Alertmanager + Robusta | Đánh giá rule PromQL (Thanos Ruler), khử trùng lặp/định tuyến (Alertmanager), làm giàu ngữ cảnh lỗi K8s (Robusta Engine). | Hub Cluster |
-| **Kênh thông báo (Notification Sinks)** | Telegram / Discord | Tiếp nhận thông báo sự cố tức thời kèm theo snapshot log, event pod từ Robusta. | Kênh bên ngoài |
-| **Benchmark Application** | TeaStore | Ứng dụng mẫu microservices thương mại điện tử chuẩn SPEC RG để sinh tải và đánh giá viễn trắc. | Spoke 1 & Spoke 2 |
+| **Event-Driven Smart Alerting** | Robusta Runner + Telegram | Bắt sự cố K8s cứng (OOMKilled, CrashLoopBackOff), trích xuất pod log, bắn cảnh báo Telegram. | Hub Cluster |
+| **AI Anomaly Detection Engine (V3)** | PyTorch, Scikit-learn, Universal Autoencoders (GRU + TCN) | Học sâu giám sát bất thường đa biến từ 8 đặc trưng PromQL, Dual Sliding Window Scorer, Pod Scale-Out Invariant. | AI Engine Layer |
+| **Distributed Trace RCA** | `TempoTraceAnalyzer` | Phân rã trễ vết W3C từ Tempo thành $T_{\text{WAN}}$, $T_{\text{self}}$, $T_{\text{DB}}$ để định danh nguyên nhân gốc rễ. | AI Engine Layer |
+| **Closed-Loop AIOps Feedback** | Embedded Prometheus Exporter (`:9108`) + Telegram Alert Sink | Xuất ngược metrics AI (`ai_anomaly_likelihood_percent`, RCA latency) về Prometheus & bắn cảnh báo RCA Telegram. | Closed-Loop Pipeline |
+| **Benchmark & Chaos Testing** | Locust + `FaultAgent.java` + Linux `tc/netem` | Tải chuẩn TeaStore (Locust), tiêm lỗi rò rỉ RAM/CPU thực tế và suy hao mạng WAN liên đám mây. | Spoke 1 & Spoke 2 |
 
 ---
 
@@ -230,46 +233,82 @@ Nhờ đó, Grafana vẽ được sơ đồ Topology trực quan, mượt mà v�
 - **Robusta Engine:** Động cơ tự động hóa sự cố K8s. Khi nhận webhook cảnh báo, Robusta tự động kết nối với API Server của k3d để lấy snapshot: `kubectl get pods`, mô tả nguyên nhân lỗi, 100 dòng log gần nhất của container bị CrashLoopBackOff, đóng gói thành báo cáo giàu ngữ cảnh (enriched alert card).
 - **Telegram / Discord Sinks:** Nhận trực tiếp báo cáo sự cố từ Robusta qua Bot API để kỹ sư có đầy đủ bằng chứng khắc phục sự cố ngay lập tức.
 
+### 3.12. AI Anomaly Detection Engine V3 & Tempo Trace RCA
+- **Kiến trúc mô hình Ensemble:** Kết hợp Universal GRU Autoencoder, Temporal Convolutional Network (TCN) Autoencoder và Isolation Forest.
+- **8 Đặc trưng phổ quát (Universal Features):** Tự động khám phá qua PromQL $O(1)$ đối với mọi thực thể `(cloud_provider, service_name)`: `qps`, `server_latency_p95`, `client_latency_p95`, `error_rate_5xx`, `max_pod_cpu_pct`, `max_pod_ram_pct`, `ram_floor_2m_pct`, `gc_pause_rate`.
+- **Pod Scale-Out Invariant & Online Calibration:** Sử dụng `max_pod_*` kết hợp bộ giảm chấn phản hồi và cơ chế hiệu chuẩn động 30 mẫu cho dịch vụ/cloud mới thêm vào, loại bỏ hoàn toàn báo động giả khi scale-out.
+- **Chấm điểm 2 cửa sổ trượt (Dual Sliding Window):** Cửa sổ ngắn (3 mẫu) phản ứng nhanh với lỗi đột ngột; cửa sổ dài (18 mẫu) phát hiện suy thoái mềm; yêu cầu $\ge 2$ vi phạm liên tiếp để triệt tiêu nhiễu mạng chập chờn.
+- **Phân rã vết thực thi Tempo RCA (`TempoTraceAnalyzer`):** Khi Autoencoder phát hiện bất thường, module tự động truy vấn Grafana Tempo HTTP API để bóc tách:
+  $$\Delta T_{\text{total}} = T_{\text{WAN}} + T_{\text{self}} + T_{\text{DB}}$$
+  Định danh chính xác nguyên nhân gốc rễ: trễ mạng WAN liên cụm (`CROSS_CLOUD_WAN_DELAY`), nghẽn CPU/RAM vi dịch vụ (`SERVICE_CPU_BOTTLENECK` / `MEMORY_LEAK_GC_STALL`), hay khóa bảng MySQL (`DATABASE_BOTTLENECK`).
+
+### 3.13. Vòng Lặp Phản Hồi Khép Kín AIOps (Closed-Loop AIOps Pipeline)
+- **Embedded Prometheus Exporter (`:9108/metrics`):** Tích hợp máy chủ HTTP đa luồng trong `detector.py`, xuất trực tiếp các metric AI chuẩn OpenMetrics:
+  - `ai_anomaly_likelihood_percent{cloud_provider, service_name, model}`
+  - `ai_reconstruction_error{cloud_provider, service_name, model}`
+  - `ai_rca_component_latency_ms{cloud_provider, service_name, component="wan|self|db"}`
+  - `ai_detector_verdict{verdict="HEALTHY|ALERT"}`
+- **Trực quan hóa trên Grafana Panel 7 (`red-metrics.json`):** Trục Y kép (Dual Y-Axis) hiển thị đồng thời xác suất bất thường (%) và các thành phần trễ RCA (ms).
+- **Telegram Alert Sink Giàu Ngữ Cảnh:** Tự động gửi cảnh báo Markdown chi tiết kèm phân tích RCA và áp dụng cooldown 60s/entity để chống spam.
+
+### 3.14. Nền Tảng Kiểm Thử Tải & Kỹ Thuật Hỗn Loạn (Locust & Chaos Engineering)
+- **Locust Traffic Generator:** Kịch bản kiểm chuẩn hành vi người dùng mua sắm thực tế (`tests/locust/locustfile.py`), hỗ trợ mô phỏng tải động qua 4 giai đoạn hoặc chế độ tải bất định (erratic mode).
+- **FaultAgent Java (`FaultAgent.java`):** Nạp động vào tiến trình Tomcat JVM qua Java Attach API để mô phỏng rò rỉ RAM (cấp phát mảng byte đến 86% heap, kích hoạt GC liên tục) hoặc đốt CPU mà không gây xung đột với OpenTelemetry Java Agent.
+- **WAN Netem Injection (`tests/chaos/run_live.py`):** Tiêm suy hao mạng WAN trực tiếp lên container máy chủ k3d bằng Linux `tc netem`, tự động dọn dẹp khi kết thúc bài test.
+
 ---
 
 ## 4. Luồng Triển Khai Kỹ Thuật Tổng Thể (End-to-End Implementation Flows)
 
 ```mermaid
 flowchart TD
-    subgraph Provisioning ["1. Cấp phát & Bootstrap Hạ tầng (Ansible)"]
-        A1[Ansible Playbook] -->|Docker Engine CLI| A2[Tạo mạng Docker: mc-monitoring-net]
+    subgraph Provisioning ["1. Cấp phát & Bootstrap Hạ tầng (Makefile + Ansible)"]
+        A1[make infra / site.yml] -->|Docker Engine CLI| A2[Tạo mạng Docker: mc-monitoring-net]
         A2 -->|k3d CLI| A3[Khởi tạo 3 cụm: aws-k3d, azure-k3d, hub-k3d]
         A3 -->|Linux tc/netem| A4[Áp dụng suy hao WAN: 10ms delay, 0.1% loss]
-        A4 -->|K8s Manifests| A5[Cài đặt Traefik Ingress + Cấp phát mTLS Certs]
+        A3 -->|make certs| A5[Cấp phát chứng chỉ mTLS 1.3 SAN cho Hub & Spokes]
     end
 
-    subgraph AppDelivery ["2. Phân phối Ứng dụng & Cấu hình (Kustomize/GitOps)"]
-        B1[Git Repository] -->|Kustomize Overlays| B2[Base Manifests + Local Patches]
-        B2 -->|kubectl apply / ArgoCD| B3[Deploy TeaStore Spoke 1 & Spoke 2]
-        B2 -->|kubectl apply / ArgoCD| B4[Deploy Hub Backends & OTel Collectors]
+    subgraph AppDelivery ["2. Phân phối Ứng dụng & Cấu hình (Kustomize Overlays)"]
+        B1[Git Repository / k8s/base] -->|Kustomize Overlays + .env| B2[Base Manifests + Local Patches]
+        B2 -->|make deploy-hub| B3[Deploy Hub Backends & OTel Gateway]
+        B2 -->|make deploy-spokes| B4[Deploy Spoke Collectors & Namespace]
+        B2 -->|make deploy-teastore| B5[Deploy TeaStore Microservices & MySQL]
     end
 
     subgraph TelemetryPipeline ["3. Luồng Thu thập & Vận chuyển Viễn trắc (OTel + mTLS)"]
-        C1[TeaStore Apps + OTel Java Agent] -->|OTLP gRPC| C2[Edge OTel Collector Spoke]
-        C2 -->|Memory Limiter -> Filter -> Batch| C3{20% Head-Sampling}
-        C3 -->|Giữ 20% normal + 100% error| C4[OTLP Client mTLS]
+        C1[TeaStore Apps + OTel Java Agent v2.10] -->|OTLP gRPC| C2[Edge OTel Collector Spoke]
+        C2 -->|Hostmetrics: 7 scrapers + Memory Limiter -> Filter -> Batch| C3{20% Head-Sampling}
+        C3 -->|Giữ 20% normal + 100% error/high-latency| C4[OTLP Client mTLS 1.3]
         C4 -->|Simulated WAN: Traefik Ingress| C5[Hub OTel Gateway Receiver]
+        C5 -->|Service Graph Connector: Pre-aggregate traces_service_graph_*| C5G[Thanos Receive]
         C5 -->|Transform OTTL: Chuẩn hóa UTC & Cloud Dependencies Semconv| C6[Fanout / Exporters]
-        C6 -->|Prometheus Remote Write| C7[Thanos Receive]
+        C6 -->|Prometheus Remote Write / Exporter:8889| C7[Thanos Query / TSDB]
         C6 -->|OTLP/HTTP| C8[Grafana Loki]
         C6 -->|OTLP/gRPC| C9[Grafana Tempo]
         C7 & C8 & C9 -->|S3 API| C10[(MinIO Object Storage)]
     end
 
-    subgraph ObservabilityAndAlerting ["4. Giám sát, Phân tích & Vòng lặp Cảnh báo (Alert Loop)"]
-        D1[Pyrra: SLO Definitions] -->|Auto-generate| D2[Multi-Burn-Rate Rules]
-        D2 -->|Evaluate| D3[Thanos Ruler]
-        D3 -->|Thanos Query| C7
-        D3 -->|Fire Alert| D4[Alertmanager]
-        D4 -->|Webhook| D5[Robusta Engine]
-        D5 -->|Query k3d API Server| D6[Enrich: Pod Logs, Events, Resources]
-        D6 -->|Telegram Bot API| D7[Telegram / Discord Channel]
-        C7 & C8 & C9 -->|Dashboards| D8[Grafana Single Pane of Glass]
+    subgraph ClosedLoopAIOps ["4. Vòng Lặp Phân Tích, AI Phát Hiện Bất Thường & Phản Ứng (Closed-Loop)"]
+        D1[Locust Workload / Chaos FaultAgent] -->|Tải & Lỗi thực tế| C1
+        
+        %% Event-Driven Alerting
+        E1[Pyrra: SLO Definitions] -->|Auto-generate| E2[Multi-Burn-Rate Rules]
+        E2 -->|Evaluate| E3[Thanos Ruler]
+        E3 -->|Fire Alert| E4[Alertmanager]
+        E4 -->|Webhook| E5[Robusta Engine]
+        E5 -->|Telegram Bot API| E6[Telegram Alert Channel: Lỗi K8s cứng]
+        
+        %% AI Engine Proactive Anomaly Detection
+        F1[AI Anomaly Engine: detector.py] -->|Vectorized PromQL: 8 features| C7
+        F1 -->|Khi Likelihood % > Ngưỡng P99| F2[Tempo Trace RCA: T_WAN + T_self + T_DB]
+        C9 -->|W3C Trace Waterfall Spans| F2
+        F1 -->|Export Metrics :9108| F3[PrometheusMetricsServer]
+        F3 -->|Scrape 5s| C7
+        F1 -->|Bắn cảnh báo suy thoái mềm + RCA| E6
+        
+        %% Visualization
+        C7 & C8 & C9 -->|7 SRE Dashboards + Panel 7 AI Anomaly| G1[Grafana Single Pane of Glass]
     end
 ```
 

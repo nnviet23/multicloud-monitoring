@@ -42,7 +42,22 @@
 - [x] Document retention, object-store buckets, query paths, and failure behavior.
 - [x] Configure Telegram alerts with secrets external to Git (Robusta runner deployed with templated Telegram secret).
 
-### Phase 4 — Benchmark and evaluation
+### Phase 3.5 — Full-Stack Hostmetrics & SRE Dashboards Upgrade
+- [x] Enable all 7 hostmetrics scrapers (cpu, load, memory, paging, disk, filesystem, network) on Edge and Hub collectors.
+- [x] Upgrade all 7 Grafana SRE dashboards (USE method, Dual Y-Axis via byFrameRefID, multi-query table merge transformation).
+
+### Phase 3.6 — Unified Resource Monitoring Schemas
+- [x] Publish RESOURCE_MONITORING_SCHEMAS.md with 3-tier acquisition mechanics and cross-layer RCA decision trees.
+- [x] Create machine-readable webapp-monitoring-schema.yaml and instance-monitoring-schema.yaml.
+- [x] Add Panel 6 (JVM Memory Heap & Thread Count) on red-metrics.json.
+
+### Phase 3.7 — AI Anomaly Detection Engine V3 & Closed-Loop AIOps Pipeline
+- [x] Merge and align AI Anomaly Detection Engine V3 (Universal GRU + TCN Autoencoders, Isolation Forest, Online Calibration).
+- [x] Align 8 PromQL features with Dual SemConv fallback and Tempo Trace RCA decomposition (T_WAN, T_self, T_DB).
+- [x] Establish Closed-Loop AIOps feedback: Embedded Prometheus Exporter (:9108), Panel 7 on Grafana, and Telegram Alert Sink with rate limiting.
+- [x] Standardize chaos engineering scripts (run_live.py, run_service_faults.py, FaultAgent.java) for 3-cluster baseline.
+
+### Phase 4 — Benchmark and evaluation (Ready)
 - [ ] Define workload profile, repetitions, warm-up, cooldown, and noise controls.
 - [ ] Capture immutable raw data and run manifests.
 - [ ] Compare no-sampling and sampling profiles.
