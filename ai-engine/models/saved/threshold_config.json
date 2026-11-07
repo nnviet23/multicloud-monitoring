@@ -1,0 +1,103 @@
+{
+  "architecture": "Universal Per-Entity GRU + TCN Autoencoder Ensemble (V3)",
+  "scoring_module": "models.scoring.compute_directional_errors",
+  "calibration_scope": "disjoint_chronological_validation_set",
+  "num_features": 8,
+  "features": [
+    "qps",
+    "server_latency_p95",
+    "client_latency_p95",
+    "error_rate_5xx",
+    "max_pod_cpu_pct",
+    "max_pod_ram_pct",
+    "ram_floor_2m_pct",
+    "gc_pause_rate"
+  ],
+  "error_distribution": {
+    "mean": 0.00481,
+    "std": 0.004614,
+    "p95": 0.012647,
+    "p99": 0.020693,
+    "p99_5": 0.021299,
+    "max": 0.021904
+  },
+  "recommended_threshold_p99": 0.35,
+  "dual_sliding_window": {
+    "short_window": 3,
+    "long_window": 18,
+    "min_consecutive_breaches": 2
+  },
+  "likelihood_calibration": {
+    "calibration_method": "logistic_boundary_anchored",
+    "score_input": "min(current_mse,short_mean_mse)",
+    "temperature": 0.075121,
+    "threshold_anchor_prob_pct": 50.0,
+    "brier_score": 9e-05,
+    "expected_calibration_error": 0.009078,
+    "log_loss": 0.009123,
+    "normal_val_mean_prob_pct": 0.99,
+    "normal_val_p95_prob_pct": 1.08,
+    "normal_val_max_prob_pct": 1.19,
+    "fault_min_prob_pct": 100.0,
+    "fault_mean_prob_pct": 100.0,
+    "calibration_verified": true,
+    "scope": "normal_validation_and_synthetic_reference_faults",
+    "validation_sha256": "f8caa2f9c5d262ba7635e0230a0cff39aa725932fe2776de5dc53a6ecee5c6c9",
+    "model_sha256": {
+      "gru_autoencoder.pt": "c24beb13b45fa390338a72b029173b59982c8f1601b03c3e0a1d5fd364668461",
+      "tcn_autoencoder.pt": "690d648b4a9dd3514c7772e08cba01213bd5f5c80c5f3e15470832988c6125dd"
+    }
+  },
+  "feature_rca_baselines": {
+    "qps": {
+      "mean_sq_err": 0.003071,
+      "p95_sq_err": 0.009211,
+      "p99_sq_err": 0.012682,
+      "rca_trigger_threshold": 0.4
+    },
+    "server_latency_p95": {
+      "mean_sq_err": 0.005487,
+      "p95_sq_err": 0.033426,
+      "p99_sq_err": 0.059688,
+      "rca_trigger_threshold": 0.4
+    },
+    "client_latency_p95": {
+      "mean_sq_err": 0.000108,
+      "p95_sq_err": 0.00033,
+      "p99_sq_err": 0.001001,
+      "rca_trigger_threshold": 0.4
+    },
+    "error_rate_5xx": {
+      "mean_sq_err": 2.6e-05,
+      "p95_sq_err": 6.5e-05,
+      "p99_sq_err": 9.3e-05,
+      "rca_trigger_threshold": 0.4
+    },
+    "max_pod_cpu_pct": {
+      "mean_sq_err": 0.000814,
+      "p95_sq_err": 0.002461,
+      "p99_sq_err": 0.00582,
+      "rca_trigger_threshold": 0.4
+    },
+    "max_pod_ram_pct": {
+      "mean_sq_err": 0.01398,
+      "p95_sq_err": 0.042689,
+      "p99_sq_err": 0.09087,
+      "rca_trigger_threshold": 0.4
+    },
+    "ram_floor_2m_pct": {
+      "mean_sq_err": 0.012294,
+      "p95_sq_err": 0.050259,
+      "p99_sq_err": 0.054462,
+      "rca_trigger_threshold": 0.4
+    },
+    "gc_pause_rate": {
+      "mean_sq_err": 0.002702,
+      "p95_sq_err": 0.009136,
+      "p99_sq_err": 0.011366,
+      "rca_trigger_threshold": 0.4
+    }
+  },
+  "isolation_forest_val_normal_pct": 100.0,
+  "training_duration_sec": 90.22
+}

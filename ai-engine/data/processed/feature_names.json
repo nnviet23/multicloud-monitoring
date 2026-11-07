@@ -1,0 +1,10 @@
+[
+  "qps",
+  "server_latency_p95",
+  "client_latency_p95",
+  "error_rate_5xx",
+  "max_pod_cpu_pct",
+  "max_pod_ram_pct",
+  "ram_floor_2m_pct",
+  "gc_pause_rate"
+]

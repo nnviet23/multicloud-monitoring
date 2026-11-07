@@ -19,10 +19,10 @@
         port_mappings:
           - "8080:8080@loadbalancer"
           - "8089:8089@loadbalancer"
+          - "31112:31112@loadbalancer"
       - name: azure-k3d
         port_mappings:
           - "31111:31111@loadbalancer"
-
   tasks:
     - name: Create dedicated Docker bridge network for inter-cluster simulated WAN
       command: >
@@ -70,4 +70,3 @@
     - name: Display cluster status
       debug:
         msg: "{{ active_clusters.stdout_lines }}"
-

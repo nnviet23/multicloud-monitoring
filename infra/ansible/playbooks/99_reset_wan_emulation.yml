@@ -7,7 +7,6 @@
     spoke_containers:
       - k3d-aws-k3d-server-0
       - k3d-azure-k3d-server-0
-
   tasks:
     - name: Remove tc netem queue discipline
       command: >
@@ -31,4 +30,3 @@
         msg: "{{ item.item }}: {{ item.stdout }}"
       loop: "{{ tc_reset_status.results }}"
       when: item.stdout is defined
-
