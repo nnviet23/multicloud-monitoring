@@ -158,6 +158,31 @@ $$\Delta T_{\text{total}} = T_{\text{WAN}} + T_{\text{self}} + T_{\text{DB}}$$
 3. **$T_{\text{DB}} = \sum T_{\text{mysql\_spans}}$:**  
    Nếu thời gian chờ phản hồi từ MySQL/MariaDB tại `azure-k3d` tăng vọt, kết luận: **Nghẽn cổ chai cơ sở dữ liệu (`DATABASE_BOTTLENECK`)**.
 
+### 3.4. Ma Trận Ánh Xạ Chi Tiết 8 Features PromQL & Tempo Trace Tags
+
+Để đảm bảo tính tương thích tuyệt đối giữa mã nguồn Python của `ai-engine/` với đường ống Telemetry của hạ tầng OpenTelemetry v2.10 & Thanos Gateway, toàn bộ các câu truy vấn PromQL và định dạng nhãn đã được chuẩn hóa và bổ sung cơ chế dự phòng hai chiều (Dual SemConv Fallback):
+
+| Đặc Trưng (Feature) | Câu Lệnh PromQL Thực Tế Trong Code (`collector.py` & `detector.py`) | Nhãn Khóa Chính (Join Keys) | Tính Tương Thích Với OTel Collector & Java Agent |
+|---|---|---|---|
+| **`discover`** | `(count by (cloud_provider, service_name) ((jvm_memory_used_bytes{jvm_memory_type="heap"} or process_runtime_jvm_memory_usage_bytes{type="heap"} or process_runtime_jvm_memory_usage_bytes) and on (cloud_provider, service_name, host_name) (ACTIVE_JVM_PODS))) or (count by (cloud_provider, service_name) (...))` | `cloud_provider`, `service_name` | Tự động phát hiện mọi thực thể Microservice đang chạy. Có cơ chế fallback tự động nếu nhãn `host_name` không khớp giữa các metrics. |
+| **`qps`** | `sum by (cloud_provider, service_name) (rate(http_server_request_duration_seconds_count[1m]) or rate(http_server_duration_milliseconds_count[1m]))` | `cloud_provider`, `service_name` | Đo lường thông lượng HTTP máy chủ từ OTel Java Agent Servlet filter. |
+| **`server_latency_p95`** | `histogram_quantile(0.95, sum by (le, cloud_provider, service_name) (rate(http_server_request_duration_seconds_bucket[1m]) or rate(http_server_duration_milliseconds_bucket[1m])))` | `le`, `cloud_provider`, `service_name` | Phân vị độ trễ P95 phản hồi máy chủ (đơn vị: giây). |
+| **`client_latency_p95`** | `histogram_quantile(0.95, sum by (le, cloud_provider, service_name) (rate(http_client_request_duration_seconds_bucket[1m]) or rate(http_client_duration_milliseconds_bucket[1m])))` | `le`, `cloud_provider`, `service_name` | Phân vị độ trễ P95 các cuộc gọi HTTP Client ra ngoài (nhận diện sớm trễ mạng WAN liên cụm). |
+| **`error_rate_5xx`** | `sum by (cloud_provider, service_name) (rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[1m]) or rate(http_server_request_duration_seconds_count{http_status_code=~"5.."}[1m]))` | `cloud_provider`, `service_name` | Hỗ trợ song song cả nhãn SemConv v1.21+ (`http_response_status_code`) và SemConv cũ (`http_status_code`). |
+| **`max_pod_cpu_pct`** | `clamp_max(max by (cloud_provider, service_name) (((jvm_cpu_recent_utilization_ratio or process_runtime_jvm_cpu_utilization_ratio) * (jvm_cpu_count or 1)) and on (cloud_provider, service_name, host_name) (ACTIVE_JVM_PODS)) * 100, 100)` | `cloud_provider`, `service_name` | Tỷ lệ phần trăm tải CPU đỉnh của Pod (0% - 100%). Scale-out invariant. |
+| **`max_pod_ram_pct`** | `max by (cloud_provider, service_name) ((sum by (cloud_provider, service_name, host_name) (jvm_memory_used_bytes{jvm_memory_type="heap"} or process_runtime_jvm_memory_usage_bytes{type="heap"}) / sum by (cloud_provider, service_name, host_name) (jvm_memory_limit_bytes{jvm_memory_type="heap"} or process_runtime_jvm_memory_limit_bytes{type="heap"})) and on (...)) * 100` | `cloud_provider`, `service_name` | Tỷ lệ sử dụng Heap đỉnh của Pod so với trần Max Heap giới hạn. |
+| **`ram_floor_2m_pct`** | Tính toán trong Python dựa trên chuỗi 12 mẫu lịch sử rolling min của `max_pod_ram_pct` trong 120 giây | Bộ đệm nội bộ | Phát hiện rò rỉ bộ nhớ thực sự (khi sàn RAM không thể giải phóng về dưới 68%). |
+| **`gc_pause_rate`** | `sum by (cloud_provider, service_name) (rate(jvm_gc_duration_seconds_sum[1m]) or rate(process_runtime_jvm_gc_duration_seconds_sum[1m]))` | `cloud_provider`, `service_name` | Tần suất dừng hệ thống phục vụ Garbage Collection (giây dừng / giây thực tế). |
+| **`wan_network_io_kbs`** | `sum by (cloud_provider) (rate(system_network_io_bytes_total[1m])) / 1024` | `cloud_provider` | Đo lường băng thông mạng hệ thống thu thập bởi OTel `hostmetrics` scraper. |
+| **`wan_network_errors`** | `sum by (cloud_provider) (rate(system_network_errors_total[1m]))` | `cloud_provider` | Đo lường lỗi giao tiếp mạng hệ thống thu thập bởi OTel `hostmetrics` scraper. |
+
+**Bảng Đối Chiếu Tags Phân Rã Trace Trong Grafana Tempo (`TempoTraceAnalyzer`):**
+- **TraceQL Endpoint:** `http://localhost:3200/api/search` và `/api/traces/<traceID>`.
+- **Bộ lọc TraceQL:** `{ resource.service.name = "teastore-webui" && duration > 20ms }` (kèm cơ chế tự động fallback `/api/search?limit=12` khi không tìm thấy span phù hợp).
+- **Trường nhận diện Resource:** `resource.attributes["cloud.provider"]` (`aws`, `azure`, `hub`), `resource.attributes["service.name"]` (`teastore-webui`, `teastore-persistence`,...).
+- **Trường nhận diện Span:** `span.attributes["db.system"] == "mysql"` (truy vấn cơ sở dữ liệu), `peer.service`, `server.address`, `net.peer.name` (ánh xạ tương ứng với các statement OTTL tại Hub Gateway).
+- Khớp 100% với cấu hình OTTL chuẩn hóa tại `k8s/base/otel-collector/gateway/03-configmap.yaml`.
+
 ---
 
 ## 4. Hệ Thống Kiểm Thử Hỗn Loạn & Đánh Giá Kịch Bản Lỗi (Chaos Engineering)
@@ -182,6 +207,21 @@ Bao gồm 11 kịch bản tổng hợp chạy qua mô hình GRU + TCN và bộ s
 ### 4.2. Cấp Độ Tiêm Lỗi Thực Tế Trong Lab k3d (`run_live.py` & `run_service_faults.py`)
 - **FaultAgent Java (`FaultAgent.java`):** Được nạp động vào tiến trình Tomcat JVM của TeaStore để mô phỏng rò rỉ bộ nhớ thực tế (`byte[]` allocated liên tục không giải phóng) và ép kích hoạt `System.gc()` gây treo ứng dụng.
 - **Tiêm lỗi WAN thực tế (`run_live.py`):** Sử dụng helper container `alpine:3.20` gắn quyền `--privileged` vào namespace mạng của container k3d server để điều khiển `tc qdisc replace dev eth0 root netem delay 250ms`. Sau khi bài test kết thúc, bộ dọn dẹp tự động (Auto Cleanup) sẽ chạy lệnh gỡ bỏ netem để trả cụm về trạng thái ban đầu.
+
+### 4.3. Kiểm Định Tính Tương Thích Của Chaos Scripts Trên 3 Cụm k3d
+
+Cuộc rà soát mã nguồn các kịch bản kiểm thử trong `tests/chaos/` đã xác thực và chuẩn hóa các yếu tố môi trường:
+
+1. **Chuẩn Hóa Ngữ Cảnh Kubernetes & Danh Tên Cụm k3d:**
+   - **Contexts:** Toàn bộ lệnh gọi `kubectl` được chuẩn hóa thành `k3d-hub-k3d`, `k3d-aws-k3d`, `k3d-azure-k3d`.
+   - **Namespaces:** Khớp hoàn toàn với hạ tầng: `teastore` (chứa ứng dụng), `monitoring` (chứa Prometheus, Thanos, Tempo, Loki, Robusta, OTel Gateway/Edge), `storage` (MinIO).
+   - **Docker Containers:** Tên container máy chủ k3d ánh xạ trực tiếp tới `k3d-aws-k3d-server-0`, `k3d-azure-k3d-server-0`, `k3d-hub-k3d-server-0`.
+2. **Loại Bỏ Hoàn Toàn Ràng Buộc Cụm GCP Cũ:**
+   - Trong thiết kế 3 cụm chuẩn, dịch vụ `teastore-recommender` nằm tại `spoke-aws` (`aws-k3d`). Kịch bản `run_service_faults.py` trước đây nhắm tới cụm `gcp` đã được chuyển hướng chính xác sang `aws` (`deploy/teastore-recommender`), đồng thời logic kiểm tra RCA chuyển sang xác nhận `aws:teastore-recommender`.
+   - Kịch bản tiêm lỗi mạng WAN (`run_live.py`) đã chuyển kịch bản mặc định sang `azure_wan_delay` (180ms delay trên `k3d-azure-k3d-server-0`), mô phỏng trực tiếp chặng WAN kết nối giữa WebUI (AWS) và Persistence/MySQL (Azure). Kịch bản `aws_wan_delay` (200ms) cũng được bổ sung để phục vụ bài test 2 chiều.
+3. **Phân Tích Khả Năng Tương Thích Của `FaultAgent.java` Với `CATALINA_OPTS`:**
+   - **Cơ chế nạp:** `FaultAgent.java` được biên dịch và nạp động vào PID tiến trình Tomcat JVM thông qua Java Dynamic Attach API (`VirtualMachine.attach(pid)` và `vm.loadAgent(...)`).
+   - **Không xung đột với OpenTelemetry Java Agent:** OTel Java Agent (`opentelemetry-javaagent.jar`) được nạp qua `-javaagent:` trong `CATALINA_OPTS` từ thời điểm khởi động máy chủ JVM và sử dụng ByteBuddy để cài đặt `ClassFileTransformer` can thiệp vào mã bytecode (Servlet/JDBC/HTTP). Trong khi đó, `FaultAgent` chỉ khởi tạo một luồng người dùng (Daemon Thread) độc lập chạy tính toán CPU hoặc chiếm dụng mảng byte `List<byte[]>` thông thường, hoàn toàn không can thiệp vào cấu trúc lớp bytecode của ứng dụng. Do đó, hai tác nhân hoạt động song song mà không gây ra bất kỳ xung đột kỹ thuật nào.
 
 ---
 
@@ -210,6 +250,56 @@ graph LR
 | **Thế mạnh xử lý** | Bắt tức thì các sự cố "chết cứng" (Hard failures): Pod bị `OOMKilled`, container khởi động lại liên tục, liveness probe trả về HTTP 500/404. | Bắt các sự cố "chết từ từ" (Soft degradation): Rò rỉ RAM dần dần trước khi chạm trần, độ trễ mạng WAN tăng từ 10ms lên 80ms nhưng chưa chạm ngưỡng cảnh báo cứng. |
 | **Độ sâu phân tích RCA** | Chụp snapshot log của Pod và trạng thái tài nguyên K8s gửi trực tiếp vào kênh Telegram. | Phân rã độ trễ dấu vết thực thi phân tán qua Tempo, chỉ rõ đích danh trễ do WAN, do dịch vụ hay do MySQL. |
 | **Kênh giao tiếp** | Tin nhắn Telegram có định dạng Rich Card kèm nút bấm tương tác. | Đầu ra dạng REST API, JSON Log Report và sẵn sàng xuất metric ngược lại Prometheus TSDB. |
+
+### 5.1. Cơ Chế Tích Hợp Closed-Loop AIOps (Prometheus Exporter & Telegram/Robusta Alert Sink)
+
+Để khép kín vòng lặp AIOps từ lúc phát hiện bất thường đến trực quan hóa và phản ứng sự cố, kiến trúc Closed-Loop AIOps đã được hiện thực hóa qua 3 trụ cột kỹ thuật:
+
+```mermaid
+flowchart LR
+    AIEngine["AI Anomaly Detector<br/>(detector.py)"]
+    
+    subgraph ExporterPlane["1. Metrics Feedback Loop"]
+        PromServer["PrometheusMetricsServer<br/>(:9108/metrics)"]
+        PrometheusHub["Prometheus Hub<br/>(Scrape Job: ai-engine)"]
+        GrafanaUI["Grafana Panel 7<br/>(red-metrics.json)"]
+    end
+
+    subgraph NotificationPlane["2. Incident Notification Loop"]
+        TelegramSink["TelegramAlertSink<br/>(Rate-limited cooldown)"]
+        TelegramBot["Telegram Channel / SRE On-Call<br/>(Markdown Rich Alert)"]
+    end
+
+    AIEngine -->|Update Metrics| PromServer
+    PromServer -->|Scrape 5s| PrometheusHub
+    PrometheusHub -->|PromQL| GrafanaUI
+
+    AIEngine -->|Khi Verdict == ALERT| TelegramSink
+    TelegramSink -->|HTTPS POST| TelegramBot
+```
+
+1. **Embedded Prometheus Metrics Exporter (`PrometheusMetricsServer`):**
+   - Tích hợp một máy chủ HTTP đa luồng (`http.server.ThreadingHTTPServer`) chạy trên cổng `9108` (tùy biến qua `--metrics-port 9108`), không phụ thuộc vào thư viện bên ngoài.
+   - Định dạng dữ liệu chuẩn OpenMetrics / Prometheus Text-based:
+     - `ai_anomaly_likelihood_percent{cloud_provider, service_name, model}`: Điểm xác suất bất thường $0\% - 100\%$.
+     - `ai_reconstruction_error{cloud_provider, service_name, model}`: Sai số tái tạo MSE của Universal Autoencoder.
+     - `ai_rca_component_latency_ms{cloud_provider, service_name, component="wan|self|db"}`: Bóc tách độ trễ từ vết Tempo.
+     - `ai_detector_verdict{verdict="HEALTHY|ALERT|UNKNOWN"}`: Cờ trạng thái phán quyết tức thời (1 hoặc 0).
+     - `ai_probe_latency_ms{status}`: Độ trễ của Synthetic E2E WebUI Probe.
+   - Đã cấu hình thêm scrape job `ai-engine` tại `k8s/base/metrics-thanos/01-configmap-prometheus.yaml` nhắm tới `host.k3d.internal:9108` và `ai-engine.monitoring.svc.cluster.local:9108`.
+
+2. **Trực Quan Hóa Closed-Loop Trên Grafana (`red-metrics.json` Panel 7):**
+   - Đã bổ sung **Panel 7** vào [red-metrics.json](file:///d:/Workstation/HCMUS/Grade4/01_TTDATN_K23/Tuần%203/multicloud-monitoring/k8s/base/visualization-grafana/dashboards/red-metrics.json): *"AIOps Proactive Anomaly Likelihood & Distributed Trace RCA Decomposition"*.
+   - Sử dụng **Dual Y-Axis (Trục Y kép)**: Trục trái hiển thị xác suất bất thường (`percent`, 0 - 100%), trục phải hiển thị độ trễ các thành phần phân rã RCA (`ms`: trễ mạng WAN, thời gian tự thân, thời gian MySQL). Kỹ sư SRE chỉ cần nhìn vào biểu đồ là biết ngay dịch vụ nào bất thường và nguyên nhân gốc rễ là do đâu.
+
+3. **Telegram Alert Sink Giàu Ngữ Cảnh (`TelegramAlertSink`):**
+   - Tự động nạp thông tin `TELEGRAM_BOT_TOKEN` và `TELEGRAM_CHAT_ID` từ biến môi trường hoặc tự động quét từ file `.env` gốc của dự án.
+   - Khi `verdict == "ALERT"`: Định dạng và phát đi bản tin cảnh báo cấu trúc cao chứa:
+     - 📍 Thực thể bị ảnh hưởng (`cloud_provider:service_name`).
+     - 📊 Điểm Likelihood (%) và Reconstruction MSE.
+     - 🔍 Bằng chứng suy diễn nguyên nhân gốc rễ (RCA Causes).
+     - ⏱️ Phân rã độ trễ $T_{\text{WAN}}$, $T_{\text{self}}$, $T_{\text{DB}}$.
+   - **Cơ chế chống spam (Cooldown):** Áp dụng thời gian chờ 60 giây giữa các lần gửi cho cùng một thực thể, ngăn chặn nghẽn thông báo khi xảy ra sự cố kéo dài.
 
 ---
 
@@ -241,3 +331,4 @@ Việc hợp nhất nhánh **AI Anomaly Detection** vào nhánh tích hợp `fea
 - Toàn bộ hạ tầng k3d, cấu hình mạng WAN mô phỏng, PKI mTLS 1.3 và bộ 7 Dashboards Grafana SRE được bảo toàn nguyên vẹn.
 - Toàn bộ mã nguồn, cấu hình và trọng số của module AI Anomaly Detection V3 đã sẵn sàng phục vụ các bài toán đo lường và đánh giá khoa học.
 - Hệ thống đã sẵn sàng bước vào **Phase 4: Workload Testing, AI/ML Sampling & Anomaly Detection, SLO Validation**.
+

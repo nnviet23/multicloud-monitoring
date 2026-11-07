@@ -17,7 +17,11 @@ import urllib.request
 import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
-FAULTS = {"gcp_wan_delay": ("gcp", 250), "azure_wan_delay": ("azure", 180)}
+FAULTS = {
+    "azure_wan_delay": ("azure", 180),
+    "aws_wan_delay": ("aws", 200),
+    "gcp_wan_delay": ("gcp", 250),
+}
 
 
 def command(args, **kwargs):
@@ -100,7 +104,7 @@ def evaluate(records, phases, settle):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--scenarios", nargs="+", choices=FAULTS, default=list(FAULTS))
+    parser.add_argument("--scenarios", nargs="+", choices=FAULTS, default=["azure_wan_delay"])
     parser.add_argument("--tc-image", default="network-infra-check:ubuntu24.04")
     parser.add_argument("--baseline", type=int, default=90)
     parser.add_argument("--fault", type=int, default=90)

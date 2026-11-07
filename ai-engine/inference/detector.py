@@ -29,6 +29,8 @@ import time
 import json
 import yaml
 import signal
+import threading
+import http.server
 import urllib.request
 import urllib.error
 import urllib.parse
@@ -239,7 +241,7 @@ class PrometheusVectorClient:
         now = time.time()
         self.fast_metrics = {}
         for side in ("server", "client"):
-            dimensions = "le, cloud_provider, service_name" + (", http_response_status_code" if side == "server" else "")
+            dimensions = "le, cloud_provider, service_name" + (", http_response_status_code, http_status_code" if side == "server" else "")
             query = (f"sum by ({dimensions}) (http_{side}_request_duration_seconds_bucket "
                      f"and on (cloud_provider, service_name, host_name) ({ACTIVE_JVM_PODS}))")
             failures_before = len(self.query_failures)
@@ -260,7 +262,8 @@ class PrometheusVectorClient:
                     continue
                 buckets = grouped.setdefault(key, {})
                 buckets[bound] = buckets.get(bound, 0.0) + count
-                if side == "server" and math.isinf(bound) and labels.get("http_response_status_code", "").startswith("5"):
+                status_code = labels.get("http_response_status_code") or labels.get("http_status_code", "")
+                if side == "server" and math.isinf(bound) and status_code.startswith("5"):
                     errors[key] = errors.get(key, 0.0) + count
             for key in entities:
                 eid = ":".join(key)
@@ -688,12 +691,198 @@ def synthesize_multicloud_rca(
     return deduped[:4]
 
 
+class PrometheusMetricsServer:
+    """
+    Lightweight, embedded HTTP server serving Prometheus metrics at /metrics
+    Zero additional third-party dependencies required.
+    """
+    def __init__(self, port=9108):
+        self.port = port
+        self.server = None
+        self.thread = None
+        self.payload = ""
+        self._lock = threading.Lock()
+        if port and port > 0:
+            self._start()
+
+    def update_metrics(self, payload: str):
+        with self._lock:
+            self.payload = payload
+
+    def _start(self):
+        parent = self
+
+        class MetricsHandler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path in ("/metrics", "/metrics/"):
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+                    self.end_headers()
+                    with parent._lock:
+                        data = parent.payload.encode("utf-8")
+                    self.wfile.write(data)
+                elif self.path in ("/-/healthy", "/healthz"):
+                    self.send_response(200)
+                    self.end_headers()
+                    self.wfile.write(b"OK\n")
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+
+            def log_message(self, format, *args):
+                pass  # Suppress HTTP access logging
+
+        try:
+            self.server = http.server.ThreadingHTTPServer(("0.0.0.0", self.port), MetricsHandler)
+            self.thread = threading.Thread(target=self.server.serve_forever, daemon=True, name="PrometheusMetricsServer")
+            self.thread.start()
+            print(f"[AIOps-Metrics] Prometheus Exporter active at http://0.0.0.0:{self.port}/metrics", flush=True)
+        except Exception as err:
+            print(f"[Warning] Failed to start Prometheus Metrics Server on port {self.port}: {err}", flush=True)
+
+    def close(self):
+        if self.server:
+            try:
+                self.server.shutdown()
+                self.server.server_close()
+            except Exception:
+                pass
+
+
+def format_prometheus_metrics(sample_record, entity_results, trace_summary, probe_ms, probe_ok):
+    lines = []
+    lines.append("# HELP ai_anomaly_likelihood_percent AI anomaly probability (0-100) per microservice entity")
+    lines.append("# TYPE ai_anomaly_likelihood_percent gauge")
+    for (cp, sn), res in entity_results.items():
+        lk = res.get("likelihood_pct", 0.0)
+        lines.append(f'ai_anomaly_likelihood_percent{{cloud_provider="{cp}",service_name="{sn}",model="universal_autoencoder"}} {lk:.2f}')
+
+    lines.append("# HELP ai_reconstruction_error Reconstruction MSE of the autoencoder")
+    lines.append("# TYPE ai_reconstruction_error gauge")
+    for (cp, sn), res in entity_results.items():
+        mse = res.get("mse", 0.0)
+        lines.append(f'ai_reconstruction_error{{cloud_provider="{cp}",service_name="{sn}",model="gru_autoencoder"}} {mse:.6f}')
+
+    lines.append("# HELP ai_rca_component_latency_ms Decomposed latency from Tempo distributed trace spans")
+    lines.append("# TYPE ai_rca_component_latency_ms gauge")
+    for link, lag in trace_summary.get("wan_links", {}).items():
+        lines.append(f'ai_rca_component_latency_ms{{component="wan",target="{link}"}} {lag:.2f}')
+    for ent, st in trace_summary.get("self_times", {}).items():
+        cp, _, sn = ent.partition(":")
+        lines.append(f'ai_rca_component_latency_ms{{cloud_provider="{cp}",service_name="{sn}",component="self"}} {st:.2f}')
+    db_ms = trace_summary.get("db_time_ms", 0.0)
+    lines.append(f'ai_rca_component_latency_ms{{cloud_provider="azure",service_name="teastore-persistence",component="db"}} {db_ms:.2f}')
+
+    lines.append("# HELP ai_detector_verdict Current detector verdict (1=active)")
+    lines.append("# TYPE ai_detector_verdict gauge")
+    verdict = sample_record.get("verdict", "HEALTHY")
+    lines.append(f'ai_detector_verdict{{verdict="HEALTHY"}} {1 if verdict == "HEALTHY" else 0}')
+    lines.append(f'ai_detector_verdict{{verdict="ALERT"}} {1 if verdict == "ALERT" else 0}')
+    lines.append(f'ai_detector_verdict{{verdict="UNKNOWN"}} {1 if verdict == "UNKNOWN" else 0}')
+
+    lines.append("# HELP ai_probe_latency_ms Synthetic end-to-end multi-cloud probe latency")
+    lines.append("# TYPE ai_probe_latency_ms gauge")
+    status_label = "ok" if probe_ok else "failed"
+    lines.append(f'ai_probe_latency_ms{{status="{status_label}"}} {probe_ms:.2f}')
+
+    return "\n".join(lines) + "\n"
+
+
+class TelegramAlertSink:
+    """
+    Sends structured AIOps alerts with Root Cause Analysis to Telegram Bot channel.
+    Rate-limited per entity to avoid channel spam during sustained outages.
+    """
+    def __init__(self, token=None, chat_id=None, cooldown_seconds=60):
+        self.token = token or os.environ.get("TELEGRAM_BOT_TOKEN")
+        self.chat_id = chat_id or os.environ.get("TELEGRAM_CHAT_ID")
+        self.cooldown_seconds = cooldown_seconds
+        self.last_sent = {}
+
+        if not self.token or self.token.startswith("CHANGE_ME"):
+            self._load_env_fallback()
+
+        self.configured = bool(self.token and self.chat_id
+                               and not self.token.startswith("CHANGE_ME")
+                               and not str(self.chat_id).startswith("CHANGE_ME"))
+        if self.configured:
+            print(f"[AIOps-Telegram] Alert Sink configured (Chat ID: {self.chat_id})", flush=True)
+        else:
+            print("[AIOps-Telegram] Alert Sink disabled (token/chat_id unconfigured or placeholder)", flush=True)
+
+    def _load_env_fallback(self):
+        try:
+            env_path = os.path.abspath(os.path.join(ai_engine_root, "..", ".env"))
+            if os.path.isfile(env_path):
+                with open(env_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("TELEGRAM_BOT_TOKEN="):
+                            self.token = line.split("=", 1)[1].strip().strip('"').strip("'")
+                        elif line.startswith("TELEGRAM_CHAT_ID="):
+                            self.chat_id = line.split("=", 1)[1].strip().strip('"').strip("'")
+        except Exception:
+            pass
+
+    def send_alert(self, entity_id, likelihood_pct, mse, verdict, causes, trace_summary):
+        if not self.configured:
+            return
+        now = time.time()
+        last = self.last_sent.get(entity_id, 0.0)
+        if now - last < self.cooldown_seconds:
+            return
+
+        causes_text = "\n".join(f"  • {c}" for c in causes) if causes else "  • Soft degradation / Uncorrelated deviation"
+        wan_links = trace_summary.get("wan_links", {})
+        top_wan = max(wan_links.values()) if wan_links else 0.0
+        self_times = trace_summary.get("self_times", {})
+        top_self = self_times.get(entity_id, 0.0)
+        db_ms = trace_summary.get("db_time_ms", 0.0)
+
+        msg = (
+            "🚨 *[AI-OPS ALERT] Multi-Cloud Anomaly Detected*\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📍 *Target Entity*: `{entity_id}`\n"
+            f"📊 *Likelihood*: `{likelihood_pct:.1f}%` (MSE: `{mse:.4f}`)\n"
+            f"⚡ *Verdict*: `{verdict}` (Sustained Anomaly)\n\n"
+            f"🔍 *Root Cause Evidence (RCA)*:\n{causes_text}\n\n"
+            "⏱️ *Tempo Trace Decomposition*:\n"
+            f"  • Cross-Cloud WAN Lag: `{top_wan:.1f}ms`\n"
+            f"  • Microservice Self-Exec: `{top_self:.1f}ms`\n"
+            f"  • Database Query Time: `{db_ms:.1f}ms`\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "💡 *Recommendation*: Inspect edge WAN shaping or database slow queries."
+        )
+
+        try:
+            url = f"https://api.telegram.org/bot{self.token}/sendMessage"
+            payload = json.dumps({
+                "chat_id": self.chat_id,
+                "text": msg,
+                "parse_mode": "Markdown",
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                url, data=payload,
+                headers={"Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                if resp.status == 200:
+                    self.last_sent[entity_id] = now
+                    print(f"[AIOps-Telegram] Alert dispatched successfully for {entity_id}", flush=True)
+        except Exception as e:
+            print(f"[AIOps-Telegram] Failed to send Telegram alert: {e}", flush=True)
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Multi-Cloud Real-Time Anomaly Detector & Trace RCA Engine (V3)")
     parser.add_argument("--config", default="ai-engine/configs/model_config.yaml", help="Path to config YAML")
     parser.add_argument("--interval", type=int, default=6, help="Inference polling interval in seconds")
     parser.add_argument("--max-samples", type=int, default=0, help="Stop automatically after N cycles (0 = infinite)")
     parser.add_argument("--summary-out", default="", help="Optional path to save JSON test summary")
+    parser.add_argument("--metrics-port", type=int, default=9108, help="Prometheus metrics exporter port (default 9108, 0 to disable)")
+    parser.add_argument("--telegram-token", default="", help="Telegram Bot Token for alerts")
+    parser.add_argument("--telegram-chat-id", default="", help="Telegram Chat ID for alerts")
+    parser.add_argument("--telegram-cooldown", type=int, default=60, help="Cooldown in seconds between alerts for same entity")
     return parser.parse_args()
 
 
@@ -783,6 +972,12 @@ def main():
     endpoints = cfg.get("observability_endpoints", {})
     prom_client = PrometheusVectorClient(endpoints.get("prometheus_url", "http://localhost:9090"))
     tempo_analyzer = TempoTraceAnalyzer(endpoints.get("tempo_url", "http://localhost:3200"))
+    metrics_server = PrometheusMetricsServer(port=args.metrics_port) if args.metrics_port > 0 else None
+    alert_sink = TelegramAlertSink(
+        token=args.telegram_token,
+        chat_id=args.telegram_chat_id,
+        cooldown_seconds=args.telegram_cooldown,
+    )
     entity_buffers = {}
     recovery = LatencyRecovery()
     sample_idx = 0
@@ -1087,6 +1282,21 @@ def main():
                 "entity_mse_map": {k: round(v["mse"], 5) for k, v in entity_results.items()},
             })
 
+            rec = stats_summary["records"][-1]
+            if metrics_server:
+                prom_text = format_prometheus_metrics(rec, entity_results, trace_summary, probe_ms, probe_ok)
+                metrics_server.update_metrics(prom_text)
+
+            if verdict == "ALERT" and alert_sink.configured:
+                alert_sink.send_alert(
+                    entity_id=worst_entity_id,
+                    likelihood_pct=float(dw_res.get("likelihood_pct", 100.0) or 100.0),
+                    mse=float(max_entity_mse),
+                    verdict=verdict,
+                    causes=top_causes,
+                    trace_summary=trace_summary,
+                )
+
             if args.max_samples > 0 and sample_idx >= args.max_samples:
                 print(f"\n[Detector] Reached target {args.max_samples} samples. Finishing run...", flush=True)
                 break
@@ -1103,6 +1313,8 @@ def main():
             with open(args.summary_out, "w", encoding="utf-8") as f:
                 json.dump(stats_summary, f, indent=2)
             print(f"[Detector] Saved V3 test summary JSON to {args.summary_out}", flush=True)
+        if metrics_server:
+            metrics_server.close()
         prom_client.close()
         tempo_analyzer.close()
         print("[Detector] Shutdown complete.", flush=True)

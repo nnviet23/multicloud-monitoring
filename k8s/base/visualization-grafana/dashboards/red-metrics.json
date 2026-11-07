@@ -292,6 +292,99 @@
           }
         ]
       }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "id": 7,
+      "title": "AIOps Proactive Anomaly Likelihood & Distributed Trace RCA Decomposition",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "max by (cloud_provider, service_name) (ai_anomaly_likelihood_percent)",
+          "legendFormat": "{{cloud_provider}}:{{service_name}} Anomaly Likelihood (%)",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "max by (target) (ai_rca_component_latency_ms{component=\"wan\"})",
+          "legendFormat": "WAN Lag: {{target}} (ms)",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "max by (service_name) (ai_rca_component_latency_ms{component=\"self\"})",
+          "legendFormat": "Self-Exec: {{service_name}} (ms)",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "max by (component) (ai_rca_component_latency_ms{component=\"db\"})",
+          "legendFormat": "Database Query Time (ms)",
+          "range": true,
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2 },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byFrameRefID", "options": "B" },
+            "properties": [
+              { "id": "custom.axisPlacement", "value": "right" },
+              { "id": "unit", "value": "ms" }
+            ]
+          },
+          {
+            "matcher": { "id": "byFrameRefID", "options": "C" },
+            "properties": [
+              { "id": "custom.axisPlacement", "value": "right" },
+              { "id": "unit", "value": "ms" }
+            ]
+          },
+          {
+            "matcher": { "id": "byFrameRefID", "options": "D" },
+            "properties": [
+              { "id": "custom.axisPlacement", "value": "right" },
+              { "id": "unit", "value": "ms" }
+            ]
+          }
+        ]
+      }
     }
   ],
   "refresh": "5s",

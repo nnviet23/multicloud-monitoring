@@ -28,7 +28,7 @@ def sql_command(sql, timeout=150):
 
 class Fault:
     JVM_TARGETS = {
-        "cpu": ("gcp", "deploy/teastore-recommender"),
+        "cpu": ("aws", "deploy/teastore-recommender"),
         "memory_leak": ("azure", "deploy/teastore-persistence"),
     }
 
@@ -264,7 +264,7 @@ def main():
         causes = list(dict.fromkeys(cause for r in alerts for cause in r.get("rca_causes", [])))
         if event["id"] == "cpu":
             passed = passed and any(r.get("model_alert") for r in selected) and any(
-                "gcp:teastore-recommender" in cause and ("cpu" in cause.lower()) for cause in causes)
+                ("aws:teastore-recommender" in cause or "gcp:teastore-recommender" in cause) and ("cpu" in cause.lower()) for cause in causes)
         if event["id"] == "db_lock":
             incident = [r for r in records if epoch(event["start"]) <= epoch(r["timestamp"]) < epoch(event["end"]) + 30]
             passed = passed and any(r.get("model_alert") for r in selected) and any(

@@ -48,3 +48,13 @@ data:
               k8s_cluster_name: hub-k3d
               cloud_provider: hub
 
+      - job_name: 'ai-engine'
+        scrape_interval: 5s
+        honor_labels: true
+        static_configs:
+          - targets: ['host.k3d.internal:9108', 'ai-engine.monitoring.svc.cluster.local:9108']
+            labels:
+              app: ai-engine
+              k8s_cluster_name: hub-k3d
+              cloud_provider: hub
+
