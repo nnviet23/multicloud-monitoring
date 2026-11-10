@@ -17,7 +17,8 @@
 6. [Đánh giá hiện trạng & Đề xuất chuẩn hóa hệ thống Skills (`.agent/skills/`)](#6-đánh-giá-hiện-trạng--đề-xuất-chuẩn-hóa-hệ-thống-skills-agentskills)
 7. [Đề xuất bổ sung & Cập nhật hệ thống Rules (`.agent/rules/`, `AGENTS.md`, `PLAN.md`)](#7-đề-xuất-bổ-sung--cập-nhật-hệ-thống-rules-agentrules-agentsmd-planmd)
 8. [Đề xuất cải tiến kiến trúc mã nguồn & cấu hình OTel Collector theo chiến lược SigNoz](#8-đề-xuất-cải-tiến-kiến-trúc-mã-nguồn--cấu-hình-otel-collector-theo-chiến-lược-signoz)
-9. [Lộ trình triển khai cụ thể chờ người dùng phê duyệt (Actionable Roadmap for Approval)](#9-lộ-trình-triển-khai-cụ-thể-chờ-người-dùng-phê-duyệt-actionable-roadmap-for-approval)
+9. [Lộ trình triển khai cụ thể đã được phê duyệt & hoàn thành](#9-lộ-trình-triển-khai-cụ-thể-chờ-người-dùng-phê-duyệt-actionable-roadmap-for-approval)
+10. [Rà Soát Chuyên Sâu Đợt 2: Đề Xuất Cải Tiến Đột Phá Bộ Dashboards, Service Graph & Quản Trị Chi Phí](#10-rà-soát-chuyên-sâu-đợt-2-đề-xuất-cải-tiến-đột-phá-bộ-dashboards-service-graph--quản-trị-chi-phí)
 
 ---
 
@@ -467,3 +468,289 @@ Dưới đây là bảng tổng hợp các đầu việc cụ thể phân chia t
 
 > [!IMPORTANT]
 > **Kính gửi bạn xem xét:** Toàn bộ đề xuất trên đã được ghi nhận chi tiết vào tệp `docs/progress/02_solution_plan.md`. Bạn vui lòng đọc qua và phản hồi chấp thuận (hoặc yêu cầu điều chỉnh). Khi nhận được sự đồng thuận của bạn, tôi sẽ tiến hành thực thi chuẩn xác từng bước!
+
+
+---
+
+## 10. Rà Soát Chuyên Sâu Đợt 2: Đề Xuất Cải Tiến Đột Phá Bộ Dashboards, Service Graph & Quản Trị Chi Phí
+
+Thực hiện yêu cầu rà soát kỹ lưỡng một lần nữa dựa trên kho tài liệu kỹ thuật SigNoz (`docs/progress/05_SigNoz_strategy.md`), chúng tôi đã kiểm tra từng dòng cấu hình của 7 tệp JSON Dashboard trong `k8s/base/visualization-grafana/dashboards/` và đối chiếu với năng lực thực tế của Grafana, Thanos, Loki, Tempo.
+
+Kết quả rà soát phát hiện **4 khoảng trống kỹ thuật lớn (Technical Gaps)** và chúng tôi đề xuất 4 giải pháp cải tiến đột phá dưới đây:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│ 4 TRỌNG TÂM CẢI TIẾN ĐỢT 2 LẤY CẢM HỨNG TỪ SIGNOZ                      │
+├────────────────────────────────────────────────────────────────────────┤
+│ 1. Dashboard Variables: Biến lọc động ($cluster, $service, $env)       │
+│ 2. Enriched Service Graph: Donut Arcs Xanh/Đỏ & Real Latency trên Edges │
+│ 3. Tempo TraceQL Integration: Bổ sung Tracing vào logs-traces-deepdive │
+│ 4. Dashboard Thứ 8 Mới: Multi-Cloud Telemetry Ingestion & Cost Meter   │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 10.1. Khoảng Trống 1: Bộ 7 Dashboards Đang Bị "Tĩnh" Vì Thiếu Biến Lọc Động (Dashboard Variables / Templating)
+
+#### A. Phân tích hiện trạng
+Khi kiểm tra thuộc tính `"templating"` trên cả 7 dashboards hiện tại:
+* `system-topology.json`: `"templating": { "list": [] }`
+* `red-metrics.json`: `"templating": { "list": [] }`
+* `k8s-infrastructure.json`: `"templating": { "list": [] }`
+* `logs-traces-deepdive.json`: `"templating": { "list": [] }`
+* `mc-executive-overview.json`: `"templating": { "list": [] }`
+* `slo-governance.json`: `"templating": { "list": [] }`
+* `wan-telemetry.json`: `"templating": { "list": [] }`
+
+**Hậu quả:** Toàn bộ dashboards hiện đang ở trạng thái hiển thị "cố định" (hardcoded aggregations). Người vận hành khi mở một dashboard không thể:
+* Chọn xem riêng dữ liệu của cụm `aws-k3d`, `azure-k3d`, hoặc `hub-k3d`.
+* Chọn cô lập một vi dịch vụ cụ thể (VD: chỉ xem RED metrics của `teastore-webui` hoặc `teastore-persistence`).
+* Lọc theo môi trường `deployment.environment.name`.
+
+Trong khi đó, triết lý cốt lõi của SigNoz là: **Mọi màn hình giám sát đều có thanh lọc ngữ cảnh trên đỉnh (Context Filter Bar)**.
+
+#### B. Đề xuất giải pháp
+Bổ sung khối `templating.list` chuẩn hóa cho cả 7 dashboards, sử dụng các truy vấn PromQL linh hoạt:
+1. **Biến Cụm (`$cluster`):**
+   * Truy vấn: `label_values(k8s_cluster_name)`
+   * Tùy chọn: Bật `includeAll: true` (mặc định chọn `All`) và `multi: true`.
+2. **Biến Dịch vụ (`$service`):**
+   * Truy vấn: `label_values(traces_service_graph_request_total, server)`
+   * Tùy chọn: Bật `includeAll: true` và `multi: true`.
+3. **Biến Môi trường (`$environment`):**
+   * Truy vấn: `label_values(deployment_environment_name)` (hoặc fallback `label_values(k8s_cluster_name)`).
+
+Sau khi thêm biến, các câu lệnh PromQL trong panels sẽ được gắn điều kiện lọc:
+$$\texttt{sum by (server) (rate(traces\_service\_graph\_request\_total\{server=~"\$service", k8s\_cluster\_name=~"\$cluster"\}[1m]))}$$
+
+---
+
+### 10.2. Khoảng Trống 2: Service Graph Thiếu Vòng Donut Arcs Xanh/Đỏ & Cạnh Kết Nối Bị Hardcode
+
+#### A. Phân tích hiện trạng Panel 1 (`system-topology.json`)
+Trong `system-topology.json`, panel `nodeGraph` đang cấu hình:
+1. **Tại các Nodes (Target A):**
+   * Chỉ thiết lập `title`, `subtitle`, và `mainStat` (tên node).
+   * **Thiếu hoàn toàn hai trường `arc__passed` và `arc__failed`:** Trong Grafana NodeGraph, `arc__passed` (màu xanh lá) và `arc__failed` (màu đỏ) vẽ nên vòng tròn Donut bao quanh biểu tượng của từng node để biểu thị tỷ lệ thành công/thất bại. Vì thiếu 2 trường này, các node hiện chỉ có viền xám tĩnh, không phản ánh được node nào đang bị lỗi!
+2. **Tại các Cạnh kết nối (Target B - Edges):**
+   * Đang sử dụng câu lệnh gán chuỗi tĩnh: `"mainStat", "Active Link"`.
+   * **Hậu quả:** Người dùng nhìn vào sơ đồ chỉ thấy chữ "Active Link" chung chung, không biết lưu lượng thực tế là bao nhiêu req/s và độ trễ trên đường truyền là bao nhiêu ms!
+
+#### B. Đề xuất nâng cấp NodeGraph chuẩn SigNoz Service Map
+1. **Tại Nodes:** Bổ sung tính toán tỷ lệ thành công và tỷ lệ thất bại từ `traces_service_graph_request_total` và `traces_service_graph_request_failed_total`:
+   * `arc__failed`: Tỷ lệ lỗi $\frac{\text{Failed RPS}}{\text{Total RPS}}$.
+   * `arc__passed`: Tỷ lệ thành công $1 - \text{arc\_\_failed}$.
+   * Khi tiêm lỗi (như HTTP 5xx trên `teastore-webui` hoặc MySQL lock trên `teastore-db`), viền của node tương ứng sẽ **chuyển ngay sang màu đỏ rực rỡ**, hệt như cơ chế của SigNoz!
+2. **Tại Edges:** Thay thế chữ `"Active Link"` bằng thông số kỹ thuật thực tế:
+   * `mainStat`: Lưu lượng cuộc gọi thời gian thực (`reqps`, VD: `48.5 req/s`).
+   * `secondaryStat`: Thời gian phản hồi trung bình hoặc độ trễ mạng WAN (`ms`, VD: `14.2 ms`).
+
+---
+
+### 10.3. Khoảng Trống 3: `logs-traces-deepdive.json` Hoàn Toàn Vắng Bóng Tín Hiệu Tracing
+
+#### A. Phân tích hiện trạng
+Mặc dù dashboard mang tên **"Centralized Logs & Tracing Correlation Deepdive"**, nhưng khi mở tệp cấu hình:
+* 100% panels bên trong đều sử dụng datasource `loki-ds` (5 panel hiển thị log volume, warning log rate, anomaly logs count, và log streams).
+* **Hoàn toàn không có bất kỳ panel nào truy vấn Grafana Tempo (`tempo-ds`)!** Người dùng không thể xem được danh sách các trace bị lỗi, không thể xem Waterfall spans, và không thể tra cứu Trace ID từ dashboard này.
+
+#### B. Đề xuất giải pháp
+Bổ sung 2 panels Tracing chuẩn mực sử dụng nguồn dữ liệu `tempo-ds`:
+1. **Panel Tracing 1: Slow & Error Distributed Traces Explorer (TraceQL):**
+   * Loại panel: `traces` (hoặc `table` kết hợp TraceQL).
+   * Datasource: `tempo-ds` (Port `:3200`).
+   * Truy vấn TraceQL:
+     ```traceql
+     { status = error || duration > 1.5s }
+     ```
+   * Hiển thị: Danh sách các trace có lỗi hoặc vi phạm SLO độ trễ, kèm theo Trace ID, Service Name, Root Span Operation Name, Duration, và Start Time.
+2. **Panel Tracing 2: Trace Spans Waterfall & Latency Heatmap:**
+   * Cho phép nhấp trực tiếp vào một Trace ID bất kỳ để mở rộng cây thực thi (Spans Waterfall: WebUI $\rightarrow$ Auth $\rightarrow$ Persistence $\rightarrow$ MySQL) ngay trong Grafana, phân tách rõ ràng độ trễ mạng WAN liên cụm và thời gian thực thi nội tại của từng hàm Java.
+
+---
+
+### 10.4. Khoảng Trống 4: Thiếu Liên Kết Chéo 360° (Data Links / Cross-Signal Correlation)
+
+#### A. Phân tích hiện trạng
+Trong SigNoz, trải nghiệm quan sát là **liền mạch (seamless drill-down)**:
+* Nhấp vào một node trên Service Map $\rightarrow$ Tự động mở chi tiết RED Metrics của dịch vụ đó.
+* Nhìn thấy một đỉnh nhọn độ trễ trên biểu đồ Latency $\rightarrow$ Nhấp chuột nhảy ngay sang danh sách Traces tương ứng tại đúng thời điểm đó.
+* Nhấp vào Trace ID $\rightarrow$ Nhảy sang Logs của đúng Service và Container đó.
+
+Hiện tại trên Grafana của chúng ta, các panels chưa cấu hình thuộc tính `dataLinks`. Người vận hành muốn chuyển từ xem Topology sang xem Log phải copy tên service thủ công và tự chuyển trang.
+
+#### B. Đề xuất giải pháp
+Cấu hình thuộc tính `dataLinks` trong `fieldConfig`:
+1. **Tại NodeGraph (`system-topology`):**
+   * Thiết lập Data Link trên Node:
+     * Tiêu đề: *"View RED Golden Signals for ${__data.fields.id}"*
+     * URL: `/d/mc-red-metrics?var-service=${__data.fields.id}&var-cluster=${__data.fields.detail__cluster}&from=${__from}&to=${__to}`
+   * Thiết lập Data Link thứ 2:
+     * Tiêu đề: *"Explore Traces & Logs for ${__data.fields.id}"*
+     * URL: `/d/mc-logs-traces-deepdive?var-service=${__data.fields.id}&from=${__from}&to=${__to}`
+2. **Tại Biểu đồ Lỗi (`red-metrics`):**
+   * Thiết lập Data Link trên đường biểu diễn:
+     * Tiêu đề: *"Investigate Error Logs for ${__field.name}"*
+     * URL: `/d/mc-logs-traces-deepdive?var-service=${__field.name}&from=${__from}&to=${__to}`
+
+---
+
+### 10.5. Đề Xuất Đột Phá: Xây Dựng Dashboard Thứ 8 — "Multi-Cloud Telemetry Ingestion, Cardinality & Cost Meter" (`mc-cost-telemetry.json`)
+
+Lấy cảm hứng trực tiếp từ module `10_Cost Meter` và `11_Cost Control` của SigNoz (`docs/other-reference/SigNozDocs/SigNoz_Docs_Categorized/10_Cost Meter`), chúng tôi đề xuất bổ sung một Dashboard hoàn toàn mới:
+
+* **Tên Dashboard:** `Multi-Cloud Telemetry Ingestion, Cardinality & Cost Meter`
+* **UID:** `mc-cost-telemetry`
+* **Giá trị nghiên cứu:** Đây là **đóng góp khoa học then chốt cho Luận văn tốt nghiệp**. Luận văn của chúng ta đánh giá kiến trúc Hub-Spoke dựa trên 5 trụ cột: *Coverage, Accuracy, Latency, Security, và Cost*. Dashboard này sẽ trực quan hóa toàn bộ số liệu về chi phí và hiệu quả tối ưu hóa dữ liệu viễn trắc.
+
+```mermaid
+graph TD
+    subgraph Cost_Dashboard ["Dashboard: mc-cost-telemetry (8 Panels Cốt Lõi)"]
+        P1["Panel 1 & 2: Ingestion Throughput\n(Bytes/s, MB/h theo AWS, Azure, Hub)"]
+        P2["Panel 3: Trace Volume Reduction Waterfall\n(Raw Spans -> Edge Dropped -> Hub Sampled)"]
+        P3["Panel 4: Metrics Ingestion Rate\n(Samples/s theo Cụm & Job)"]
+        P4["Panel 5: Top 10 High-Cardinality Metrics\n(Bảng xếp hạng chuỗi thời gian nhiều nhãn nhất)"]
+        P5["Panel 6: Logs Ingestion Rate\n(Lines/s & Bytes/s trong Loki)"]
+        P6["Panel 7: Multi-Cloud Egress Cost Model\n(Ước tính chi phí truyền mạng WAN $/tháng)"]
+        P7["Panel 8: OTel Collector Buffer & Health\n(Queue size, memory limiter, dropped points)"]
+    end
+```
+
+#### Chi Tiết 8 Panels Của Dashboard Mới:
+1. **Panel 1 (Stat):** Tổng băng thông viễn trắc nạp vào hệ thống hiện tại (MB/s) và dự phóng dung lượng lưu trữ 30 ngày (GB/tháng).
+2. **Panel 2 (Timeseries):** Lưu lượng nạp viễn trắc thời gian thực phân bổ theo 3 cụm (`aws-k3d`, `azure-k3d`, `hub-k3d`).
+3. **Panel 3 (Timeseries - Trace Reduction Waterfall):**
+   * Đường A: Tốc độ span sinh ra từ TeaStore (chưa qua lọc).
+   * Đường B: Số lượng spans bị loại bỏ bởi Spoke Edge Pre-filter (`filter/drop_noise`).
+   * Đường C: Số lượng spans thực tế được lưu vào Tempo sau Hub Tail-sampling.
+   * $\rightarrow$ *Chứng minh trực quan hiệu quả tiết giảm hơn 70% dung lượng nạp!*
+4. **Panel 4 (Timeseries):** Tốc độ nạp số liệu (Metrics Ingestion Rate - Samples/s) đo lường từ Prometheus TSDB.
+5. **Panel 5 (Table - High Cardinality Inspector):** Bảng kiểm kê Top 10 chỉ số có số lượng chuỗi thời gian (Time Series) cao nhất, giúp phát hiện sớm các nhãn động gây phình bộ nhớ TSDB:
+   $$\texttt{topk(10, count by (\_\_name\_\_) (\{\_\_name\_\_=~".+"\}))}$$
+6. **Panel 6 (Timeseries):** Tốc độ nạp nhật ký (Logs Ingestion Rate - Lines/s và Throughput KB/s) đo lường từ Loki.
+7. **Panel 7 (Gauge & Stat - Multi-Cloud Egress Cost Simulator):**
+   * Áp dụng công thức tính chi phí truyền dữ liệu liên đám mây của AWS và Azure (đơn giá chuẩn: \$0.09 / GB truyền qua Internet/WAN):
+     $$\text{Estimated Monthly Cost (\$)} = \left(\text{WAN Egress Rate (Bytes/s)} \times 86400 \times 30 \div 10^9\right) \times 0.09$$
+   * So sánh chi phí giữa kịch bản *Không nén/Không lọc* với kịch bản *Phương án A (Edge-Filtered + Batch Ingestion)* để đưa vào bảng kết quả của báo cáo tốt nghiệp.
+8. **Panel 8 (Timeseries - Collector Pipeline Health):**
+   * Giám sát mức sử dụng bộ nhớ của OTel Collector (`otelcol_process_memory_rss`).
+   * Số lượng dữ liệu bị rớt do nghẽn hàng đợi (`otelcol_processor_dropped_spans`, `otelcol_processor_dropped_metric_points`).
+
+---
+
+### 10.6. Bảng Kế Hoạch Hành Động Đợt 2 Chờ Phê Duyệt
+
+Dưới đây là 4 gói công việc cụ thể. **Kính gửi bạn xem xét và phê duyệt trước khi tiến hành thực thi:**
+
+| Gói công việc | Tệp mục tiêu bị tác động | Nội dung thực thi chi tiết | Mức độ ưu tiên |
+| :--- | :--- | :--- | :---: |
+| **Gói 1: Biến lọc động & Data Links** | Toàn bộ 7 Dashboards hiện tại | Bổ sung `templating.list` (`$cluster`, `$service`, `$environment`) và cấu hình `dataLinks` liên kết chéo 360° | **Cao (P1)** |
+| **Gói 2: Nâng cấp Service Graph** | `system-topology.json` | Đưa QPS & Latency lên cạnh kết nối; bổ sung `arc__passed` & `arc__failed` cho viền Donut Xanh/Đỏ | **Cao (P1)** |
+| **Gói 3: Tích hợp Tempo Tracing** | `logs-traces-deepdive.json` | Bổ sung 2 panels: TraceQL Slow/Error Traces Explorer và Spans Waterfall Viewer qua `tempo-ds` | **Cao (P1)** |
+| **Gói 4: Tạo Dashboard Thứ 8** | `mc-cost-telemetry.json` & Kustomize | Xây dựng Dashboard mới: Multi-Cloud Telemetry Ingestion, Cardinality & Cost Meter | **Cao (P1)** |
+
+> [!IMPORTANT]
+> **Cam kết:** Tôi **chưa can thiệp vào bất kỳ tệp JSON dashboard hay manifest nào**. Bạn vui lòng xem qua toàn bộ phân tích và đề xuất chuyên sâu đợt 2 tại [Mục 10 của `docs/progress/02_solution_plan.md`](file:///d:/Workstation/HCMUS/Grade4/01_TTDATN_K23/Tuần%203/multicloud-monitoring/docs/progress/02_solution_plan.md). Khi bạn phản hồi đồng ý hoặc có điều chỉnh gì thêm, tôi sẽ lập tức triển khai chuẩn xác từng bước một!
+
+---
+
+## 11. Rà Soát Chuyên Sâu Đợt 3: Đề Xuất Hoàn Thiện Chiến Lược SigNoz Tầng Sâu (Pipeline Order, Smart Alerting & Automation Testing)
+
+Sau khi rà soát lại toàn bộ mã nguồn hệ thống (OTel Collector, Prometheus, Thanos, Loki, Tempo, Robusta, và Makefile), đối chiếu với các nguyên lý thiết kế tối ưu nhất từ kho tài liệu kỹ thuật SigNoz (`docs/progress/05_SigNoz_strategy.md`), chúng tôi phát hiện thêm **3 điểm nghẽn kỹ thuật quan trọng** có thể nâng cấp để hệ thống đạt độ hoàn thiện cao nhất cho công trình tốt nghiệp:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│ 3 TRỌNG TÂM ĐỀ XUẤT NÂNG CẤP ĐỢT 3 THEO CHUẨN SIGNOZ                   │
+├────────────────────────────────────────────────────────────────────────┤
+│ 1. Tách Nhánh Pipeline OTel: Bảo toàn 100% QPS cho ServiceGraph       │
+│ 2. Triển khai Prometheus Alerting Rules: Bắt lỗi Absent Data & SLO     │
+│ 3. Hoàn thiện Makefile Master Automation: Hỗ trợ Test Suite Linux/WSL2 │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 11.1. Điểm Nghẽn 1: Trật Tự Xử Lý Spans Trong OTel Hub Collector (Connectors vs Tail-Sampling)
+
+#### A. Phân tích hiện trạng
+Trong cấu hình `k8s/base/otel-collector/gateway/03-configmap.yaml`, pipeline `traces` hiện đang xử lý:
+```yaml
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, transform/normalize_cloud, tail_sampling, batch]
+          exporters: [servicegraph, otlp/tempo, awss3, debug]
+```
+* **Vấn đề kỹ thuật:** Bộ xử lý `tail_sampling` nằm trong danh sách processor trước khi spans đi tới exporter `servicegraph`.
+* **Hệ quả:** Do `tail_sampling` chỉ giữ lại 5% các traces bình thường (routine traces), connector `servicegraph` sẽ tính toán số liệu QPS (`traces_service_graph_request_total`) và Service Graph Topology dựa trên số spans đã bị lấy mẫu thay vì lưu lượng thực tế 100% của người dùng.
+
+#### B. Chiến lược giải quyết học hỏi từ SigNoz
+SigNoz áp dụng mô hình **Dual-Route Traces Processing** (Phân luồng kép viễn trắc):
+1. **Luồng Metrics & Topology:** Toàn bộ spans thô (100% traffic) được đưa vào `servicegraph` connector ngay lập tức để trích xuất chỉ số RED và Topology đầy đủ, chân thực.
+2. **Luồng Storage & Trace TSDB:** Chỉ luồng ghi dấu vết vào Tempo TSDB và Object Storage (MinIO) mới đi qua `tail_sampling` (bảo toàn 100% error spans, 100% high-latency spans > 1500ms, và lấy mẫu 5% spans bình thường).
+
+```mermaid
+flowchart TD
+    In["OTLP Ingestion (100% Spans từ AWS/Azure)"] --> Mem["Memory Limiter & Normalize Cloud"]
+    
+    Mem --> Branch1["Luồng Topology & RED Metrics (100% Traffic)"]
+    Branch1 --> SG["servicegraph connector"]
+    SG --> ThanosRec["Thanos / Prometheus (True QPS & Accurate Latency)"]
+    
+    Mem --> Branch2["Luồng Lưu Trữ Vết Phân Tán (Tối ưu Dung Lượng)"]
+    Branch2 --> Tail["tail_sampling processor\n(100% Error + 100% >1.5s + 5% Routine)"]
+    Tail --> Batch["Batch Processor"]
+    Batch --> Tempo["Tempo TSDB (Tiết kiệm >70% lưu trữ)"]
+    Batch --> S3["MinIO S3 raw-telemetry"]
+```
+
+---
+
+### 11.2. Điểm Nghẽn 2: Thiếu Bộ Luật Cảnh Báo Tự Động (Prometheus Alert Rules) & Absent Data Heartbeat
+
+#### A. Phân tích hiện trạng
+Tệp cấu hình `01-configmap-prometheus.yaml` hiện tại chỉ đóng vai trò thu thập số liệu (Scrape Configs) mà chưa định nghĩa bất kỳ tập luật cảnh báo nào (`rule_files: []`). Pyrra đã hỗ trợ SLO Burn-rate, nhưng ở tầng hạ tầng, mạng WAN và microservices, hệ thống đang thiếu các cảnh báo tự động khi:
+* Một cụm Spoke (`aws-k3d` hoặc `azure-k3d`) bị cô lập mạng hoặc sập Edge Collector (không có telemetry gửi về Hub).
+* Trễ mạng WAN bị nén hoặc suy giảm nghiêm trọng.
+* Collector Pod bị tràn bộ nhớ hoặc rớt dữ liệu.
+
+#### B. Chiến lược học hỏi từ SigNoz (Absent Data & Threshold Alerting)
+SigNoz sở hữu module `02_Alerts` cực kỳ mạnh mẽ với cơ chế phát hiện **"Absent Data / Heartbeat Missing"** và **"Composite Latency Spikes"**. Chúng tôi đề xuất tạo tệp `02-prometheus-rules.yaml` trong `k8s/base/metrics-thanos/` với 4 nhóm luật chuẩn mực:
+
+1. **SpokeClusterHeartbeatAbsent (Critical):** Bắn cảnh báo ngay lập tức nếu không nhận được bất kỳ số liệu nào từ cụm Spoke (`aws-k3d` hoặc `azure-k3d`) trong 2 phút:
+   $$\texttt{absent(up\{cluster="aws-k3d"\} == 1) for: 2m}$$
+2. **MicroserviceHighErrorRate (High):** Tỷ lệ yêu cầu thất bại của một dịch vụ microservice vượt quá 5% trong vòng 2 phút:
+   $$\frac{\sum \text{rate}(\texttt{traces\_service\_graph\_request\_failed\_total}[2m])}{\sum \text{rate}(\texttt{traces\_service\_graph\_request\_total}[2m]) + 0.001} > 0.05$$
+3. **CrossCloudWANLatencyDegraded (High):** Độ trễ P99 liên cụm vượt ngưỡng 1.5 giây trong 2 phút:
+   $$\texttt{histogram\_quantile}(0.99, \sum \text{rate}(\texttt{traces\_service\_graph\_request\_server\_seconds\_bucket}[2m])) > 1.5$$
+4. **OTelCollectorMemoryHigh (Medium):** Bộ nhớ RSS của OTel Collector vượt 85% ngưỡng giới hạn bộ đệm:
+   $$\texttt{otelcol\_process\_memory\_rss} > 400 \times 10^6 \quad (400\text{ MB})$$
+
+---
+
+### 11.3. Điểm Nghẽn 3: Bổ Sung Bộ Lệnh Automation Test Cho Makefile (Hỗ trợ Kiểm Thử Ubuntu/WSL2)
+
+#### A. Phân tích hiện trạng
+Trong `Makefile` master automation hiện tại, các lệnh tập trung vào khởi tạo môi trường (`setup`, `infra`, `deploy`, `verify`, `teardown`), nhưng **thiếu hoàn toàn các lệnh thực thi kiểm thử tự động (test targets)**. Khi chuyển sang môi trường Ubuntu/WSL2, người dùng phải gõ thủ công các lệnh dài hoặc tìm tệp script rời rạc.
+
+#### B. Đề xuất hoàn thiện Makefile
+Bổ sung các target kiểm thử tiêu chuẩn:
+* `make test`: Chạy toàn bộ các bài kiểm thử unit tests, kiểm thử thuật toán AI và kiểm tra tính toàn vẹn hệ thống.
+* `make test-ai`: Chạy riêng kiểm thử bộ máy AI Anomaly Detection Engine V3 (`tests/chaos/test_live_evaluation.py`).
+* `make validate-dashboards`: Script tự động kiểm tra cú pháp JSON của 8/8 Dashboards Grafana.
+* `make validate-kustomize`: Kiểm thử dry-run build Kustomize cho cả 3 cụm (`hub`, `spoke-aws`, `spoke-azure`).
+* `make test-wan`: Thực thi kiểm tra độ trễ mạng WAN qua `ping` và `netem` giữa AWS và Azure.
+
+---
+
+### 11.4. Bảng Kế Hoạch Hành Động Đợt 3 Chờ Phê Duyệt
+
+| Gói công việc | Tệp mục tiêu bị tác động | Nội dung thực thi chi tiết | Mức độ ưu tiên |
+| :--- | :--- | :--- | :---: |
+| **Gói 1: Tách Nhánh Pipeline OTel** | `k8s/base/otel-collector/gateway/03-configmap.yaml` | Tách luồng Spans: Nạp ServiceGraph trước khi lọc mẫu để bảo toàn 100% QPS thực tế | **Cao (P1)** |
+| **Gói 2: Prometheus Alert Rules** | `k8s/base/metrics-thanos/02-prometheus-rules.yaml` & `03-statefulset-prometheus.yaml` | Triển khai 4 nhóm luật cảnh báo chuẩn SigNoz (Absent Data, Error Rate, WAN Latency, Buffer Pressure) | **Cao (P1)** |
+| **Gói 3: Nâng cấp Master Makefile** | `Makefile` | Bổ sung `test`, `test-ai`, `validate-dashboards`, `validate-kustomize` và `test-wan` | **Trung bình (P2)** |
+
+> [!NOTE]
+> **Kính gửi bạn xem xét:** Toàn bộ 3 đề xuất trên đã được cập nhật chi tiết vào `docs/progress/02_solution_plan.md`. Bạn vui lòng xem qua và cho mình biết ý kiến duyệt nhé! Nếu bạn đồng ý, mình sẽ triển khai ngay, hoặc nếu bạn muốn giữ nguyên và tập trung kiểm thử bên phía Ubuntu/WSL2, mình sẽ tiến hành test các lệnh Makefile trên môi trường Ubuntu ngay lập tức!

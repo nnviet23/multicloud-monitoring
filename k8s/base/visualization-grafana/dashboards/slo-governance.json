@@ -141,10 +141,17 @@
         {
           "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
           "editorMode": "code",
-          "expr": "sum by (server) (rate(traces_service_graph_request_failed_total[5m]))",
+          "expr": "sum by (server) (rate(traces_service_graph_request_failed_total{server=~\"$service\"}[5m]))",
           "legendFormat": "{{server}} Errors/sec",
           "range": true,
           "refId": "A"
+        }
+      ],
+      "links": [
+        {
+          "title": "Investigate Error Traces & Logs (${__field.name})",
+          "url": "/d/mc-logs-traces-deepdive?var-service=${__field.name}&var-cluster=${cluster}&from=${__from}&to=${__to}",
+          "targetBlank": true
         }
       ],
       "fieldConfig": {
@@ -155,7 +162,98 @@
   "refresh": "5s",
   "schemaVersion": 39,
   "tags": ["multicloud", "slo", "pyrra", "sre", "errorbudget"],
-  "templating": { "list": [] },
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "thanos-query-ds"
+        },
+        "definition": "label_values(up, cluster)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Cluster",
+        "multi": true,
+        "name": "cluster",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(up, cluster)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "thanos-query-ds"
+        },
+        "definition": "label_values(traces_service_graph_request_total, server)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Service",
+        "multi": true,
+        "name": "service",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(traces_service_graph_request_total, server)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "production",
+          "value": "production"
+        },
+        "hide": 0,
+        "includeAll": true,
+        "label": "Environment",
+        "multi": false,
+        "name": "environment",
+        "options": [
+          {
+            "selected": false,
+            "text": "All",
+            "value": "$__all"
+          },
+          {
+            "selected": true,
+            "text": "production",
+            "value": "production"
+          },
+          {
+            "selected": false,
+            "text": "staging",
+            "value": "staging"
+          }
+        ],
+        "query": "production, staging",
+        "skipUrlSync": false,
+        "type": "custom"
+      }
+    ]
+  },
   "time": { "from": "now-15m", "to": "now" },
   "timezone": "browser",
   "title": "SLO Management & Error Budget Governance",

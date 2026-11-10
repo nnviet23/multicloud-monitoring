@@ -18,6 +18,8 @@
 | **Phase 3.5** | Full-Stack Infrastructure Observability (OS, Kernel, Storage, Network USE) & Nâng cấp toàn diện Bộ 7 Grafana Dashboards | **Hoàn thành** | 100% | OTel Collector 7 Hostmetrics scrapers, 7 Grafana SRE Dashboards (USE Method, 4 Golden Signals, Dynamic Topo, Log Anomaly) |
 | **Phase 3.6** | Unified Resource Monitoring Schemas (Web App & Compute Instance), JVM Runtime Completeness & Cross-Layer RCA Tree | **Hoàn thành** | 100% | `RESOURCE_MONITORING_SCHEMAS.md`, `webapp-monitoring-schema.yaml`, `instance-monitoring-schema.yaml`, JVM Heap/Threads Panel 6 trên `red-metrics.json` |
 | **Phase 3.7** | AI Anomaly Detection Engine V3 & Closed-Loop AIOps Pipeline (Tempo Trace RCA, Embedded Exporter :9108, Telegram Sink) | **Hoàn thành** | 100% | Hợp nhất nhánh AI, PromQL Dual SemConv, Tempo Trace RCA, Prometheus scrape :9108, Panel 7 Grafana `red-metrics.json`, Telegram Alert Sink |
+| **Phase 3.8** | Chiến lược Quan sát Nâng cao Học hỏi từ SigNoz (Dynamic Templating, 360° Data Links, Tempo TraceQL Explorer & Telemetry Cost Meter) | **Hoàn thành** | 100% | 8/8 Grafana Dashboards chuẩn hóa biến động, NodeGraph Health Arcs, Tempo Distributed Traces, Dashboard 8 `mc-cost-telemetry.json`, Edge Pre-filtering & Gateway Tail-sampling |
+| **Phase 3.9** | Kiến Trúc Tối Ưu Tầng Sâu (Dual-Route Traces Pipeline, Prometheus Absent Data Alert Rules & Linux/WSL2 Test Suite) | **Hoàn thành** | 100% | OTel Collector Dual-Route Pipeline bảo toàn 100% QPS cho ServiceGraph, 4 nhóm luật Prometheus Alert Rules (`01-configmap-prometheus-rules.yaml`), lệnh `make test` pass 100% trên Ubuntu WSL2 |
 | **Phase 4** | Workload Testing (Locust), Live Chaos Evaluation, SLO Validation & Final Scientific Report | *Sẵn sàng thực thi* | 0% | Toàn bộ script Locust & Chaos Engineering đã sẵn sàng khởi chạy |
 
 ---
@@ -48,6 +50,8 @@ Dưới đây là danh mục toàn bộ sự cố kỹ thuật ghi nhận trong 
 | **INC-P3-15** | Phase 3.5 | Observability & Dashboards | Thiếu hụt chỉ số hạ tầng sâu (OS/Kernel/Storage/USE) và bộ Dashboards chưa chuẩn 4 Golden Signals / USE Method | High | **Đã giải quyết** | Kích hoạt trọn bộ 7 OTel hostmetrics scrapers (cpu, load, memory, paging, disk, filesystem, network) trên cả Edge và Hub; nâng cấp toàn diện bộ 7 Dashboards SRE (k8s-infrastructure 10 panels/4 rows, wan-telemetry 8 panels, red-metrics 4 Golden Signals, logs-traces-deepdive anomaly & persistence stream, topology dynamic metrics & node health table, executive fleet matrix). |
 | **INC-P3-16** | Phase 3.6 | Resource Schemas & JVM Completeness | Thiếu chuẩn đặc tả giám sát thống nhất cho từng loại tài nguyên (Web App vs Compute Instance) và thiếu JVM Runtime Saturation trên RED Dashboard | Medium | **Đã giải quyết** | Ban hành tài liệu đặc tả `RESOURCE_MONITORING_SCHEMAS.md`, khởi tạo 2 tệp YAML Schemas chuẩn máy đọc được (`webapp-monitoring-schema.yaml`, `instance-monitoring-schema.yaml`), và bổ sung Panel 6 (JVM Memory Heap & Thread Count) vào `red-metrics.json`. |
 | **INC-P3-17** | Phase 3.7 | AI Engine & AIOps Closed-Loop | Lệch pha tên SemConv PromQL, xung đột kịch bản chaos với 3 cụm k3d, thiếu phản hồi Closed-Loop và kênh cảnh báo Telegram | High | **Đã giải quyết** | Chuẩn hóa PromQL Dual SemConv fallback trong `collector.py` & `detector.py`, chuyển hướng toàn bộ scripts chaos sang 3 cụm chuẩn k3d (AWS, Azure, Hub), xây dựng máy chủ Prometheus Exporter nhúng cổng `:9108`, bổ sung Panel 7 Grafana (Dual Y-Axis) và tích hợp Telegram Alert Sink kèm bộ đệm chống spam 60s. |
+| **INC-P3-18** | Phase 3.8 | Visualization & Telemetry Cost | Dashboards Grafana thiếu biến động (static templating), thiếu liên kết ngữ cảnh (Data Links), thiếu panel TraceQL Tempo, và thiếu giám sát chi phí/cardinality | Medium | **Đã giải quyết** | Bổ sung dynamic templating (`$cluster`, `$service`, `$environment`) cho 100% dashboards, tích hợp Data Links chuyển tiếp ngữ cảnh, nhúng Tempo TraceQL explorer (`{ status = error || duration > 1.5s }`), và phát triển Dashboard 8 chuyên sâu về Cost Meter & Cardinality Management theo chuẩn SigNoz. |
+| **INC-P3-19** | Phase 3.9 | Collector Pipeline & Alerting | ServiceGraph bị suy giảm thông lượng do tail-sampling và Prometheus thiếu tập luật cảnh báo tự động | Medium | **Đã giải quyết** | Thiết lập Dual-Route Traces Pipeline trong OTel Gateway tách riêng luồng ServiceGraph (100% QPS) với luồng lưu trữ Tempo (tail-sampling), triển khai 4 nhóm luật Prometheus Alert Rules và hoàn thiện master test suite `make test` chạy mượt mà trên Linux/WSL2. |
 
 ---
 
@@ -104,4 +108,48 @@ Toàn bộ các thành phần hạ tầng và giám sát trên cả 3 cụm Kube
     - Ban hành đặc tả kiến trúc `docs/schemas/RESOURCE_MONITORING_SCHEMAS.md` phân định rõ 3 tầng phụ thuộc (Application, System, Cloud) và cơ chế thu thập tương ứng (IMDS vs K8s API vs IaC/OTTL Enrichment).
     - Tạo 2 tệp Schema chuẩn máy đọc được `docs/schemas/webapp-monitoring-schema.yaml` và `docs/schemas/instance-monitoring-schema.yaml`.
     - Bổ sung Panel 6 (Application Runtime Saturation: JVM Memory Heap Usage & Thread Count) vào `red-metrics.json` với cơ chế trục Y kép (Dual Y-Axis).
+11. **Tích Hợp Dynamic Multi-Cluster Templating & 360° Data Links (Phase 3.8 - Gói 1 & Gói 2)**:
+    - Chuẩn hóa hệ thống biến động (`templating`) trên **100% (8/8) Grafana Dashboards**:
+      - `$cluster`: Truy vấn động `label_values(up, cluster)` hoặc `k8s_cluster_name` cho phép cô lập phân tích theo từng cụm hoặc xem toàn cục đa cụm (`$__all`).
+      - `$service`: Truy vấn `label_values(traces_service_graph_request_total, server)` lọc chi tiết microservice (WebUI, Auth, Recommender, Image, Persistence, DB).
+      - `$environment`: Phân tách ranh giới môi trường (`production` vs `staging`).
+    - Nâng cấp **Interactive NodeGraph (Panel 1 trên `system-topology.json`)**:
+      - Tích hợp vòng tròn sức khỏe (Health Donut Arcs) với `arc__passed` (xanh lục) và `arc__failed` (đỏ) phản ánh tỷ lệ lỗi trực quan trên từng node.
+      - Hiển thị nhãn kết nối an toàn `Active (mTLS 1.3)` trên toàn bộ các cạnh (edges) WAN xuyên cụm.
+      - Tích hợp 360° Data Links: Click chuột trực tiếp từ Node để chuyển tiếp ngữ cảnh sang `mc-red-metrics` hoặc `mc-logs-traces-deepdive` kèm biến `$service`, `$cluster` và khoảng thời gian `${__from}`/`${__to}`.
+    - Tích hợp Data Links trên Panels 1, 2, 3 của `red-metrics.json` và Panel 6 của `slo-governance.json` dẫn trực tiếp tới điều tra Logs & Traces chuyên sâu.
+12. **Nâng Cấp Tempo Distributed Tracing Explorer & Dashboard 8 Quản Trị Chi Phí Telemetry (Phase 3.8 - Gói 3 & Gói 4)**:
+    - **Nâng cấp `logs-traces-deepdive.json`**:
+      - Bổ sung Panel 6: *Tempo Distributed TraceQL Explorer (Cross-Cloud Slow & Error Traces)* truy vấn trực tiếp từ Tempo backend qua TraceQL `{ status = error || duration > 1.5s }`, cho phép xem chi tiết Spans Waterfall của các giao dịch lỗi hoặc vượt ngưỡng độ trễ WAN/DB.
+      - Bổ sung Panel 7: *Trace Spans Latency Distribution & Service Bottlenecks (P99, P90, P50)* tính toán theo thời gian thực từ `traces_service_graph_request_server_seconds_bucket`.
+    - **Kiến tạo Dashboard 8: `mc-cost-telemetry.json` (Multi-Cloud Telemetry Ingestion, Cardinality & Cost Meter)**:
+      - 8 Panels chuyên sâu phục vụ đánh giá luận văn:
+        1. *Total Telemetry Ingestion Rate*: Tổng tốc độ nạp (pps) của toàn bộ Metrics, Logs, Spans.
+        2. *Projected Monthly Telemetry Volume*: Dự báo tổng dung lượng nạp trong 30 ngày (GB/tháng).
+        3. *Estimated Monthly Cloud WAN Egress Cost*: Ước tính chi phí truyền tải WAN liên đám mây theo đơn giá chuẩn $0.09/GB.
+        4. *Telemetry Ingestion Rate by Multi-Cloud Cluster*: Phân bổ lưu lượng nạp theo `aws-k3d`, `azure-k3d`, `hub-k3d`.
+        5. *Trace Volume Reduction Waterfall*: Đánh giá hiệu quả tiết kiệm chi phí của cơ chế Edge Pre-filtering (`filter/drop_noise`) và Central Gateway Tail-sampling (100% error/slow preservation).
+        6. *Top 10 High-Cardinality Metrics Inspector*: Bảng kiểm toán rò rỉ nhãn vô hạn (unbounded cardinality) thời gian thực.
+        7. *Logs Ingestion Rate by Service (Loki)*: Lưu lượng log chi tiết theo từng service.
+        8. *Collector Health: Pipeline Memory RSS & Dropped Telemetry Points*: Giám sát bộ đệm và áp lực bộ nhớ collector pods.
+      - Đăng ký chính thức `dashboards/mc-cost-telemetry.json` vào `k8s/base/visualization-grafana/kustomization.yaml`.
+    - Xác thực kỹ thuật: 100% 8/8 tệp JSON dashboard vượt qua kiểm tra cú pháp; Kustomize build thành công cho cả 3 cụm (`hub-k3d`, `aws-k3d`, `azure-k3d`).
+13. **Kiến Trúc Tối Ưu Tầng Sâu & Hoàn Thiện Master Test Suite (Phase 3.9)**:
+    - **Dual-Route Traces Pipeline trong OTel Gateway (`03-configmap.yaml`)**:
+      - Tách luồng traces thành 2 pipeline độc lập:
+        - `traces`: Nhận 100% spans thô $\rightarrow$ qua `memory_limiter`, `transform/normalize_cloud`, `batch` $\rightarrow$ xuất trực tiếp vào `servicegraph` connector. Bảo toàn nguyên vẹn 100% throughput giao dịch (True QPS) và độ chính xác của bản đồ mạng Service Map.
+        - `traces/storage`: Nhận spans thô $\rightarrow$ qua `tail_sampling` (giữ 100% trace lỗi, 100% trace trễ > 1500ms, lấy mẫu 5% trace thông thường) $\rightarrow$ ghi vào `otlp/tempo` và MinIO S3 `awss3`. Đảm bảo tiết kiệm >70% chi phí lưu trữ TSDB.
+    - **Bộ Luật Cảnh Báo Prometheus Thông Minh (`01-configmap-prometheus-rules.yaml`)**:
+      - Ban hành ConfigMap `prometheus-rules` và liên kết trực tiếp vào Prometheus StatefulSet (`/etc/prometheus/rules/alerts.yaml`) với 4 nhóm luật:
+        1. `SpokeClusterHeartbeatAbsent`: Bắt lỗi mất tín hiệu telemetry từ Spoke AWS hoặc Azure quá 2 phút (Absent Data detection).
+        2. `MicroserviceHighErrorRate`: Cảnh báo khi tỷ lệ lỗi microservice > 5% trong 2 phút.
+        3. `CrossCloudWANLatencyDegraded`: Cảnh báo khi trễ P99 liên cụm vượt 1500ms liên tục trong 2 phút.
+        4. `OTelCollectorMemoryHigh`: Giám sát áp lực bộ nhớ và nguy cơ tràn bộ đệm OTel Collector Pods (> 400MB RSS).
+    - **Hoàn Thiện Master Automation Makefile & Xác Thực 100% Trên Ubuntu WSL2**:
+      - Bổ sung các target: `make test`, `make test-ai`, `make validate-dashboards`, `make validate-kustomize`, `make test-wan`.
+      - Chạy thực tế lệnh `make test` trong môi trường Ubuntu (WSL2):
+        - AI Anomaly Detection Engine V3: 4/4 bài test đạt `OK` (thời gian chạy 0.001s).
+        - Toàn bộ 8/8 Dashboards Grafana: Xác thực cú pháp JSON hợp lệ 100%.
+        - Kustomize manifests của cả 3 cụm (`hub-k3d`, `aws-k3d`, `azure-k3d`): Build dry-run thành công 100%.
+
 

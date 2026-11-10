@@ -185,8 +185,12 @@ data:
       pipelines:
         traces:
           receivers: [otlp]
+          processors: [memory_limiter, transform/normalize_cloud, batch]
+          exporters: [servicegraph]
+        traces/storage:
+          receivers: [otlp]
           processors: [memory_limiter, transform/normalize_cloud, tail_sampling, batch]
-          exporters: [servicegraph, otlp/tempo, awss3, debug]
+          exporters: [otlp/tempo, awss3, debug]
         metrics:
           receivers: [otlp, hostmetrics]
           processors: [memory_limiter, transform/normalize_cloud, batch]

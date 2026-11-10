@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - 01-configmap-prometheus.yaml
+  - 01-configmap-prometheus-rules.yaml
   - 02-pvc.yaml
   - 03-statefulset-prometheus.yaml
   - 04-service-prometheus.yaml

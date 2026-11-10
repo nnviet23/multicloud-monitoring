@@ -31,10 +31,17 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "sum by (server) (rate(traces_service_graph_request_total[1m]))",
+          "expr": "sum by (server) (rate(traces_service_graph_request_total{server=~\"$service\"}[1m]))",
           "legendFormat": "{{server}}",
           "range": true,
           "refId": "A"
+        }
+      ],
+      "links": [
+        {
+          "title": "Investigate Service Logs & Traces (${__field.name})",
+          "url": "/d/mc-logs-traces-deepdive?var-service=${__field.name}&var-cluster=${cluster}&from=${__from}&to=${__to}",
+          "targetBlank": true
         }
       ],
       "fieldConfig": {
@@ -66,10 +73,17 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "sum by (server) (rate(traces_service_graph_request_failed_total[1m]))",
+          "expr": "sum by (server) (rate(traces_service_graph_request_failed_total{server=~\"$service\"}[1m]))",
           "legendFormat": "{{server}} failed",
           "range": true,
           "refId": "A"
+        }
+      ],
+      "links": [
+        {
+          "title": "Investigate Service Error Logs & Traces (${__field.name})",
+          "url": "/d/mc-logs-traces-deepdive?var-service=${__field.name}&var-cluster=${cluster}&from=${__from}&to=${__to}",
+          "targetBlank": true
         }
       ],
       "fieldConfig": {
@@ -102,7 +116,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000",
+          "expr": "histogram_quantile(0.99, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket{server=~\"$service\"}[1m]))) * 1000",
           "legendFormat": "P99 {{server}}",
           "range": true,
           "refId": "A"
@@ -113,7 +127,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000",
+          "expr": "histogram_quantile(0.90, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket{server=~\"$service\"}[1m]))) * 1000",
           "legendFormat": "P90 {{server}}",
           "range": true,
           "refId": "B"
@@ -124,10 +138,17 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000",
+          "expr": "histogram_quantile(0.50, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket{server=~\"$service\"}[1m]))) * 1000",
           "legendFormat": "P50 {{server}}",
           "range": true,
           "refId": "C"
+        }
+      ],
+      "links": [
+        {
+          "title": "Investigate High Latency Traces (${__field.name})",
+          "url": "/d/mc-logs-traces-deepdive?var-service=${__field.name}&var-cluster=${cluster}&from=${__from}&to=${__to}",
+          "targetBlank": true
         }
       ],
       "fieldConfig": {
@@ -396,7 +417,96 @@
     "teastore"
   ],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "thanos-query-ds"
+        },
+        "definition": "label_values(up, cluster)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Cluster",
+        "multi": true,
+        "name": "cluster",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(up, cluster)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "thanos-query-ds"
+        },
+        "definition": "label_values(traces_service_graph_request_total, server)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Service",
+        "multi": true,
+        "name": "service",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(traces_service_graph_request_total, server)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "production",
+          "value": "production"
+        },
+        "hide": 0,
+        "includeAll": true,
+        "label": "Environment",
+        "multi": false,
+        "name": "environment",
+        "options": [
+          {
+            "selected": false,
+            "text": "All",
+            "value": "$__all"
+          },
+          {
+            "selected": true,
+            "text": "production",
+            "value": "production"
+          },
+          {
+            "selected": false,
+            "text": "staging",
+            "value": "staging"
+          }
+        ],
+        "query": "production, staging",
+        "skipUrlSync": false,
+        "type": "custom"
+      }
+    ]
   },
   "time": {
     "from": "now-15m",
