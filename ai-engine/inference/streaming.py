@@ -128,11 +128,14 @@ class TraceEvidence:
         if observed_at > now + 5 or now - observed_at > self.ttl:
             return
         db_ms = summary.get("db_time_ms", 0.0)
+        db_entity = summary.get("db_entity") or "azure:teastore-persistence"
+        db_target = summary.get("db_target") or "MariaDB"
         if (math.isfinite(db_ms) and db_ms >= 80.0
-                and observed_at > self.cleared_at.get("azure:teastore-persistence", -math.inf)):
+                and observed_at > self.cleared_at.get(db_entity, -math.inf)):
             if self.db is None or observed_at > self.db["observed_at"]:
                 self.db = {"db_time_ms": db_ms, "trace_id": trace_id,
-                           "observed_at": observed_at, "entity": "azure:teastore-persistence"}
+                           "observed_at": observed_at, "entity": db_entity,
+                           "target": db_target}
         for link, delay in summary.get("wan_links", {}).items():
             if not math.isfinite(delay) or delay < 65.0 or " (" not in link:
                 continue
@@ -171,12 +174,14 @@ class TraceEvidence:
             self.db = None
             return None
         entity = entity_results.get(self.db["entity"])
-        webui = entity_results.get("aws:teastore-webui")
         if entity is None:
             return None
         raw = entity["raw"]
-        webui_slow = webui is not None and webui["raw"].get("server_latency_p95", 0.0) > 0.50
-        if raw["server_latency_p95"] <= 0.05 and entity.get("mse", 0.0) <= 0.35 and not webui_slow:
+        any_entrypoint_slow = any(
+            r["raw"].get("server_latency_p95", 0.0) > 0.50
+            for r in entity_results.values()
+        )
+        if raw["server_latency_p95"] <= 0.05 and entity.get("mse", 0.0) <= 0.35 and not any_entrypoint_slow:
             return None
         return {**self.db, "age_seconds": round(now - self.db["observed_at"], 1)}
 

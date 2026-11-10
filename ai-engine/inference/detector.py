@@ -74,6 +74,22 @@ ENTITY_FEATURE_COLS = [
     "gc_pause_rate",
 ]
 
+EXCLUDED_INFRA_SERVICES = {
+    "otel-collector",
+    "otel-collector-spoke",
+    "otel-collector-hub",
+    "otel-collector-edge",
+    "otel-collector-gateway",
+    "prometheus",
+    "tempo",
+    "loki",
+    "grafana",
+    "minio",
+    "pyrra",
+    "robusta",
+    "coredns",
+}
+
 STOP_REQUESTED = False
 
 
@@ -170,7 +186,7 @@ class PrometheusVectorClient:
             metric = item.get("metric", {})
             cp = metric.get("cloud_provider", "").strip()
             sn = metric.get("service_name", "").strip()
-            if cp and sn and sn.startswith("teastore-"):
+            if cp and sn and sn not in EXCLUDED_INFRA_SERVICES and not sn.startswith("unknown_service"):
                 entities.add((cp, sn))
         return sorted(entities)
 
@@ -350,11 +366,13 @@ class TempoTraceAnalyzer:
             "self_times": {},
             "server_times": {},
             "db_time_ms": 0.0,
+            "db_entity": "",
+            "db_target": "MariaDB",
         }
         try:
             now_sec = int(time.time())
             start_sec = now_sec - 45
-            q_str = f'{{ resource.service.name = "teastore-webui" && duration > {int(min_duration_ms)}ms }}'
+            q_str = f'{{ duration > {int(min_duration_ms)}ms }}'
             params = urllib.parse.urlencode({
                 "q": q_str,
                 "start": start_sec,
@@ -370,13 +388,12 @@ class TempoTraceAnalyzer:
                 with urllib.request.urlopen(fallback_url, timeout=3.0) as resp:
                     traces = json.loads(resp.read().decode("utf-8")).get("traces", [])
 
-            # Sort traces prioritizing full multi-cloud traces (with recommender & persistence) and newest startTime
+            # Sort traces prioritizing multi-service traces and newest startTime
             def trace_sort_key(tr):
                 s_stats = tr.get("serviceStats", {})
-                has_rec = 1 if "teastore-recommender" in s_stats else 0
-                has_per = 1 if "teastore-persistence" in s_stats else 0
+                span_breadth = len(s_stats)
                 st_nano = int(tr.get("startTimeUnixNano", 0) or 0)
-                return (has_rec + has_per, st_nano)
+                return (span_breadth, st_nano)
 
             traces.sort(key=trace_sort_key, reverse=True)
 
@@ -388,7 +405,7 @@ class TempoTraceAnalyzer:
                 with urllib.request.urlopen(t_url, timeout=3.0) as resp:
                     t_data = json.loads(resp.read().decode("utf-8"))
                 local = {"wan_links": {}, "entity_wan_ms": {}, "self_times": {},
-                         "server_times": {}, "db_time_ms": 0.0}
+                         "server_times": {}, "db_time_ms": 0.0, "db_entity": "", "db_target": "MariaDB"}
                 self._decompose_single_trace(t_data, local)
                 start = int(tr_meta.get("startTimeUnixNano", 0) or 0) / 1e9
                 observed_at = start + float(tr_meta.get("durationMs", 0) or 0) / 1000
@@ -398,8 +415,12 @@ class TempoTraceAnalyzer:
                     for name in ("wan_links", "entity_wan_ms", "self_times", "server_times"):
                         for key, value in local[name].items():
                             summary[name][key] = max(summary[name].get(key, 0.0), value)
-                    if observed_at > self.evidence.cleared_at.get("azure:teastore-persistence", -math.inf):
-                        summary["db_time_ms"] = max(summary["db_time_ms"], local["db_time_ms"])
+                    db_ent = local.get("db_entity") or "azure:teastore-persistence"
+                    if observed_at > self.evidence.cleared_at.get(db_ent, -math.inf):
+                        if local["db_time_ms"] >= summary["db_time_ms"]:
+                            summary["db_time_ms"] = local["db_time_ms"]
+                            summary["db_entity"] = db_ent
+                            summary["db_target"] = local.get("db_target") or "MariaDB"
                 summary["traces_inspected"] += 1
         except Exception:
             pass
@@ -454,8 +475,11 @@ class TempoTraceAnalyzer:
                     if pid:
                         children_by_parent.setdefault(pid, []).append(span_obj)
 
-                    if db_sys == "mysql" or name.upper().startswith("SELECT "):
-                        summary["db_time_ms"] = max(summary["db_time_ms"], dur_ms)
+                    if bool(db_sys) or name.upper().startswith(("SELECT ", "INSERT ", "UPDATE ", "DELETE ")):
+                        if dur_ms >= summary["db_time_ms"]:
+                            summary["db_time_ms"] = dur_ms
+                            summary["db_entity"] = entity_id
+                            summary["db_target"] = "MariaDB" if db_sys.lower() in ("", "mysql", "mariadb") else db_sys
 
         # Compute T_WAN and T_self across all SERVER spans
         server_spans = [sp for sp in spans_by_id.values() if sp["kind"] == "SPAN_KIND_SERVER"]
@@ -552,10 +576,22 @@ class EntityCalibrator:
     def is_calibrated(self, entity_id):
         return entity_id in self.entities
 
+    def _find_service_fallback(self, entity_id):
+        _, _, sn = entity_id.partition(":")
+        for k, v in self.entities.items():
+            if not k.startswith("__") and k.endswith(f":{sn}") and isinstance(v, dict) and "features" in v:
+                return v["features"]
+        return None
+
     def update_or_standardize(self, entity_id, raw_feature_dict):
         if entity_id not in self.entities:
+            fallback_meta = self._find_service_fallback(entity_id)
             buf = self.calibration_buffers.setdefault(entity_id, [])
-            buf.append(dict(raw_feature_dict))
+            if (fallback_meta is None
+                    or (raw_feature_dict.get("max_pod_cpu_pct", 0.0) < 80.0
+                        and raw_feature_dict.get("server_latency_p95", 0.0) < 0.25
+                        and raw_feature_dict.get("error_rate_5xx", 0.0) <= 0.05)):
+                buf.append(dict(raw_feature_dict))
             if len(buf) >= self.warmup_samples:
                 # Finalize online calibration for new entity
                 cp, sn = entity_id.split(":", 1)
@@ -566,6 +602,8 @@ class EntityCalibrator:
                     q25 = float(np.percentile(vals, 25))
                     q75 = float(np.percentile(vals, 75))
                     iqr = max(float(q75 - q25), float(np.std(vals)), float(self.scale_floors.get(col, 1e-3)))
+                    if fallback_meta and col in fallback_meta:
+                        iqr = max(iqr, float(fallback_meta[col].get("scale", iqr)))
                     feat_stats[col] = {
                         "median": round(med, 6),
                         "iqr": round(iqr, 6),
@@ -587,11 +625,19 @@ class EntityCalibrator:
                 except Exception:
                     pass
                 print(f"[Auto-Calibrator] Completed 30-sample calibration for new entity: {entity_id}")
+            elif fallback_meta:
+                z_vec = []
+                for col in ENTITY_FEATURE_COLS:
+                    mu = float(fallback_meta[col]["median"])
+                    sc = max(float(fallback_meta[col]["scale"]), float(self.scale_floors.get(col, 1e-3)))
+                    z = np.clip((raw_feature_dict[col] - mu) / sc, -self.clip_z, self.clip_z)
+                    z_vec.append(float(z))
+                return np.array(z_vec, dtype=np.float32), True
             else:
                 # Provisional standardization using current buffer median + scale floor
                 z_vec = []
                 for col in ENTITY_FEATURE_COLS:
-                    vals = np.array([b[col] for b in buf], dtype=np.float64)
+                    vals = np.array([b[col] for b in buf], dtype=np.float64) if buf else np.array([raw_feature_dict[col]], dtype=np.float64)
                     med = float(np.median(vals))
                     sc = max(float(np.std(vals)), float(self.scale_floors.get(col, 1.0)))
                     z = np.clip((raw_feature_dict[col] - med) / sc, -self.clip_z, self.clip_z)
@@ -635,9 +681,11 @@ def synthesize_multicloud_rca(
 
     if trace_summary.get("db_time_ms", 0.0) >= 80.0:
         db_ev = trace_summary.get("db_evidence")
+        db_ent = (db_ev.get("entity") if db_ev else None) or trace_summary.get("db_entity") or "azure:teastore-persistence"
+        db_tgt = (db_ev.get("target") if db_ev else None) or trace_summary.get("db_target") or "MariaDB"
         detail = f", trace_age={db_ev['age_seconds']:.0f}s" if db_ev else ""
         candidates.append(
-            f"[DATABASE_BOTTLENECK] azure:teastore-persistence -> MariaDB (T_DB={trace_summary['db_time_ms']:.0f}ms{detail})"
+            f"[DATABASE_BOTTLENECK] {db_ent} -> {db_tgt} (T_DB={trace_summary['db_time_ms']:.0f}ms{detail})"
         )
 
     # 2. Rank entities by their AI reconstruction MSE & z-score profile
@@ -753,13 +801,15 @@ def format_prometheus_metrics(sample_record, entity_results, trace_summary, prob
     lines = []
     lines.append("# HELP ai_anomaly_likelihood_percent AI anomaly probability (0-100) per microservice entity")
     lines.append("# TYPE ai_anomaly_likelihood_percent gauge")
-    for (cp, sn), res in entity_results.items():
-        lk = res.get("likelihood_pct", 0.0)
+    for eid, res in sorted(entity_results.items()):
+        cp, _, sn = eid.partition(":")
+        lk = res.get("likelihood_pct", sample_record.get("likelihood_pct") or 0.0)
         lines.append(f'ai_anomaly_likelihood_percent{{cloud_provider="{cp}",service_name="{sn}",model="universal_autoencoder"}} {lk:.2f}')
 
     lines.append("# HELP ai_reconstruction_error Reconstruction MSE of the autoencoder")
     lines.append("# TYPE ai_reconstruction_error gauge")
-    for (cp, sn), res in entity_results.items():
+    for eid, res in sorted(entity_results.items()):
+        cp, _, sn = eid.partition(":")
         mse = res.get("mse", 0.0)
         lines.append(f'ai_reconstruction_error{{cloud_provider="{cp}",service_name="{sn}",model="gru_autoencoder"}} {mse:.6f}')
 
@@ -1002,9 +1052,18 @@ def main():
             sample_idx += 1
 
             entities, entity_metrics, cloud_wan = prom_client.collect_all_entities()
-            required_entities = set(cfg.get("inference", {}).get("required_entities",
-                [eid for eid in calibrator.entities if not eid.startswith("__")]))
-            missing_entities = sorted(required_entities - {":".join(entity) for entity in entities})
+            discovered_ids = {":".join(entity) for entity in entities}
+            discovered_services = {sn for _, sn in entities}
+            explicit_required = cfg.get("inference", {}).get("required_entities")
+            if explicit_required:
+                missing_entities = sorted(set(explicit_required) - discovered_ids)
+            else:
+                missing_entities = sorted(
+                    eid for eid in calibrator.entities
+                    if not eid.startswith("__")
+                    and eid not in discovered_ids
+                    and eid.split(":", 1)[-1] not in discovered_services
+                )
             telemetry_ok = bool(entities) and not missing_entities and not prom_client.query_failures and all(
                 {"max_pod_cpu_pct", "max_pod_ram_pct"} <= prom_client.metric_presence.get(entity, set())
                 for entity in entities)
@@ -1022,7 +1081,11 @@ def main():
             else:
                 consecutive_slow_probes = 0
 
-            webui_raw = entity_metrics.get(("aws", "teastore-webui"), {})
+            entrypoint_key = next(
+                (k for k in entities if k == ("aws", "teastore-webui") or k[1].endswith(("webui", "frontend", "gateway"))),
+                max(entities, key=lambda k: entity_metrics[k].get("qps", 0.0), default=None),
+            )
+            webui_raw = entity_metrics.get(entrypoint_key, {}) if entrypoint_key else {}
             webui_qps = webui_raw.get("qps", 0.0)
             webui_lat_ms = webui_raw.get("server_latency_p95", 0.0) * 1000.0
             total_qps = sum(m.get("qps", 0.0) for m in entity_metrics.values())
@@ -1040,6 +1103,7 @@ def main():
             entity_results = {}
             refreshed_entities = []
             cpu_refreshed_entities = []
+            db_caller_entity = trace_summary.get("db_entity") or "azure:teastore-persistence"
             for (cp, sn) in entities if telemetry_ok else []:
                 eid = f"{cp}:{sn}"
                 if eid not in stats_summary["discovered_entities"]:
@@ -1052,7 +1116,7 @@ def main():
                 if ent_wan_ms > 32.0 and not fresh.get("client"):
                     excess_wan_sec = (ent_wan_ms - 22.0) / 1000.0
                     raw_dict["client_latency_p95"] = max(raw_dict["client_latency_p95"], excess_wan_sec)
-                if eid == "azure:teastore-persistence" and trace_summary.get("db_time_ms", 0.0) >= 80.0:
+                if eid == db_caller_entity and trace_summary.get("db_time_ms", 0.0) >= 80.0:
                     raw_dict["server_latency_p95"] = max(
                         raw_dict["server_latency_p95"],
                         trace_summary["db_time_ms"] / 1000.0,

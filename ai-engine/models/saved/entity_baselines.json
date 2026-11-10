@@ -486,5 +486,99 @@
         "scale": 0.015
       }
     }
+  },
+  "aws:teastore-auth": {
+    "cloud_provider": "aws",
+    "service_name": "teastore-auth",
+    "sample_count": 30,
+    "features": {
+      "qps": {
+        "median": 2.936333,
+        "iqr": 8.72,
+        "scale": 8.72
+      },
+      "server_latency_p95": {
+        "median": 0.004892,
+        "iqr": 0.058845,
+        "scale": 0.058845
+      },
+      "client_latency_p95": {
+        "median": 0.00475,
+        "iqr": 0.035,
+        "scale": 0.035
+      },
+      "error_rate_5xx": {
+        "median": 0.0,
+        "iqr": 0.1,
+        "scale": 0.1
+      },
+      "max_pod_cpu_pct": {
+        "median": 4.160589,
+        "iqr": 12.0,
+        "scale": 12.0
+      },
+      "max_pod_ram_pct": {
+        "median": 56.848154,
+        "iqr": 19.916675,
+        "scale": 19.916675
+      },
+      "ram_floor_2m_pct": {
+        "median": 46.857994,
+        "iqr": 15.429091,
+        "scale": 15.429091
+      },
+      "gc_pause_rate": {
+        "median": 0.00094,
+        "iqr": 0.015,
+        "scale": 0.015
+      }
+    }
+  },
+  "aws:teastore-recommender": {
+    "cloud_provider": "aws",
+    "service_name": "teastore-recommender",
+    "sample_count": 30,
+    "features": {
+      "qps": {
+        "median": 1.32,
+        "iqr": 5.0,
+        "scale": 5.0
+      },
+      "server_latency_p95": {
+        "median": 0.00475,
+        "iqr": 0.035,
+        "scale": 0.035
+      },
+      "client_latency_p95": {
+        "median": 0.00475,
+        "iqr": 0.035,
+        "scale": 0.035
+      },
+      "error_rate_5xx": {
+        "median": 0.0,
+        "iqr": 0.1,
+        "scale": 0.1
+      },
+      "max_pod_cpu_pct": {
+        "median": 3.444347,
+        "iqr": 12.0,
+        "scale": 12.0
+      },
+      "max_pod_ram_pct": {
+        "median": 67.664097,
+        "iqr": 14.59163,
+        "scale": 14.59163
+      },
+      "ram_floor_2m_pct": {
+        "median": 62.169626,
+        "iqr": 10.126,
+        "scale": 10.126
+      },
+      "gc_pause_rate": {
+        "median": 0.00153,
+        "iqr": 0.015,
+        "scale": 0.015
+      }
+    }
   }
 }

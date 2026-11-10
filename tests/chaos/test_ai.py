@@ -243,6 +243,42 @@ class UnifiedScoringAndLikelihoodCalibrationTests(unittest.TestCase):
         self.assertLess(cal_report["expected_calibration_error"], 0.10)
         self.assertEqual(cal_report["threshold_anchor_prob_pct"], 50.0)
 
+    def test_relocated_service_and_custom_db_bottleneck_rca(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "baselines.json"
+            feats = {k: {"median": 10.0, "iqr": 2.0, "scale": 2.0} for k in ENTITY_FEATURE_COLS}
+            path.write_text(json.dumps({"entities": {"gcp:teastore-recommender": {"features": feats}}}))
+            calibrator = EntityCalibrator(str(path), {k: 1.0 for k in ENTITY_FEATURE_COLS}, warmup_samples=3)
+            raw = {k: 14.0 for k in ENTITY_FEATURE_COLS}
+            raw["max_pod_cpu_pct"] = 14.0
+            raw["server_latency_p95"] = 0.02
+            raw["error_rate_5xx"] = 0.0
+            z, ready = calibrator.update_or_standardize("aws:teastore-recommender", raw)
+            self.assertTrue(ready)
+            self.assertAlmostEqual(float(z[0]), 2.0, places=5)
+
+            causes = synthesize_multicloud_rca(
+                entity_results={"aws:checkoutservice": {
+                    "mse": 1.2,
+                    "feat_losses": np.zeros(len(ENTITY_FEATURE_COLS), dtype=np.float32),
+                    "z_vec": np.zeros(len(ENTITY_FEATURE_COLS), dtype=np.float32),
+                    "raw": {k: 0.0 for k in ENTITY_FEATURE_COLS},
+                }},
+                rca_baselines={},
+                features=ENTITY_FEATURE_COLS,
+                trace_summary={
+                    "wan_links": {},
+                    "self_times": {},
+                    "db_time_ms": 145.0,
+                    "db_entity": "aws:checkoutservice",
+                    "db_target": "postgresql",
+                    "db_evidence": {"entity": "aws:checkoutservice", "target": "postgresql", "age_seconds": 4.0},
+                },
+                probe_ok=True,
+                probe_ms=180.0,
+            )
+            self.assertIn("[DATABASE_BOTTLENECK] aws:checkoutservice -> postgresql (T_DB=145ms, trace_age=4s)", causes)
+
 
 if __name__ == "__main__":
     torch.set_num_threads(1)
