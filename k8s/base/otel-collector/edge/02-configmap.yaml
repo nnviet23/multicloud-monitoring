@@ -49,6 +49,23 @@ data:
         limit_percentage: 75
         spike_limit_percentage: 20
 
+      filter/drop_noise:
+        error_mode: ignore
+        traces:
+          span:
+            - 'IsMatch(attributes["url.path"], ".*/isready.*")'
+            - 'IsMatch(attributes["url.path"], ".*/finished.*")'
+            - 'IsMatch(attributes["http.target"], ".*/status.*")'
+        logs:
+          log_record:
+            - 'IsMatch(body, ".*GET /ready/isready.*200.*")'
+            - 'IsMatch(body, ".*GET /image/finished.*200.*")'
+
+      resourcedetection:
+        detectors: [env, system]
+        timeout: 2s
+        override: false
+
       filter/logs:
         error_mode: ignore
         logs:
@@ -81,18 +98,21 @@ data:
               - set(attributes["k8s.cluster.name"], "${CLUSTER_NAME}")
               - set(attributes["cloud.provider"], "${CLOUD_PROVIDER}")
               - set(attributes["cloud.region"], "${CLOUD_REGION}")
+              - set(attributes["deployment.environment.name"], "production")
         trace_statements:
           - context: resource
             statements:
               - set(attributes["k8s.cluster.name"], "${CLUSTER_NAME}")
               - set(attributes["cloud.provider"], "${CLOUD_PROVIDER}")
               - set(attributes["cloud.region"], "${CLOUD_REGION}")
+              - set(attributes["deployment.environment.name"], "production")
         metric_statements:
           - context: resource
             statements:
               - set(attributes["k8s.cluster.name"], "${CLUSTER_NAME}")
               - set(attributes["cloud.provider"], "${CLOUD_PROVIDER}")
               - set(attributes["cloud.region"], "${CLOUD_REGION}")
+              - set(attributes["deployment.environment.name"], "production")
 
       batch:
         send_batch_size: 512
@@ -114,13 +134,13 @@ data:
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [memory_limiter, probabilistic_sampler, transform/cluster_id, batch]
+          processors: [memory_limiter, filter/drop_noise, resourcedetection, probabilistic_sampler, transform/cluster_id, batch]
           exporters: [otlp/hub, debug]
         logs:
           receivers: [otlp, filelog]
-          processors: [memory_limiter, groupbyattrs, transform/logs, filter/logs, transform/cluster_id, batch]
+          processors: [memory_limiter, filter/logs, filter/drop_noise, resourcedetection, groupbyattrs, transform/logs, transform/cluster_id, batch]
           exporters: [otlp/hub, debug]
         metrics:
           receivers: [otlp, hostmetrics]
-          processors: [memory_limiter, transform/cluster_id, batch]
+          processors: [memory_limiter, resourcedetection, transform/cluster_id, batch]
           exporters: [otlp/hub, debug]

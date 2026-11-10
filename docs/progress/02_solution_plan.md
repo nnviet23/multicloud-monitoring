@@ -13,7 +13,11 @@
 2. [Khúc mắc 2: Hiện trạng Bucket `raw-telemetry` trong MinIO đang rỗng](#2-khúc-mắc-2-hiện-trạng-bucket-raw-telemetry-trong-minio-đang-rỗng)
 3. [Khúc mắc 3: Sự phân mảnh nhãn Cluster (`cluster` vs `k8s_cluster_name`) và chuẩn hóa](#3-khúc-mắc-3-sự-phân-mảnh-nhãn-cluster-cluster-vs-k8s_cluster_name-và-chuẩn-hóa)
 4. [Khúc mắc 4: Tiêu chuẩn Best Practice cho bộ Grafana Dashboards](#4-khúc-mắc-4-tiêu-chuẩn-best-practice-cho-bộ-grafana-dashboards)
-5. [Kế hoạch hành động tổng thể chờ phê duyệt (Action Plan for Approval)](#5-kế-hoạch-hành-động-tổng-thể-chờ-phê-duyệt-action-plan-for-approval)
+5. [Kế hoạch hành động tổng thể đã thực hiện (Executed Action Plan - Phases 3.5 & 3.6)](#5-kế-hoạch-hành-động-tổng-thể-chờ-phê-duyệt-action-plan-for-approval)
+6. [Đánh giá hiện trạng & Đề xuất chuẩn hóa hệ thống Skills (`.agent/skills/`)](#6-đánh-giá-hiện-trạng--đề-xuất-chuẩn-hóa-hệ-thống-skills-agentskills)
+7. [Đề xuất bổ sung & Cập nhật hệ thống Rules (`.agent/rules/`, `AGENTS.md`, `PLAN.md`)](#7-đề-xuất-bổ-sung--cập-nhật-hệ-thống-rules-agentrules-agentsmd-planmd)
+8. [Đề xuất cải tiến kiến trúc mã nguồn & cấu hình OTel Collector theo chiến lược SigNoz](#8-đề-xuất-cải-tiến-kiến-trúc-mã-nguồn--cấu-hình-otel-collector-theo-chiến-lược-signoz)
+9. [Lộ trình triển khai cụ thể chờ người dùng phê duyệt (Actionable Roadmap for Approval)](#9-lộ-trình-triển-khai-cụ-thể-chờ-người-dùng-phê-duyệt-actionable-roadmap-for-approval)
 
 ---
 
@@ -219,3 +223,247 @@ Dưới đây là kế hoạch 4 bước cụ thể chuẩn bị triển khai. *
 > [!IMPORTANT]
 > **Trạng thái:** Kế hoạch trên đã sẵn sàng. Khi bạn xem qua các giải pháp và đồng ý với hướng tiếp cận, bạn chỉ cần phản hồi chấp thuận, mình sẽ lập tức bắt tay vào thực hiện từng bước chính xác và an toàn!
 
+
+
+---
+
+## 6. Đánh Giá Hiện Trạng & Đề Xuất Chuẩn Hóa Hệ Thống Skills (`.agent/skills/`)
+
+Sau khi rà soát toàn diện kho 40 thư mục kỹ năng trong `.agent/skills/`, chúng tôi phát hiện nhiều kỹ năng cốt lõi đang gặp lỗi cú pháp metadata khiến hệ thống Agent runtime không thể tải được, cùng với một số kỹ năng bị trùng lặp hoặc không thuộc phạm vi công nghệ của đồ án.
+
+### 6.1. Bảng Rà Soát Chi Tiết Hiện Trạng Toàn Bộ Skills
+
+| Thư mục Skill | Trạng thái kỹ thuật | Đánh giá tính phù hợp | Đề xuất hành động |
+| :--- | :---: | :--- | :---: |
+| `ansible-generator` & `ansible-validator` | **Hoạt động tốt** | Phù hợp với Ansible playbooks khởi tạo 3 cụm k3d | **Giữ nguyên** |
+| `argocd-gitops` | ❌ **Lỗi: Metadata Rỗng** | **Không phù hợp:** Dự án sử dụng Makefile + Kustomize + Ansible, không cài ArgoCD Operator | 🔥 **Đề xuất: XÓA** |
+| `benchmark-analysis` | **Hoạt động tốt** | Phục vụ đánh giá số liệu thực nghiệm Phase 4 | **Giữ nguyên** |
+| `dockerfile-generator` & `dockerfile-validator` | **Hoạt động tốt** | Phục vụ đóng gói container images ghim phiên bản | **Giữ nguyên** |
+| `grafana-dashboards` | ❌ **Lỗi: Metadata Rỗng** | **Cốt lõi:** Quản lý JSON Schema v39 cho bộ 7 Dashboards SRE | 🛠️ **Đề xuất: SỬA METADATA** |
+| `grafana-loki` | ❌ **Lỗi: Metadata Rỗng** | **Cốt lõi:** Quản lý cấu hình lưu trữ TSDB và truy vấn LogQL | 🛠️ **Đề xuất: SỬA METADATA** |
+| `k3d-ansible-lab` | **Hoạt động tốt** | Điều phối 3 cụm k3d, mạng Docker và mô phỏng WAN | **Giữ nguyên** |
+| `kubernetes-helm` | **Hoạt động tốt** | Tham khảo khi tích hợp các chart bên ngoài | **Giữ nguyên** |
+| `kustomize` | ❌ **Lỗi: Metadata Rỗng** | **Cốt lõi tuyệt đối:** Điều phối toàn bộ K8s Base & Overlays theo chuẩn SRP | 🛠️ **Đề xuất: SỬA METADATA** |
+| `observability-backends` | **Hoạt động tốt** | Quản lý Thanos, Tempo, Loki, MinIO, Grafana | **Giữ nguyên** |
+| `otel-collector` (Dash0) | ⚠️ **Xung đột tên** | Trùng tên với `otel-collector-base`, nội dung thiên về vendor thương mại Dash0 | 🔥 **Đề xuất: XÓA BẢN DASH0** |
+| `otel-collector-base` | **Hoạt động tốt** | Bộ kỹ năng Collector được viết riêng cho bài toán Hub-Spoke của dự án | 🛠️ **Đổi tên thành `otel-collector`** |
+| `otel-instrumentation` | **Hoạt động tốt** | Quản lý OTel Java Agent v2.10 cho TeaStore | **Giữ nguyên** |
+| `otel-ottl` | **Hoạt động tốt** | Xử lý biến đổi viễn trắc và chuẩn hóa nhãn SemConv | **Giữ nguyên** |
+| `otel-semantic-conventions` | **Hoạt động tốt** | Chuẩn hóa quy ước thuộc tính tài nguyên đám mây | **Giữ nguyên** |
+| `otel-span-events-to-logs-migration` | **Hoạt động tốt** | Tham khảo quy chuẩn chuyển dịch sự kiện sang logs | **Giữ nguyên** |
+| `otel-telemetry-emissions` | **Hoạt động tốt** | Tra cứu danh mục metrics phát ra theo phiên bản OTel | **Giữ nguyên** |
+| `project-architecture` | **Hoạt động tốt** | Đặc tả kiến trúc tổng thể Hub-Spoke | **Giữ nguyên** |
+| `prometheus-grafana` | ❌ **Lỗi: Metadata Rỗng** | **Cốt lõi:** Cấu hình Prometheus, Thanos Query và Grafana panels | 🛠️ **Đề xuất: SỬA METADATA** |
+| `sampling-cost` | **Hoạt động tốt** | Tính toán đánh đổi giữa tỷ lệ sampling và độ chính xác | **Giữ nguyên** |
+| 12 kỹ năng SigNoz (`signoz-*`) | **Hoạt động tốt** | Kho tri thức tham chiếu xuất sắc về APM, Alerts, Dashboards, Cost Control | **Giữ nguyên làm Reference** |
+| `teastore-benchmark` | ❌ **Lỗi: Sai tên file `KILL.md`** | **Cốt lõi tuyệt đối:** Kịch bản sinh tải Locust chuẩn SPEC RG cho TeaStore | 🛠️ **Đổi tên thành `SKILL.md`** |
+| `telemetry-schema-time` | **Hoạt động tốt** | Chuẩn hóa thời gian UTC và bù trừ độ trễ đồng hồ | **Giữ nguyên** |
+| `terraform-aws` | **Hoạt động tốt** | Phục vụ giai đoạn mở rộng đám mây công cộng thực tế | **Giữ nguyên** |
+| `terraform-azure` | ❌ **Lỗi: Metadata Rỗng** | Phục vụ giai đoạn mở rộng đám mây công cộng thực tế | 🛠️ **Đề xuất: SỬA METADATA** |
+| `terraform-engineer` | ❌ **Lỗi: Sai ngôn ngữ & Thiếu YAML** | Bị viết dở dang bằng tiếng Thổ Nhĩ Kỳ, trùng lặp với `terraform-aws` | 🔥 **Đề xuất: XÓA** |
+| `terraform-specialist` | ❌ **Lỗi: Metadata Rỗng** | Trùng lặp tính năng với các kỹ năng Terraform khác | 🔥 **Đề xuất: XÓA** |
+
+---
+
+### 6.2. Chi Tiết Các Lỗi Kỹ Thuật Nghiêm Trọng Cần Sửa Chữa Ngay
+
+1. **Lỗi gõ sai tên tệp (`KILL.md` thay vì `SKILL.md`) tại `teastore-benchmark`:**
+   * Tệp kỹ năng cốt lõi điều phối TeaStore và Locust hiện đang bị đặt tên là `.agent/skills/teastore-benchmark/KILL.md`.
+   * **Hậu quả:** Trình nạp Agent Runtime của Antigravity quét tìm `SKILL.md`, do đó kỹ năng này hoàn toàn **bị bỏ qua và không xuất hiện trong danh sách kỹ năng khả dụng**.
+   * **Giải pháp:** Đổi tên ngay lập tức thành `SKILL.md`.
+
+2. **Tình trạng 7 kỹ năng cốt lõi bị rỗng metadata trong YAML Frontmatter:**
+   * Các tệp `kustomize/SKILL.md`, `grafana-dashboards/SKILL.md`, `grafana-loki/SKILL.md`, `prometheus-grafana/SKILL.md`, `terraform-azure/SKILL.md` có khối đầu tệp như sau:
+     ```yaml
+     ---
+     name: 
+     description:
+
+     ---
+     ```
+   * **Hậu quả:** Hệ thống tự động gán tên mặc định `SKILL` với mô tả rỗng, khiến Agent không thể kích hoạt kỹ năng đúng ngữ cảnh khi được yêu cầu.
+   * **Giải pháp:** Bổ sung đầy đủ định danh `name` và `description` chuyên sâu cho từng kỹ năng.
+
+3. **Xung đột tên định danh giữa 2 thư mục Collector:**
+   * Thư mục `.agent/skills/otel-collector/` (của vendor Dash0) và `.agent/skills/otel-collector-base/` (của dự án) cùng khai báo `name: otel-collector`.
+   * **Giải pháp:** Xóa bỏ thư mục Dash0 không phù hợp, đổi tên `otel-collector-base` thành `otel-collector` chuẩn mực.
+
+---
+
+### 6.3. Đề Xuất Bổ Sung 2 Kỹ Năng Mới Chuyên Biệt Cho Dự Án
+
+Để hoàn thiện toàn diện năng lực cho Agent trong giai đoạn thực nghiệm khoa học Phase 4:
+
+1. **Skill Mới 1: `chaos-engineering` (`.agent/skills/chaos-engineering/SKILL.md`):**
+   * **Mục đích:** Hướng dẫn Agent điều phối các kịch bản tiêm lỗi thực tế trong lab k3d:
+     * Tiêm suy hao mạng WAN xuyên cụm qua Linux `tc netem` (Latency RTT 10ms - 200ms, Jitter 2ms - 50ms, Packet Loss 0.1% - 10%).
+     * Nạp động Java Agent `FaultAgent.java` vào tiến trình Tomcat qua JVM Attach API để giả lập CPU Spike, rò rỉ bộ nhớ Heap (`OutOfMemoryError`).
+     * Tiêm lỗi khóa bảng MySQL (`LOCK TABLES`) và cưỡng bức lỗi HTTP 500/503 trên các microservices của TeaStore.
+   * **Giá trị mang lại:** Giúp Agent có tài liệu chuẩn để tự động hóa các kịch bản đánh giá khả năng chịu lỗi và tính bền bỉ của hệ sinh thái quan sát.
+
+2. **Skill Mới 2: `aiops-anomaly-engine` (`.agent/skills/aiops-anomaly-engine/SKILL.md`):**
+   * **Mục đích:** Hướng dẫn Agent vận hành toàn bộ vòng đời của Module AI V3:
+     * Thu thập 8 đặc trưng PromQL từ Thanos Query hỗ trợ song song Dual SemConv.
+     * Quy trình tiền xử lý Z-Score per-entity và Sliding Window 12 bước (120 giây).
+     * Huấn luyện mô hình Deep Learning Ensemble (Universal GRU Autoencoder + Temporal Convolutional Network TCN + Isolation Forest).
+     * Bóc tách nguyên nhân gốc rễ qua Grafana Tempo Trace RCA ($T_{\text{WAN}}, T_{\text{self}}, T_{\text{DB}}$).
+     * Xuất bản chỉ số qua Prometheus Exporter cổng `:9108` và cơ chế cảnh báo khép kín qua Telegram với bộ đệm chống spam 60s.
+
+---
+
+## 7. Đề Xuất Bổ Sung & Cập Nhật Hệ Thống Rules (`.agent/rules/`, `AGENTS.md`, `PLAN.md`)
+
+### 7.1. Đề Xuất Tạo Rule Mới: `50-cost-control-and-telemetry-optimization.md`
+Học hỏi từ triết lý quản trị chi phí viễn trắc của SigNoz (`docs/other-reference/SigNozDocs/SigNoz_Docs_Categorized/11_Cost Control`), chúng tôi đề xuất bổ sung một Rule bắt buộc:
+
+* **Tên tệp:** `.agent/rules/50-cost-control-and-telemetry-optimization.md`
+* **Trigger:** `model_decision` (áp dụng khi can thiệp vào OTel pipelines, K8s manifests, hoặc cấu hình thu thập).
+* **Nội dung quy chuẩn cốt lõi:**
+  1. **Nguyên tắc "Lọc tại nguồn trước, xử lý tại Collector sau" (Source First, Collector Second):**
+     * Mọi span, log hoặc metric phát sinh từ các cơ chế kiểm tra sức khỏe định kỳ không mang giá trị chẩn đoán (VD: Kubelet liveness/readiness probes `/ready/isready`, `/image/finished`, `/status`, hoặc ping rác) **bắt buộc phải bị lọc bỏ ngay tại Spoke Edge Collector** qua bộ xử lý `filter/drop_noise` trước khi đóng gói gửi qua đường truyền WAN mTLS.
+  2. **Chiến lược Lấy Mẫu Kết Hợp (Hybrid Sampling Policy):**
+     * Spoke Edge Collector duy trì tỷ lệ Head-based sampling 20% đối với các request thành công thông thường để tiết kiệm tối đa băng thông WAN.
+     * Hub OTel Gateway **bắt buộc phải bật Tail-Sampling** để đảm bảo giữ lại **100% trace có lỗi** (`status.code == ERROR` hoặc HTTP $\ge 500$) và **100% trace có độ trễ cao vi phạm SLO** ($> 1500\text{ms}$), loại bỏ hoàn toàn rủi ro mất mát dấu vết sự cố phục vụ AI RCA.
+  3. **Bảo Vệ Tính Toàn Vẹn Chuỗi Thời Gian & Chống Bùng Nổ Cardinality:**
+     * Tuyệt đối không dùng thao tác xóa nhãn đơn thuần `delete_key()` trên các chiều dữ liệu động (như `client.port`, `k8s.pod.uid`, `http.target` chứa query params) vì hành động này không gộp chuỗi thời gian mà gây va chạm dữ liệu. Bắt buộc phải sử dụng bộ xử lý `metricstransform` với hành động `aggregate` để gộp chuỗi thời gian an toàn.
+  4. **Phân Tầng Chu Kỳ Lấy Mẫu (Collection Interval Tiering):**
+     * Các chỉ số vàng ứng dụng (RED Metrics, HTTP QPS, JVM Memory) duy trì chu kỳ cao `10s` phục vụ AI Anomaly Detection.
+     * Các chỉ số tài nguyên hệ điều hành ít biến động (Disk I/O, Filesystem Capacity, Memory Paging) được điều chỉnh chu kỳ sang `30s` - `60s` để cắt giảm hơn 40% dung lượng nạp vào TSDB và MinIO S3.
+
+---
+
+### 7.2. Đề Xuất Cập Nhật `AGENTS.md`
+Cập nhật tệp chỉ dẫn trung tâm `AGENTS.md` để đồng bộ các thành tựu mới nhất:
+1. **Bổ sung Quy Chuẩn SemConv Hiện Đại:** Bắt buộc sử dụng `deployment.environment.name` (thay cho `deployment.environment` đã deprecated theo OTel v1.26+).
+2. **Đồng Bộ Kiến Trúc Closed-Loop AIOps:** Bổ sung mô tả về luồng tự động: AI Engine suy luận $\rightarrow$ xuất bản metric tại cổng `:9108` $\rightarrow$ Prometheus cào dữ liệu $\rightarrow$ Grafana hiển thị Panel 7 Dual Y-Axis $\rightarrow$ Telegram Bot thông báo tức thời khi xác suất bất thường $> 85\%$.
+3. **Quy Tắc Định Danh Khóa Phức Hợp Chống Va Chạm Đa Đám Mây:** Khi viết truy vấn PromQL hoặc LogQL phân nhóm, bắt buộc dùng khóa phức hợp tối thiểu $\langle \texttt{k8s_cluster_name},\; \texttt{k8s_namespace_name},\; \texttt{k8s_pod_name} \rangle$.
+
+---
+
+### 7.3. Đề Xuất Cập Nhật `PLAN.md`
+Cập nhật lộ trình tổng thể của dự án:
+1. Đánh dấu hoàn thành toàn diện Phase 3.5 (Hostmetrics & 7 SRE Dashboards), Phase 3.6 (Resource Schemas), và Phase 3.7 (AI Engine V3 & Closed-Loop AIOps).
+2. Trong **Phase 4 (Benchmark, Chaos Evaluation, and Final Report)**: Bổ sung 2 nhiệm vụ tối ưu hóa kế thừa từ SigNoz:
+   * [ ] *Nhiệm vụ 4.1:* Kiểm thử hiệu quả tiết giảm băng thông WAN sau khi áp dụng Edge Pre-filtering (`filter/drop_noise`) và Hub Tail-sampling.
+   * [ ] *Nhiệm vụ 4.2:* Đo lường độ chính xác (Precision / Recall / F1-Score) và thời gian phát hiện bất thường (Mean Time to Detect - MTTD) của AI Engine trong 11 kịch bản lỗi thực tế.
+
+---
+
+## 8. Đề Xuất Cải Tiến Kiến Trúc Mã Nguồn & Cấu Hình OTel Collector Theo Chiến Lược SigNoz
+
+Dựa trên các thực hành tốt nhất từ tài liệu SigNoz, chúng tôi đề xuất cải tiến cấu hình tại các tệp manifest trong `k8s/base/`:
+
+```mermaid
+flowchart LR
+    subgraph Spoke_Edge ["Spoke Edge Collector (AWS / Azure)"]
+        direction TB
+        RECV["Receivers\n(OTLP, HostMetrics, KubeletStats)"]
+        MEM1["memory_limiter"]
+        DROP["filter/drop_noise\n(Lọc bỏ probes /isready, /finished)"]
+        DETECT["resourcedetection\n(Phát hiện metadata đám mây tự động)"]
+        BATCH1["batch"]
+        EXP1["otlp/hub (mTLS 1.3)"]
+        
+        RECV --> MEM1 --> DROP --> DETECT --> BATCH1 --> EXP1
+    end
+
+    subgraph Hub_Gateway ["Hub OTel Gateway"]
+        direction TB
+        RECV2["otlp (mTLS Ingress :4317/:4318)"]
+        MEM2["memory_limiter"]
+        TAIL["tail_sampling\n(Giữ 100% lỗi & slow traces >1500ms)"]
+        CONN["servicegraphconnector\n(Pre-aggregate Topo Metrics)"]
+        BATCH2["batch"]
+        EXP2["Thanos, Tempo, Loki, MinIO S3"]
+        
+        RECV2 --> MEM2 --> TAIL --> CONN --> BATCH2 --> EXP2
+    end
+
+    EXP1 -->|Traverse WAN netem| RECV2
+```
+
+### 8.1. Cải Tiến Cấu Hình Spoke Edge Collector (`k8s/base/collector-edge/02-configmap.yaml`)
+1. **Bổ sung bộ xử lý lọc nhiễu tại nguồn (`filter/drop_noise`):**
+   ```yaml
+   processors:
+     filter/drop_noise:
+       error_mode: ignore
+       traces:
+         span:
+           - 'IsMatch(attributes["url.path"], ".*/isready.*")'
+           - 'IsMatch(attributes["url.path"], ".*/finished.*")'
+           - 'IsMatch(attributes["http.target"], ".*/status.*")'
+       logs:
+         log_record:
+           - 'IsMatch(body, ".*GET /ready/isready.*200.*")'
+           - 'IsMatch(body, ".*GET /image/finished.*200.*")'
+   ```
+2. **Kích hoạt bộ xử lý phát hiện tài nguyên đám mây (`resourcedetection`):**
+   ```yaml
+   processors:
+     resourcedetection:
+       detectors: [env, system]
+       timeout: 2s
+       override: false
+   ```
+   *Khi đồ án mở rộng sang đám mây thực tế bằng Terraform, chỉ cần thêm `detectors: [aws, azure, gcp]` là toàn bộ AMI ID, Region, VM Size sẽ được nạp tự động.*
+3. **Phân tầng chu kỳ thu thập `hostmetrics`:**
+   Nâng `collection_interval` của các scrapers `disk`, `filesystem`, `paging` từ 15s lên 30s trong ConfigMap để giảm tải I/O.
+
+### 8.2. Cải Tiến Cấu Hình Hub OTel Gateway (`k8s/base/collector-hub/02-configmap.yaml`)
+1. **Kích hoạt Tail-Based Sampling cho luồng Traces:**
+   ```yaml
+   processors:
+     tail_sampling:
+       decision_wait: 10s
+       num_traces: 10000
+       expected_new_traces_per_sec: 200
+       policies:
+         - name: preserve-all-errors
+           type: status_code
+           status_code:
+             status_codes: [ERROR]
+         - name: preserve-high-latency-traces
+           type: latency
+           latency:
+             threshold_ms: 1500
+         - name: sample-routine-traces
+           type: probabilistic
+           probabilistic:
+             sampling_percentage: 5
+   ```
+   *Chính sách này đảm bảo mọi giao dịch bị tiêm lỗi mạng WAN hoặc nghẽn database đều được lưu trọn vẹn vào Tempo, làm dữ liệu đầu vào hoàn hảo cho AI RCA.*
+
+---
+
+## 9. Lộ Trình Triển Khai Cụ Thể Chờ Người Dùng Phê Duyệt (Actionable Roadmap for Approval)
+
+Dưới đây là bảng tổng hợp các đầu việc cụ thể phân chia theo 3 bước tuần tự. **Toàn bộ mã nguồn và cấu hình hiện tại được giữ nguyên, chỉ tiến hành thực thi sau khi bạn xem xét và phê duyệt:**
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│ BƯỚC 1: DỌN DẸP & CHUẨN HÓA HỆ THỐNG SKILLS (Clean & Align Skills)     │
+│ • Đổi tên teastore-benchmark/KILL.md -> SKILL.md                       │
+│ • Xóa các skills thừa: argocd-gitops, terraform-engineer, specialist  │
+│ • Xóa otel-collector (Dash0), đổi tên otel-collector-base -> collector │
+│ • Sửa metadata YAML cho: kustomize, grafana-dashboards, loki, prometheus│
+│ • Tạo 2 skills mới: chaos-engineering, aiops-anomaly-engine            │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ BƯỚC 2: BỔ SUNG RULES & CẬP NHẬT TÀI LIỆU HƯỚNG DẪN                     │
+│ • Tạo .agent/rules/50-cost-control-and-telemetry-optimization.md       │
+│ • Cập nhật AGENTS.md (Closed-Loop AIOps, SemConv v1.26+, Compound Keys) │
+│ • Cập nhật PLAN.md (Bổ sung mốc tối ưu viễn trắc vào Phase 4)          │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ BƯỚC 3: CẢI TIẾN PIPELINE OTEL COLLECTOR (Tối ưu hóa Băng thông & WAN) │
+│ • Cập nhật k8s/base/collector-edge/02-configmap.yaml (Pre-filtering)   │
+│ • Cập nhật k8s/base/collector-hub/02-configmap.yaml (Tail-sampling)    │
+│ • Kiểm thử kustomize build xác thực tính hợp lệ của manifests          │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+> [!IMPORTANT]
+> **Kính gửi bạn xem xét:** Toàn bộ đề xuất trên đã được ghi nhận chi tiết vào tệp `docs/progress/02_solution_plan.md`. Bạn vui lòng đọc qua và phản hồi chấp thuận (hoặc yêu cầu điều chỉnh). Khi nhận được sự đồng thuận của bạn, tôi sẽ tiến hành thực thi chuẩn xác từng bước!

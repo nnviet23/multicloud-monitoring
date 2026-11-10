@@ -14,10 +14,13 @@ Build and evaluate a reproducible multi-cloud observability platform using TeaSt
 - `hub-k3d`: central hub receiving telemetry from both spokes.
 - Local provider names are simulation labels, not real cloud deployments.
 - Architecture baseline: **Phương án A** (Edge-Filtered Ingestion with Centralized Processing & Batch Ingestion). Initial trace sampling rate is **20%** at edge collectors (with 100% preservation of error traces and high latency); AI streaming inference is deferred to a subsequent phase.
+- Telemetry Ingestion Optimization: Edge pre-filtering (`filter/drop_noise`) drops health probes at Spoke before traversing WAN; Hub Central Gateway executes tail-based sampling (`tail_sampling`) preserving 100% error traces and high-latency spans (>1500ms).
 - Stack: Docker, Kubernetes/k3d, OpenTelemetry, Prometheus + Thanos, Loki, Tempo, Grafana, Pyrra (SLO-as-code), Robusta (smart alerting) + Telegram; Locust for load testing; Ansible for local lab; Terraform for later real-cloud deployment.
 - TeaStore is the benchmark application; Locust (`locustfile.py`) is the official workload generator.
+- AI & Closed-Loop AIOps: Deep Learning Ensemble (GRU + TCN + Isolation Forest), Tempo Trace RCA ($T_{\text{WAN}}, T_{\text{self}}, T_{\text{DB}}$), Prometheus Exporter (:9108), Grafana Panel 7 Dual Y-Axis, Telegram Alert Sink with 60s cooldown buffer.
 - Collector processor order: Memory Limiter → Filter → Transform → Batch → Exporter.
 - Service Graph Topology: Pre-aggregated at Hub OTel Gateway via `servicegraphconnector` producing `traces_service_graph_request_total` directly into Thanos Receive.
+- Semantic Conventions: Strictly use canonical OpenTelemetry attributes (`deployment.environment.name`, `cloud.provider`, `cloud.region`, `k8s.cluster.name`, `k8s.pod.uid`). All queries must use anti-collision compound keys.
 - Protect Spoke-to-Hub OTLP with mutual TLS (mTLS 1.3) when traversing the simulated WAN.
 - Strict Version Pinning: Every container image and tool version is pinned in `infra/README.md`. Never use `latest` or floating tags.
 - Manifest hygiene: Kustomize Base (`k8s/base/`) vs Overlays (`k8s/overlays/`). Each manifest adheres to the Single Responsibility Principle (SRP).

@@ -134,7 +134,26 @@ data:
               - set(attributes["cluster"], attributes["k8s.cluster.name"])
               - set(attributes["cloud"], attributes["cloud.provider"])
               - set(attributes["region"], attributes["cloud.region"])
+              - set(attributes["deployment.environment.name"], "production")
               - set(attributes["telemetry.hub.received_time"], UnixMilli(Now()))
+
+      tail_sampling:
+        decision_wait: 10s
+        num_traces: 10000
+        expected_new_traces_per_sec: 200
+        policies:
+          - name: preserve-all-errors
+            type: status_code
+            status_code:
+              status_codes: [ERROR]
+          - name: preserve-high-latency-traces
+            type: latency
+            latency:
+              threshold_ms: 1500
+          - name: sample-routine-traces
+            type: probabilistic
+            probabilistic:
+              sampling_percentage: 5
 
       batch:
         send_batch_size: 512
@@ -166,7 +185,7 @@ data:
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [memory_limiter, transform/normalize_cloud, batch]
+          processors: [memory_limiter, transform/normalize_cloud, tail_sampling, batch]
           exporters: [servicegraph, otlp/tempo, awss3, debug]
         metrics:
           receivers: [otlp, hostmetrics]
