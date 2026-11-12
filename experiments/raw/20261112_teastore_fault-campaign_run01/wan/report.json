@@ -1,0 +1,9 @@
+{
+  "mode": "live_k3d_fault_injection",
+  "settle_seconds": 30,
+  "passed": 0,
+  "total": 0,
+  "results": [],
+  "error": "Command '['kubectl', '--context', 'k3d-hub-k3d', '--request-timeout=10s', '-n', 'monitoring', 'wait', '--for=condition=Ready', 'pod', '-l', 'app.kubernetes.io/name=tempo', '--timeout=10s']' returned non-zero exit status 1.",
+  "cleanup_errors": []
+}

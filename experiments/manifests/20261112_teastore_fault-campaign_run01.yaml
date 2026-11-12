@@ -1,0 +1,58 @@
+schema_version: "1.0"
+experiment_id: "20261112_teastore_fault-campaign_run01"
+status: "invalid" # planned | running | valid | invalid | incomplete
+purpose: "Campaign A: real fault injection on the 4-cluster lab with the deployed model v1 (online detector, Telegram disabled). Results are used for offline tuning of v2, so they are NOT the final held-out evaluation (that is campaign B)."
+started_at_utc: "2026-11-12T22:44:12Z"
+ended_at_utc: "2026-11-12T22:45:00Z"   # stopped manually during the inter-stage sleep
+
+repository:
+  commit: "db6470a"
+  branch: "AI"
+  dirty: false
+  model: "v1 (ai-engine/models/saved/model_v1_sha256.txt; exact hashes in raw/20261112_teastore_fault-campaign_run01/system/model_sha256.txt)"
+
+workload:
+  application: "TeaStore"
+  scenario: "fault-campaign"
+  entrypoint: "http://localhost:8080/tools.descartes.teastore.webui (AWS nginx-api-gateway)"
+  load_tool: "runner-internal stdlib load (12 users) started by each chaos runner"
+  concurrency: {users: 12}
+  fault_injection:
+    wan_runner: "tests/chaos/run_live.py --baseline 120 --fault 120 --recovery 150 --settle 30 --interval 10"
+    wan_faults:
+      gcp_wan_delay: "netem delay 250ms on gcp-k3d node egress (keeps 2ms jitter, 0.1% loss); restored to delay 10ms 2ms loss 0.1%"
+      azure_wan_delay: "netem delay 180ms on azure-k3d node egress; restored to baseline"
+      aws_wan_delay: "netem delay 200ms on aws-k3d node egress; restored to baseline"
+    service_runner: "tests/chaos/run_service_faults.py --fault 90 --recovery 150 --interval 10"
+    service_faults:
+      cpu: "JVM attach CPU burn in gcp:teastore-recommender"
+      db_lock: "MariaDB LOCK TABLES pulses on PERSISTENCEPRODUCT/CATEGORY (verified by a blocked independent reader) + persistence JPA cache eviction"
+      memory_leak: "JVM attach heap growth in azure:teastore-persistence"
+      http_5xx: "POST cartAction with invalid productid every 0.35s (HTTP 500 verified) on aws:teastore-webui"
+      webui_outage: "scale aws deploy/teastore-webui to 0, then restore replicas"
+  anomaly_label: "per phase in events.json"
+
+environment:
+  clusters: ["hub-k3d", "aws-k3d", "azure-k3d", "gcp-k3d"]
+  node_profile: "k3s v1.31.2+k3s1, 1 server per cluster, single host 16 vCPU / 12.8 GiB RAM"
+  network_profile: "baseline netem delay 10ms 2ms loss 0.1% on each spoke (verified before start)"
+
+telemetry:
+  detector: "ai-engine/inference/detector.py --interval 10 --disable-telegram (spawned by each runner; one detector per runner)"
+  outputs: "detector.json (per-cycle records incl. entity_features), events.json (phase timeline), report.json"
+
+artifacts:
+  raw:
+    - "experiments/raw/20261112_teastore_fault-campaign_run01/wan/"
+    - "experiments/raw/20261112_teastore_fault-campaign_run01/service/"
+    - "experiments/raw/20261112_teastore_fault-campaign_run01/system/model_sha256.txt"
+  processed: []
+  logs:
+    - "experiments/raw/20261112_teastore_fault-campaign_run01/system/run.log"
+    - "experiments/raw/20261112_teastore_fault-campaign_run01/system/wan_runner.log"
+    - "experiments/raw/20261112_teastore_fault-campaign_run01/system/service_runner.log"
+
+quality:
+  validity_reason: "ABORTED before any fault: run_live.py preflight waited on pod label app.kubernetes.io/name=tempo, but the Tempo StatefulSet is labelled app=tempo (k8s/base/traces-tempo/03-statefulset.yaml); the WAN runner exited rc=1 at 22:44:14Z without touching netem. The campaign was stopped before the service stage; it is re-run as 20261112_teastore_fault-campaign_run02 after the selector fix."
+  missing_data_notes: ["no detector or fault data was produced"]
+  deviations: []

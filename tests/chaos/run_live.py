@@ -221,7 +221,7 @@ def main():
                  "-n", "monitoring", "get", "service/prometheus", "service/tempo"])
         command(["kubectl", "--context", "k3d-hub-k3d", "--request-timeout=10s",
                  "-n", "monitoring", "wait", "--for=condition=Ready", "pod",
-                 "-l", "app.kubernetes.io/name=tempo", "--timeout=10s"])
+                 "-l", "app=tempo", "--timeout=10s"])
         with urllib.request.urlopen("http://localhost:8080/tools.descartes.teastore.webui/product?id=7",
                                     timeout=10) as response:
             if response.status != 200:
