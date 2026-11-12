@@ -1,0 +1,212 @@
+[
+ {
+  "node": "k3d-hub-k3d-server-0",
+  "namespace": "monitoring",
+  "pod": "grafana-594d8f9c47-8cn97",
+  "container": "grafana",
+  "image": "docker.io/grafana/grafana:11.5.0",
+  "image_id": "docker.io/grafana/grafana@sha256:0a2874cf39c6487093c682215f7c7903ed8646d78ae5f911af945d2dfcc0a447",
+  "ready": true,
+  "restarts": 0
+ },
+ {
+  "node": "k3d-hub-k3d-server-0",
+  "namespace": "monitoring",
+  "pod": "loki-0",
+  "container": "loki",
+  "image": "docker.io/grafana/loki:2.9.4",
+  "image_id": "docker.io/grafana/loki@sha256:f379a20ce9dd815884ed6446aad8819b81a8ba4d36b548ca14be8cecbc6cbca0",
+  "ready": true,
+  "restarts": 0
+ },
+ {
+  "node": "k3d-hub-k3d-server-0",
+  "namespace": "monitoring",
+  "pod": "otel-collector-hub-7cdd8bbdb9-bshfs",
+  "container": "otel-collector",
+  "image": "docker.io/otel/opentelemetry-collector-contrib:0.114.0",
+  "image_id": "docker.io/otel/opentelemetry-collector-contrib@sha256:37fa87091cfaaec7234a27e4e395a40c31c2bfaea97a349a4afef6d9e9681197",
+  "ready": true,
+  "restarts": 0
+ },
+ {
+  "node": "k3d-hub-k3d-server-0",
+  "namespace": "monitoring",
+  "pod": "prometheus-0",
+  "container": "prometheus",
+  "image": "docker.io/prom/prometheus:v2.50.0",
+  "image_id": "docker.io/prom/prometheus@sha256:042258e3578a558ce41b036104dfa997b2d25151ab6889a3f4d6187e27b1176c",
+  "ready": true,
+  "restarts": 1
+ },
+ {
+  "node": "k3d-hub-k3d-server-0",
+  "namespace": "monitoring",
+  "pod": "prometheus-0",
+  "container": "thanos-sidecar",
+  "image": "quay.io/thanos/thanos:v0.36.1",
+  "image_id": "quay.io/thanos/thanos@sha256:e542959e1b36d5046083d1b64a7049c356b68a44a173c58b3ae7c0c9ada932d5",
+  "ready": true,
+  "restarts": 0
+ },
+ {
+  "node": "k3d-hub-k3d-server-0",
+  "namespace": "monitoring",
+  "pod": "pyrra-5d9b5c47fc-pjwd2",
+  "container": "pyrra-api",
+  "image": "ghcr.io/pyrra-dev/pyrra:v0.7.3",
+  "image_id": "ghcr.io/pyrra-dev/pyrra@sha256:96d4e10f0797be420d84552934c2303f6b4fb618d69ddae3d4c6e36c7c68bcb0",
+  "ready": true,
+  "restarts": 0
+ },
+ {
+  "node": "k3d-hub-k3d-server-0",
+  "namespace": "monitoring",
+  "pod": "robusta-runner-7dfcc8c54c-nqs8s",
+  "container": "runner",
+  "image": "docker.io/robustadev/robusta-runner:0.53.0",
+  "image_id": "docker.io/robustadev/robusta-runner@sha256:d412978de75f64d835768f830eafc7daa8f96968273da606165154ca70c25ebb",
+  "ready": false,
+  "restarts": 8
+ },
+ {
+  "node": "k3d-hub-k3d-server-0",
+  "namespace": "monitoring",
+  "pod": "tempo-0",
+  "container": "tempo",
+  "image": "docker.io/grafana/tempo:2.4.0",
+  "image_id": "docker.io/grafana/tempo@sha256:50fec6c2cf621141218edee9e23e8860b6158088d18fac54cf0c29df7fdf29db",
+  "ready": true,
+  "restarts": 0
+ },
+ {
+  "node": "k3d-hub-k3d-server-0",
+  "namespace": "monitoring",
+  "pod": "thanos-query-5cb747c496-5dwsr",
+  "container": "thanos-query",
+  "image": "quay.io/thanos/thanos:v0.36.1",
+  "image_id": "quay.io/thanos/thanos@sha256:e542959e1b36d5046083d1b64a7049c356b68a44a173c58b3ae7c0c9ada932d5",
+  "ready": true,
+  "restarts": 0
+ },
+ {
+  "node": "k3d-hub-k3d-server-0",
+  "namespace": "storage",
+  "pod": "minio-0",
+  "container": "minio",
+  "image": "sha256:ff64ecefb8c1a47cd2d3ba7ea6a7d892850710e4f456220b7b9694e133bc4561",
+  "image_id": "cgr.dev/chainguard/minio@sha256:0dab2f9fee1c1139ae8753b5e35bb4461af2a276cfe0923a2504c75a6170bc64",
+  "ready": true,
+  "restarts": 0
+ },
+ {
+  "node": "k3d-aws-k3d-server-0",
+  "namespace": "monitoring",
+  "pod": "otel-collector-spoke-bfb649666-fq4d2",
+  "container": "otel-collector",
+  "image": "docker.io/otel/opentelemetry-collector-contrib:0.114.0",
+  "image_id": "sha256:973ad330aa2b1a40643d111e62918c68129a2b063ca46892347e9767801f1e85",
+  "ready": true,
+  "restarts": 0
+ },
+ {
+  "node": "k3d-aws-k3d-server-0",
+  "namespace": "teastore",
+  "pod": "nginx-api-gateway-5d599bb47c-6xzjr",
+  "container": "nginx-api-gateway",
+  "image": "docker.io/library/nginx:1.27.3-alpine",
+  "image_id": "sha256:93f9c72967dbcfaffe724ae5ba471e9568c9bbe67271f53266c84f3c83a409e3",
+  "ready": true,
+  "restarts": 0
+ },
+ {
+  "node": "k3d-aws-k3d-server-0",
+  "namespace": "teastore",
+  "pod": "teastore-image-54f8cbb9bb-77xgf",
+  "container": "teastore-image",
+  "image": "docker.io/descartesresearch/teastore-image:1.4.1",
+  "image_id": "sha256:8649ff0dacc47b0f5ad175ecacd51ca647cedad33b4ec2e95a8c1d6fd8d98ca7",
+  "ready": true,
+  "restarts": 1
+ },
+ {
+  "node": "k3d-aws-k3d-server-0",
+  "namespace": "teastore",
+  "pod": "teastore-registry-969f47b7c-m9swq",
+  "container": "teastore-registry",
+  "image": "docker.io/descartesresearch/teastore-registry:1.4.1",
+  "image_id": "sha256:afe46a9db03a00c14dbd704554cb5bb11a1ea660c0bef94ec1031bfa0a1c1510",
+  "ready": true,
+  "restarts": 0
+ },
+ {
+  "node": "k3d-aws-k3d-server-0",
+  "namespace": "teastore",
+  "pod": "teastore-webui-554db6c674-sdpkr",
+  "container": "teastore-webui",
+  "image": "docker.io/descartesresearch/teastore-webui:1.4.1",
+  "image_id": "sha256:599137b2ba44524f0aa53b641ebedbe26b4ff17517b95b79fad38cbfda64cb1f",
+  "ready": true,
+  "restarts": 0
+ },
+ {
+  "node": "k3d-azure-k3d-server-0",
+  "namespace": "monitoring",
+  "pod": "otel-collector-spoke-6968f649c-22nt7",
+  "container": "otel-collector",
+  "image": "docker.io/otel/opentelemetry-collector-contrib:0.114.0",
+  "image_id": "sha256:973ad330aa2b1a40643d111e62918c68129a2b063ca46892347e9767801f1e85",
+  "ready": true,
+  "restarts": 0
+ },
+ {
+  "node": "k3d-azure-k3d-server-0",
+  "namespace": "teastore",
+  "pod": "teastore-auth-676465598b-sc9rm",
+  "container": "teastore-auth",
+  "image": "docker.io/descartesresearch/teastore-auth:1.4.1",
+  "image_id": "sha256:df3762a577f3e692f6f4fab6e05352d88118a43c7256d28e49db5021b71ec19b",
+  "ready": true,
+  "restarts": 0
+ },
+ {
+  "node": "k3d-azure-k3d-server-0",
+  "namespace": "teastore",
+  "pod": "teastore-db-866d85fbbb-th268",
+  "container": "teastore-db",
+  "image": "docker.io/descartesresearch/teastore-db:1.4.1",
+  "image_id": "sha256:8b7e6d76a7db6f7ee7b84ba1590a1892e52715762e83aea54be09850dfa3ae26",
+  "ready": true,
+  "restarts": 0
+ },
+ {
+  "node": "k3d-azure-k3d-server-0",
+  "namespace": "teastore",
+  "pod": "teastore-persistence-675576c8d9-g7vn9",
+  "container": "teastore-persistence",
+  "image": "docker.io/descartesresearch/teastore-persistence:1.4.1",
+  "image_id": "sha256:3ec9cd7f8f5db32f0a99c245e0cf83220a735e35b1d812a703b9b83b8e2bba36",
+  "ready": true,
+  "restarts": 0
+ },
+ {
+  "node": "k3d-gcp-k3d-server-0",
+  "namespace": "monitoring",
+  "pod": "otel-collector-spoke-58f774c77b-r6mhw",
+  "container": "otel-collector",
+  "image": "docker.io/otel/opentelemetry-collector-contrib:0.114.0",
+  "image_id": "sha256:973ad330aa2b1a40643d111e62918c68129a2b063ca46892347e9767801f1e85",
+  "ready": true,
+  "restarts": 0
+ },
+ {
+  "node": "k3d-gcp-k3d-server-0",
+  "namespace": "teastore",
+  "pod": "teastore-recommender-7bb7fb989d-m5cv5",
+  "container": "teastore-recommender",
+  "image": "docker.io/descartesresearch/teastore-recommender:1.4.1",
+  "image_id": "sha256:0a385900555ba83c974be03ac1ffcb29122472f011ca4aeb6450f6713f9192d2",
+  "ready": true,
+  "restarts": 0
+ }
+]

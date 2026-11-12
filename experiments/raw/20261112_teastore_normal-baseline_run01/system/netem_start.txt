@@ -1,0 +1,3 @@
+k3d-aws-k3d-server-0 qdisc netem 8001: root refcnt 17 limit 1000 delay 10ms  2ms loss 0.1% seed 15613671041155368865
+k3d-azure-k3d-server-0 qdisc netem 8002: root refcnt 17 limit 1000 delay 10ms  2ms loss 0.1% seed 18275475025458708813
+k3d-gcp-k3d-server-0 qdisc netem 8003: root refcnt 17 limit 1000 delay 10ms  2ms loss 0.1% seed 6890226254464309328
