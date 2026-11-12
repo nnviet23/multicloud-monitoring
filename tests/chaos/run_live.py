@@ -38,33 +38,78 @@ def qdisc(image, cloud):
                               "tc", "-j", "qdisc", "show", "dev", "eth0"]))
 
 
-def inject(image, cloud, delay_ms, duration, name):
+# Baseline WAN profile applied by infra/ansible/playbooks/03_emulate_wan_latency.yml.
+BASELINE_NETEM = "delay 10ms 2ms loss 0.1%"
+
+
+def shaping_kind(entries):
+    """Return the root qdisc kind of eth0 ("noqueue" when unshaped)."""
+    kinds = [item.get("kind") for item in entries if item.get("root", True)]
+    return kinds[0] if kinds else "noqueue"
+
+
+def fault_profile(delay_ms, baseline):
+    """Fault netem keeps the baseline jitter/loss and only raises the delay."""
+    if not baseline:
+        return f"delay {delay_ms}ms"
+    tokens = baseline.split()
+    if "delay" in tokens and tokens.index("delay") + 1 < len(tokens):
+        tokens[tokens.index("delay") + 1] = f"{delay_ms}ms"
+        return " ".join(tokens)
+    return f"delay {delay_ms}ms {baseline}"
+
+
+def restore_command(baseline):
+    if baseline:
+        return f"tc qdisc replace dev eth0 root netem {baseline}"
+    return "tc qdisc del dev eth0 root 2>/dev/null || true"
+
+
+def inject(image, cloud, delay_ms, duration, name, baseline):
     original = qdisc(image, cloud)
-    # Refuse to overwrite a pre-existing WAN profile that cannot be restored exactly.
-    if any(item.get("kind") != "noqueue" for item in original):
-        raise RuntimeError(f"{cloud}: existing qdisc must be restored manually before this test: {original}")
-    script = ('set -eu; trap \'tc qdisc del dev eth0 root 2>/dev/null || true\' EXIT; '
-              'trap \'exit 0\' TERM INT; '
-              f'tc qdisc replace dev eth0 root netem delay {delay_ms}ms; '
-              f'sleep {duration + 45} & wait $!')
+    # Only the known baseline profile (or no shaping) can be restored exactly.
+    expected = "netem" if baseline else "noqueue"
+    if shaping_kind(original) != expected:
+        raise RuntimeError(f"{cloud}: unexpected qdisc {original}; expected {expected} "
+                           f"(--baseline-netem '{baseline}')")
+    script = (f"set -eu; trap '{restore_command(baseline)}' EXIT; "
+              "trap 'exit 0' TERM INT; "
+              f"tc qdisc replace dev eth0 root netem {fault_profile(delay_ms, baseline)}; "
+              f"sleep {duration + 45} & wait $!")
     command(["docker", "run", "-d", "--rm", "--pull=never", "--name", name,
              "--cap-add", "NET_ADMIN", "--network", f"container:k3d-{cloud}-k3d-server-0",
              image, "sh", "-c", script])
     return name, original
 
 
-def restore(name, image, cloud):
+def netem_delay_ms(entries):
+    for item in entries:
+        delay = (item.get("options") or {}).get("delay") or {}
+        if "delay" in delay:
+            return float(delay["delay"]) * 1000.0
+    return None
+
+
+def is_restored(current, baseline):
+    if not baseline:
+        return shaping_kind(current) == "noqueue"
+    expected_ms = float(baseline.split()[baseline.split().index("delay") + 1].rstrip("ms"))
+    delay = netem_delay_ms(current)
+    return shaping_kind(current) == "netem" and delay is not None and abs(delay - expected_ms) < 0.5
+
+
+def restore(name, image, cloud, baseline):
     # docker stop sends TERM to the helper, triggering its cleanup trap.
     result = subprocess.run(["docker", "stop", "--time", "5", name], text=True,
                             capture_output=True, timeout=15)
     current = qdisc(image, cloud)
-    if any(item.get("kind") != "noqueue" for item in current):
+    if not is_restored(current, baseline):
         # Retry cleanup if the helper's shell did not receive TERM in time.
         command(["docker", "run", "--rm", "--pull=never", "--cap-add", "NET_ADMIN",
                  "--network", f"container:k3d-{cloud}-k3d-server-0", image,
-                 "tc", "qdisc", "del", "dev", "eth0", "root"])
+                 "sh", "-c", restore_command(baseline)])
         current = qdisc(image, cloud)
-    if any(item.get("kind") != "noqueue" for item in current):
+    if not is_restored(current, baseline):
         raise RuntimeError(f"Cleanup failed for {cloud}: {current}; docker stop: {result.stderr}")
     return current
 
@@ -110,7 +155,10 @@ def main():
     parser.add_argument("--fault", type=int, default=90)
     parser.add_argument("--recovery", type=int, default=120)
     parser.add_argument("--settle", type=int, default=30)
-    parser.add_argument("--interval", type=int, default=6)
+    parser.add_argument("--interval", type=int, default=10,
+                        help="Detector polling interval; 10s matches the training sampling interval")
+    parser.add_argument("--baseline-netem", default=BASELINE_NETEM,
+                        help="Baseline WAN netem profile on spoke nodes to restore after each fault ('' if unshaped)")
     parser.add_argument("--users", type=int, default=6)
     parser.add_argument("--output", default="tests/benchmarks/results/live")
     args = parser.parse_args()
@@ -157,8 +205,8 @@ def main():
             cloud, _ = FAULTS[scenario]
             command(["docker", "inspect", f"k3d-{cloud}-k3d-server-0"])
             original = qdisc(args.tc_image, cloud)
-            if any(item.get("kind") != "noqueue" for item in original):
-                raise RuntimeError(f"Existing WAN shaping on {cloud}: {original}")
+            if not is_restored(original, args.baseline_netem):
+                raise RuntimeError(f"{cloud}: WAN shaping differs from baseline '{args.baseline_netem}': {original}")
         command(["kubectl", "--context", "k3d-hub-k3d", "--request-timeout=10s",
                  "-n", "monitoring", "get", "service/prometheus", "service/tempo"])
         command(["kubectl", "--context", "k3d-hub-k3d", "--request-timeout=10s",
@@ -194,13 +242,13 @@ def main():
                 helpers[name] = cloud
                 save_events()
                 try:
-                    _, original = inject(args.tc_image, cloud, delay, args.fault, name)
+                    _, original = inject(args.tc_image, cloud, delay, args.fault, name, args.baseline_netem)
                     actual = qdisc(args.tc_image, cloud)
-                    if not any(item.get("kind") == "netem" for item in actual):
+                    if (netem_delay_ms(actual) or 0.0) < delay - 0.5:
                         raise RuntimeError(f"WAN injection did not take effect: {actual}")
                     phase(scenario, args.fault, detector)
                 finally:
-                    restored = restore(name, args.tc_image, cloud)
+                    restored = restore(name, args.tc_image, cloud, args.baseline_netem)
                     helpers.pop(name)
                     if phases and phases[-1]["id"] == scenario:
                         phases[-1]["qdisc_before"] = original
@@ -212,7 +260,7 @@ def main():
     finally:
         for name, cloud in list(helpers.items()):
             try:
-                restore(name, args.tc_image, cloud)
+                restore(name, args.tc_image, cloud, args.baseline_netem)
                 helpers.pop(name)
             except Exception as exc:
                 cleanup_errors.append(str(exc))

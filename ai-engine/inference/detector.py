@@ -1045,7 +1045,7 @@ class TelegramAlertSink:
 def parse_args():
     parser = argparse.ArgumentParser(description="Multi-Cloud Real-Time Anomaly Detector & Trace RCA Engine (V3)")
     parser.add_argument("--config", default="ai-engine/configs/model_config.yaml", help="Path to config YAML")
-    parser.add_argument("--interval", type=int, default=6, help="Inference polling interval in seconds")
+    parser.add_argument("--interval", type=int, default=10, help="Inference polling interval in seconds (10s = training sampling interval)")
     parser.add_argument("--max-samples", type=int, default=0, help="Stop automatically after N cycles (0 = infinite)")
     parser.add_argument("--summary-out", default="", help="Optional path to save JSON test summary")
     parser.add_argument("--metrics-port", type=int, default=9108, help="Prometheus metrics exporter port (default 9108, 0 to disable)")

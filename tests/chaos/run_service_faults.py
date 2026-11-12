@@ -28,7 +28,8 @@ def sql_command(sql, timeout=150):
 
 class Fault:
     JVM_TARGETS = {
-        "cpu": ("aws", "deploy/teastore-recommender"),
+        # Recommender runs on the GCP spoke in the 4-cluster topology.
+        "cpu": ("gcp", "deploy/teastore-recommender"),
         "memory_leak": ("azure", "deploy/teastore-persistence"),
     }
 
@@ -170,6 +171,8 @@ def main():
     parser.add_argument("--fault", type=int, default=60)
     parser.add_argument("--recovery", type=int, default=120)
     parser.add_argument("--users", type=int, default=6)
+    parser.add_argument("--interval", type=int, default=10,
+                        help="Detector polling interval; 10s matches the training sampling interval")
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
     if not 30 <= args.fault <= 120 or args.recovery < 90 or not 1 <= args.users <= 20:
@@ -215,7 +218,7 @@ def main():
         with (output / "detector.log").open("w") as dl, (output / "traffic.log").open("w") as tl:
             children.append(subprocess.Popen([sys.executable, "tests/locust/traffic_generator.py", "--duration", str(total + 180),
                 "--min-users", str(args.users), "--max-users", str(args.users)], cwd=ROOT, env=env, stdout=tl, stderr=subprocess.STDOUT))
-            children.append(subprocess.Popen([sys.executable, "ai-engine/inference/detector.py", "--interval", "6",
+            children.append(subprocess.Popen([sys.executable, "ai-engine/inference/detector.py", "--interval", str(args.interval),
                 "--summary-out", str(output / "detector.json")], cwd=ROOT, env=env, stdout=dl, stderr=subprocess.STDOUT))
             deadline = time.monotonic() + 90
             while "Sample #" not in (output / "detector.log").read_text():
@@ -264,7 +267,7 @@ def main():
         causes = list(dict.fromkeys(cause for r in alerts for cause in r.get("rca_causes", [])))
         if event["id"] == "cpu":
             passed = passed and any(r.get("model_alert") for r in selected) and any(
-                ("aws:teastore-recommender" in cause or "gcp:teastore-recommender" in cause) and ("cpu" in cause.lower()) for cause in causes)
+                "gcp:teastore-recommender" in cause and "cpu" in cause.lower() for cause in causes)
         if event["id"] == "db_lock":
             incident = [r for r in records if epoch(event["start"]) <= epoch(r["timestamp"]) < epoch(event["end"]) + 30]
             passed = passed and any(r.get("model_alert") for r in selected) and any(
