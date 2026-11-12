@@ -1,0 +1,1 @@
+scripts/run_data_collection.sh 20261112_teastore_normal-baseline_run02 14400 4 50

@@ -1,9 +1,9 @@
 schema_version: "1.0"
 experiment_id: "20261112_teastore_normal-baseline_run02"
-status: "running" # planned | running | valid | invalid | incomplete
+status: "valid" # planned | running | valid | invalid | incomplete
 purpose: "Fault-free training data for the AI anomaly detector on the 4-cluster topology (replaces the stopped run01)"
 started_at_utc: "2026-11-12T17:34:55Z"   # runner start; sampling starts after the 180s warm-up
-ended_at_utc: null
+ended_at_utc: "2026-11-12T21:37:58Z"   # collector end (sampling 17:37:57Z-21:37:58Z)
 
 repository:
   commit: "4e5d4bf82a607f9507695a359d6fc3ebda392614"
@@ -57,7 +57,7 @@ telemetry:
     missing_data: "failed query cycles are skipped and listed in metrics/collection_summary.json (no zero rows)"
   probe_logger:
     script: "scripts/probe_logger.py (detector probe_webui_health, 10s)"
-    started_at_utc: "2026-11-12T17:42:5xZ"   # started manually ~5 min after sampling began; see system/run.log
+    started_at_utc: "2026-11-12T17:40:30Z"   # started manually ~2.5 min after sampling began; see system/run.log
 
 artifacts:
   raw:
@@ -65,7 +65,8 @@ artifacts:
     - "experiments/raw/20261112_teastore_normal-baseline_run02/metrics/collection_summary.json"
     - "experiments/raw/20261112_teastore_normal-baseline_run02/workload/probe.csv"
     - "experiments/raw/20261112_teastore_normal-baseline_run02/workload/traffic_generator.log"
-  processed: []
+  processed:
+    - "ai-engine/data/processed/preprocess_summary.json (model v1)"
   logs:
     - "experiments/raw/20261112_teastore_normal-baseline_run02/system/run.log"
     - "experiments/raw/20261112_teastore_normal-baseline_run02/system/collector.log"
@@ -74,7 +75,10 @@ artifacts:
     - "experiments/raw/20261112_teastore_normal-baseline_run02/system/run_command.sh is the exact runner"
 
 quality:
-  validity_reason: null
-  missing_data_notes: []
+  validity_reason: "1440/1440 cycles, 6 entities x 1440 rows, 0 skipped cycles, max sample gap 11s; traffic 188476 requests, 0 failed; 1424 probes, 100% HTTP 200 (p50 318ms, p99 547ms, max 1364ms)"
+  missing_data_notes:
+    - "no missing feature values; 6/8640 rows used the rate_1m latency fallback (server_latency_source column)"
+    - "probe.csv starts at 17:40:31Z, so the first ~2.5 min of sampling has no probe rows"
   deviations:
-    - "probe logger was not part of the runner at start; it was launched separately after ~5 min of sampling"
+    - "probe logger was not part of the runner at start; it was launched separately ~2.5 min after sampling began (17:40:30Z vs 17:37:57Z)"
+    - "runner exited rc=2 AFTER the collector completed (rc=0): run_data_collection.sh was edited during the run and bash re-read it (line 127 parse error). The EXIT trap still stopped traffic and port-forward; the final run.log lines were not written. Data is unaffected."
