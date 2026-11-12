@@ -1,0 +1,17 @@
+{
+  "output": "/home/tuna/multicloud-monitoring/experiments/raw/20261112_teastore_normal-erratic_run01/metrics/entity_features.csv",
+  "interval_seconds": 10,
+  "cycles": 270,
+  "entity_rows": 1620,
+  "rows_per_entity": {
+    "aws:teastore-image": 270,
+    "aws:teastore-registry": 270,
+    "aws:teastore-webui": 270,
+    "azure:teastore-auth": 270,
+    "azure:teastore-persistence": 270,
+    "gcp:teastore-recommender": 270
+  },
+  "skipped_cycles": [],
+  "started_at": "2026-11-12T21:58:27Z",
+  "ended_at": "2026-11-12T22:43:27Z"
+}

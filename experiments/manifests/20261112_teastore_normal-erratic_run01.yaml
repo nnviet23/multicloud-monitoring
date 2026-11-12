@@ -1,0 +1,71 @@
+schema_version: "1.0"
+experiment_id: "20261112_teastore_normal-erratic_run01"
+status: "valid" # planned | running | valid | invalid | incomplete
+purpose: "Held-out fault-free TEST data under an erratic load regime (never used for training or threshold tuning of model v1); measures the model-only false-positive rate"
+started_at_utc: "2026-11-12T21:55:25Z"   # runner start; sampling starts after the 180s warm-up
+ended_at_utc: "2026-11-12T22:43:27Z"   # collector end (sampling 21:58:27Z-22:43:27Z)
+
+repository:
+  commit: "3dd8607540e6cdff834b137230e6f59d2e80af63"
+  branch: "AI"
+  dirty: false
+
+workload:
+  application: "TeaStore"
+  version_or_image_digest: "descartesresearch/teastore-*:1.4.1 (digests in raw/20261112_teastore_normal-erratic_run01/system/pods_snapshot_start.json)"
+  scenario: "normal-erratic"
+  entrypoint: "http://localhost:8080/tools.descartes.teastore.webui (AWS nginx-api-gateway)"
+  load_tool: "tests/locust/traffic_generator.py --erratic (stdlib generator; not Locust)"
+  concurrency: {min_users: 4, max_users: 50, profile: "regime switch every 25s (flash_crowd, sudden_drop, rollercoaster, moderate_wave, burst_spike; seeded), think time 0.45-2.1s"}
+  duration_seconds: 2700
+  warmup_seconds: 180
+  cooldown_seconds: 0
+  fault_injection: none
+  anomaly_label: 0
+
+environment:
+  clusters: ["hub-k3d", "aws-k3d", "azure-k3d", "gcp-k3d"]
+  placement:
+    aws-k3d: [nginx-api-gateway, teastore-webui, teastore-image, teastore-registry]
+    azure-k3d: [teastore-auth, teastore-persistence, teastore-db]
+    gcp-k3d: [teastore-recommender]
+  node_profile: "k3s v1.31.2+k3s1, 1 server per cluster, single host 16 vCPU / 12.8 GiB RAM"
+  resource_limits_snapshot: "raw/20261112_teastore_normal-erratic_run01/system/pods_snapshot_start.json"
+  network_profile: "baseline"
+  network_impairment:
+    rtt_ms: 10
+    jitter_ms: 2
+    packet_loss_percent: 0.1
+    bandwidth_mbps: null
+  lab_events_before_run:
+    - "same lab session as run02 (no restart); model v1 training (CPU) finished at ~21:53Z, before this run started"
+
+telemetry:
+  collector_version: "otel/opentelemetry-collector-contrib:0.114.0"
+  java_agent: "autoinstrumentation-java:2.10.0, OTEL_METRIC_EXPORT_INTERVAL=10000"
+  backend_versions: {prometheus: "v2.50.0", tempo: "2.4.0", loki: "2.9.4", thanos: "v0.36.1"}
+  transport_security: "mtls"
+  sampling_policy: "edge 20% traces + tail sampling at hub (metrics unsampled)"
+  ai_feature_collector:
+    script: "ai-engine/data/collector.py (detector feature path, histogram-delta latency)"
+    interval_seconds: 10
+  probe_logger:
+    script: "scripts/probe_logger.py (part of the runner)"
+
+artifacts:
+  raw:
+    - "experiments/raw/20261112_teastore_normal-erratic_run01/metrics/entity_features.csv"
+    - "experiments/raw/20261112_teastore_normal-erratic_run01/metrics/collection_summary.json"
+    - "experiments/raw/20261112_teastore_normal-erratic_run01/workload/probe.csv"
+  processed:
+    - "model v1 replay (ai-engine/inference/replay_eval.py): 0/270 alert samples, max per-cycle MSE p99 1.71 vs threshold 2.4671 (see docs report)"
+  logs:
+    - "experiments/raw/20261112_teastore_normal-erratic_run01/system/run.log"
+    - "experiments/raw/20261112_teastore_normal-erratic_run01/system/collector.log"
+  notes:
+    - "experiments/raw/20261112_teastore_normal-erratic_run01/system/run_command.sh is the exact runner"
+
+quality:
+  validity_reason: "270/270 cycles x 6 entities, 0 skipped; traffic 57924 requests, 0 failed; 270 probes, 100% HTTP 200 (p50 317ms, p99 549ms, max 556ms). Peak load exceeds run02 (persistence 160 vs 123 QPS max)"
+  missing_data_notes: ["none"]
+  deviations: []

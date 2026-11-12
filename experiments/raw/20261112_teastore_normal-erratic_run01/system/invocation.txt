@@ -1,0 +1,1 @@
+scripts/run_data_collection.sh 20261112_teastore_normal-erratic_run01 2700 4 50 --erratic
