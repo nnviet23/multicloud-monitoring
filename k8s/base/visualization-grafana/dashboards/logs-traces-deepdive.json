@@ -1,5 +1,7 @@
 {
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -9,74 +11,142 @@
   "panels": [
     {
       "collapsed": false,
-      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
       "id": 1,
       "title": "Log Stream Volume by Service",
       "type": "timeseries",
-      "datasource": { "type": "loki", "uid": "loki-ds" },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "loki", "uid": "loki-ds" },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-ds"
+          },
           "editorMode": "code",
-          "expr": "sum by (job) (count_over_time({exporter=\"OTLP\"}[1m]))",
-          "legendFormat": "Service: {{job}}",
+          "expr": "sum by (service_name, job) (count_over_time({exporter=\"OTLP\"}[1m]))",
+          "legendFormat": "{{service_name}} ({{job}})",
           "refId": "A"
         }
       ],
       "fieldConfig": {
-        "defaults": { "custom": { "fillOpacity": 20, "lineWidth": 2 }, "unit": "short" }
+        "defaults": {
+          "custom": {
+            "fillOpacity": 20,
+            "lineWidth": 2
+          },
+          "unit": "short"
+        }
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 0 },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
       "id": 2,
       "title": "Warning & Error Log Rate",
       "type": "timeseries",
-      "datasource": { "type": "loki", "uid": "loki-ds" },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "loki", "uid": "loki-ds" },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-ds"
+          },
           "editorMode": "code",
-          "expr": "sum by (job) (count_over_time({exporter=\"OTLP\"} |~ \"(?i)(warning|error|exception)\" [1m]))",
-          "legendFormat": "{{job}} Warn/Error",
+          "expr": "sum by (service_name, job) (count_over_time({exporter=\"OTLP\"} |~ \"(?i)(warning|error|exception)\" [1m]))",
+          "legendFormat": "{{service_name}} Warn/Error",
           "refId": "A"
         }
       ],
       "fieldConfig": {
-        "defaults": { "color": { "fixedColor": "orange", "mode": "fixed" }, "custom": { "lineWidth": 2 }, "unit": "short" }
+        "defaults": {
+          "color": {
+            "fixedColor": "orange",
+            "mode": "fixed"
+          },
+          "custom": {
+            "lineWidth": 2
+          },
+          "unit": "short"
+        }
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 6 },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
       "id": 3,
       "title": "Infrastructure, Database & Connection Anomaly Logs Count",
       "type": "timeseries",
-      "datasource": { "type": "loki", "uid": "loki-ds" },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "loki", "uid": "loki-ds" },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-ds"
+          },
           "editorMode": "code",
-          "expr": "sum by (job) (count_over_time({exporter=\"OTLP\"} |~ \"(?i)(aborted|timeout|refused|oom|killed|io|error|fail|slow)\" [1m]))",
-          "legendFormat": "Anomaly: {{job}}",
+          "expr": "sum by (service_name, job) (count_over_time({exporter=\"OTLP\"} |~ \"(?i)(aborted|timeout|refused|oom|killed|io|error|fail|slow)\" [1m]))",
+          "legendFormat": "Anomaly: {{service_name}}",
           "refId": "A"
         }
       ],
       "fieldConfig": {
-        "defaults": { "color": { "fixedColor": "red", "mode": "fixed" }, "custom": { "lineWidth": 2 }, "unit": "short" }
+        "defaults": {
+          "color": {
+            "fixedColor": "red",
+            "mode": "fixed"
+          },
+          "custom": {
+            "lineWidth": 2
+          },
+          "unit": "short"
+        }
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 12 },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
       "id": 4,
       "title": "Centralized Multi-Cloud Live Logs Stream (AWS & Azure)",
       "type": "logs",
-      "datasource": { "type": "loki", "uid": "loki-ds" },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "loki", "uid": "loki-ds" },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-ds"
+          },
           "editorMode": "code",
           "expr": "{exporter=\"OTLP\"}",
           "refId": "A"
@@ -91,14 +161,25 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 12 },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
       "id": 5,
       "title": "Database & Persistence Layer Diagnostic Log Stream (Azure Data Services)",
       "type": "logs",
-      "datasource": { "type": "loki", "uid": "loki-ds" },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "loki", "uid": "loki-ds" },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-ds"
+          },
           "editorMode": "code",
           "expr": "{exporter=\"OTLP\"} |~ \"(?i)(persistence|mysql|mariadb|innodb|deadlock|lock|db|teadb)\"",
           "refId": "A"
@@ -113,15 +194,26 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 22 },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
       "id": 6,
       "title": "Tempo Distributed TraceQL Explorer (Cross-Cloud Slow & Error Traces)",
       "description": "Truy vấn TraceQL thời gian thực từ Tempo backend: Lọc toàn bộ các Trace spans có lỗi (status=error) hoặc thời gian phản hồi vượt ngưỡng WAN/DB (> 1.5s). Click vào từng Trace ID để xem Waterfall Spans chi tiết.",
       "type": "traces",
-      "datasource": { "type": "tempo", "uid": "tempo-ds" },
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "tempo", "uid": "tempo-ds" },
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo-ds"
+          },
           "queryType": "traceql",
           "query": "{ status = error || duration > 1.5s }",
           "limit": 25,
@@ -131,15 +223,26 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 32 },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
       "id": 7,
       "title": "Trace Spans Latency Distribution & Service Bottlenecks (P99, P90, P50)",
       "description": "Phân phối độ trễ microservices từ service graph bucket metrics, phát hiện nghẽn mạng WAN và suy giảm hiệu năng cơ sở dữ liệu MySQL.",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "histogram_quantile(0.99, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket{server=~\"$service\"}[5m]))) * 1000",
           "legendFormat": "P99 - {{server}} (ms)",
@@ -147,7 +250,10 @@
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "histogram_quantile(0.90, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket{server=~\"$service\"}[5m]))) * 1000",
           "legendFormat": "P90 - {{server}} (ms)",
@@ -155,7 +261,10 @@
           "refId": "B"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "histogram_quantile(0.50, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket{server=~\"$service\"}[5m]))) * 1000",
           "legendFormat": "P50 - {{server}} (ms)",
@@ -165,7 +274,9 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": { "lineWidth": 2 },
+          "custom": {
+            "lineWidth": 2
+          },
           "unit": "ms"
         }
       }
@@ -173,7 +284,14 @@
   ],
   "refresh": "5s",
   "schemaVersion": 39,
-  "tags": ["multicloud", "logs", "traces", "loki", "tempo", "deepdive"],
+  "tags": [
+    "multicloud",
+    "logs",
+    "traces",
+    "loki",
+    "tempo",
+    "deepdive"
+  ],
   "templating": {
     "list": [
       {
@@ -186,7 +304,7 @@
           "type": "prometheus",
           "uid": "thanos-query-ds"
         },
-        "definition": "label_values(up, cluster)",
+        "definition": "label_values(system_cpu_time_seconds_total, k8s_cluster_name)",
         "hide": 0,
         "includeAll": true,
         "label": "Cluster",
@@ -195,7 +313,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(up, cluster)",
+          "query": "label_values(system_cpu_time_seconds_total, k8s_cluster_name)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -266,9 +384,12 @@
       }
     ]
   },
-  "time": { "from": "now-15m", "to": "now" },
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
   "timezone": "browser",
-  "title": "Centralized Multi-Cloud Logs & Tracing Correlation",
+  "title": "06. Logs, Traces & Database",
   "uid": "mc-logs-traces-deepdive",
   "version": 2
 }

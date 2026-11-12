@@ -2,7 +2,7 @@
 
 > **Tài liệu:** `docs/progress/00_result_progress.md`  
 > **Dự án:** Multi-Cloud Monitoring Platform (TeaStore Hub-Spoke Observability)  
-> **Cập nhật lần cuối:** 2026-11-07  
+> **Cập nhật lần cuối:** 2026-11-10  
 > **Quy chuẩn:** Báo cáo tiến độ các Phase, tổng quan các lỗi phát sinh, trạng thái giải quyết và kết quả kiểm thử thực tế.
 
 ---
@@ -52,6 +52,11 @@ Dưới đây là danh mục toàn bộ sự cố kỹ thuật ghi nhận trong 
 | **INC-P3-17** | Phase 3.7 | AI Engine & AIOps Closed-Loop | Lệch pha tên SemConv PromQL, xung đột kịch bản chaos với 3 cụm k3d, thiếu phản hồi Closed-Loop và kênh cảnh báo Telegram | High | **Đã giải quyết** | Chuẩn hóa PromQL Dual SemConv fallback trong `collector.py` & `detector.py`, chuyển hướng toàn bộ scripts chaos sang 3 cụm chuẩn k3d (AWS, Azure, Hub), xây dựng máy chủ Prometheus Exporter nhúng cổng `:9108`, bổ sung Panel 7 Grafana (Dual Y-Axis) và tích hợp Telegram Alert Sink kèm bộ đệm chống spam 60s. |
 | **INC-P3-18** | Phase 3.8 | Visualization & Telemetry Cost | Dashboards Grafana thiếu biến động (static templating), thiếu liên kết ngữ cảnh (Data Links), thiếu panel TraceQL Tempo, và thiếu giám sát chi phí/cardinality | Medium | **Đã giải quyết** | Bổ sung dynamic templating (`$cluster`, `$service`, `$environment`) cho 100% dashboards, tích hợp Data Links chuyển tiếp ngữ cảnh, nhúng Tempo TraceQL explorer (`{ status = error || duration > 1.5s }`), và phát triển Dashboard 8 chuyên sâu về Cost Meter & Cardinality Management theo chuẩn SigNoz. |
 | **INC-P3-19** | Phase 3.9 | Collector Pipeline & Alerting | ServiceGraph bị suy giảm thông lượng do tail-sampling và Prometheus thiếu tập luật cảnh báo tự động | Medium | **Đã giải quyết** | Thiết lập Dual-Route Traces Pipeline trong OTel Gateway tách riêng luồng ServiceGraph (100% QPS) với luồng lưu trữ Tempo (tail-sampling), triển khai 4 nhóm luật Prometheus Alert Rules và hoàn thiện master test suite `make test` chạy mượt mà trên Linux/WSL2. |
+| **INC-P3-20** | Phase 3.9 | Kustomize CRD & Containerd Cache | Race condition khi apply Kustomize Pyrra CRD cùng ServiceLevelObjective CR và containerd pull scope error cho MinIO image | Medium | **Đã giải quyết** | Áp dụng lại Kustomize overlay sau khi Kube API server hoàn tất đăng ký schema CRD; sử dụng pipeline `docker save | ctr images import -` nạp trực tiếp image MinIO vào containerd của k3d server node, đưa toàn bộ 18 pod lên trạng thái 100% `Running`. |
+| **INC-P3-21** | Phase 3.9 | Clean Teardown & Cloud Identity Normalization | Tồn đọng Docker images sau khi teardown; nhãn sai lệch "AzureVM" và định danh giả lập chưa chuẩn thực tế (123456 / 000000) | High | **Đã giải quyết** | Khởi tạo script `clean_images.sh` tích hợp vào `make teardown` xóa sạch 100% container images; loại bỏ hoàn toàn nhãn AzureVM, chuẩn hóa sang AKS NodePool (`nodepool-data`); làm giàu định danh chuẩn thực tế với Microsoft Entra ID (Tenant/UAMI) và AWS Account ID 12 số (`851725492014`). |
+| **INC-P3-22** | Phase 3.9.3 | Remediation & Cryptographic PKI Verification | Lệch service Prometheus `prometheus-server:80`, Head Sampling 20% làm mất 80% error traces, MySQL 384Mi nguy cơ OOM, kịch bản GCP không tồn tại, và script PKI thiếu xác thực chữ ký mật mã | Critical | **Đã giải quyết** | 1. Chuẩn hóa script PKI với `openssl verify -CAfile` + `openssl x509 -checkend 604800` + `chmod 600`.<br>2. Sửa `collector.py`, `detector.py`, `run_live.py` trỏ đúng `svc/prometheus:9090`.<br>3. Gỡ bỏ `probabilistic_sampler` tại Spoke, bật `compression: gzip`, hội tụ spans về Hub để `servicegraphconnector` và `tail_sampling` bảo toàn 100% error/high-latency traces.<br>4. Nâng RAM MySQL lên `768Mi` và cấu hình `retention_period: 72h` cho Loki.<br>5. Chuẩn hóa 100% kịch bản trong `scenarios.json` về cặp cụm thực tế `aws <-> azure`. |
+| **INC-P3-23** | Phase 3.9.5 | Dynamic Secret Injection & Dashboards Standardization | Mật khẩu S3 MinIO plaintext trong ConfigMap của Loki/Tempo; 8 Dashboards Grafana tiêu đề rườm rà, lệch biến cluster, thiếu filter cụm và thiếu metrics GC/P99/Service | High | **Đã giải quyết** | 1. Loại bỏ 100% plaintext trong ConfigMap Loki & Tempo, chuyển sang `${MINIO_ROOT_USER}` & `${MINIO_ROOT_PASSWORD}` kết hợp cờ `-config.expand-env=true` nạp động từ Secret.<br>2. Chuẩn hóa tiêu đề 8 Dashboards ngắn gọn `01.` đến `08.`.<br>3. Chuẩn hóa biến `$cluster` dùng `label_values(system_cpu_time_seconds_total, k8s_cluster_name)` trên 8/8 Dashboards.<br>4. Thêm filter `k8s_cluster_name=~"$cluster"` cho 10 panels K8s Infra và Panels 6, 7, 8 WAN Telemetry.<br>5. Bổ sung GC Pause (ms/s) cho Panel 6 RED Metrics, quantile P99 cho Topology, và gom nhóm `service_name` cho Logs. |
+| **INC-P3-24** | Phase 3.9.7 | Dashboards vs Schemas v4.2.0 Alignment & Safe Refinements | Rà soát độ phủ giữa 8 Categories/4 Entity Profiles và 8 Grafana Dashboards; phát hiện 5 điểm cần tinh chỉnh (GAP-01 đến GAP-05) | Medium | **Đã giải quyết** | 1. Giữ nguyên bộ lọc `{server=~"$service"}` cho GAP-01 và không thêm panel cAdvisor vào Dashboard 04 cho GAP-04 nhằm triệt tiêu hoàn toàn rủi ro "No Data".<br>2. Bổ sung bộ lọc `{k8s_cluster_name=~"$cluster"}` cho Panel 4 của `red-metrics.json` (GAP-02).<br>3. Chuẩn hóa tiêu đề/mô tả Waterfall Panel 5 của `mc-cost-telemetry.json` (GAP-03).<br>4. Bổ sung target `refId: C` hiển thị Database Error Rate (`reqps`, trục Y phải, màu đỏ) trên Panel 5 và đồng bộ biến `$service` trên Panel 6 của `red-metrics.json` (GAP-05). Toàn bộ 8 dashboards và kustomize build hợp lệ 100%. |
 
 ---
 
@@ -72,7 +77,7 @@ Toàn bộ các thành phần hạ tầng và giám sát trên cả 3 cụm Kube
   └── robusta-runner             1/1 Running   (Automated K8s RCA & Alert Forwarder)
 
 [aws-k3d] (Spoke 1 - Compute)
-  ├── otel-collector-spoke       1/1 Running   (Hostmetrics, Filelog, 20% Sampling, mTLS to Hub)
+  ├── otel-collector-spoke       1/1 Running   (Hostmetrics, Filelog, Edge Noise Filter, Gzip mTLS to Hub)
   ├── teastore-registry          1/1 Running   (RMI Registry :1099, NodePort :31112)
   ├── teastore-webui             1/1 Running   (Tomcat WebUI :8080)
   ├── teastore-auth              1/1 Running   (Authentication service)
@@ -80,7 +85,7 @@ Toàn bộ các thành phần hạ tầng và giám sát trên cả 3 cụm Kube
   └── teastore-recommender       1/1 Running   (Recommender service)
 
 [azure-k3d] (Spoke 2 - Persistence)
-  ├── otel-collector-spoke       1/1 Running   (Hostmetrics, Filelog, 20% Sampling, mTLS to Hub)
+  ├── otel-collector-spoke       1/1 Running   (Hostmetrics, Filelog, Edge Noise Filter, Gzip mTLS to Hub)
   ├── teastore-persistence       1/1 Running   (Database abstraction layer, NodePort :31111)
   └── teastore-db                1/1 Running   (MySQL 8.0 Relational DB :3306)
 ```
@@ -151,5 +156,25 @@ Toàn bộ các thành phần hạ tầng và giám sát trên cả 3 cụm Kube
         - AI Anomaly Detection Engine V3: 4/4 bài test đạt `OK` (thời gian chạy 0.001s).
         - Toàn bộ 8/8 Dashboards Grafana: Xác thực cú pháp JSON hợp lệ 100%.
         - Kustomize manifests của cả 3 cụm (`hub-k3d`, `aws-k3d`, `azure-k3d`): Build dry-run thành công 100%.
+14. **Kiểm Thử Nghiệm Thu Toàn Diện Trên Môi Trường Sạch (Fresh Teardown & Full Redeployment Verification - 2026-11-10)**:
+    - **Quy trình thực nghiệm**:
+      1. Xóa bỏ hoàn toàn thư mục làm việc cũ trên Ubuntu (WSL2) và clone mới 100% từ nhánh `feat/integrate-infra-ai-anomaly` (commit `e7e2d16`).
+      2. Kích hoạt `make teardown` (Ansible playbook `00_cleanup_all.yml`): Xóa sạch 3 cụm k3d, docker network `mc-monitoring-net`, volumes lưu trữ và PKI certs tạm thời. Kiểm tra `docker ps -a`, `k3d cluster list`, `docker network ls` xác nhận 0 container, 0 cluster, 0 network còn sót lại (sạch 100%).
+      3. Khởi tạo hạ tầng tuần tự:
+         - `make env-setup`: Tạo tệp `.env` từ `.env.example`.
+         - `make pki-generate`: Sinh Root CA, Hub server certs và Spoke1/Spoke2 client certs.
+         - `make infra`: Khởi tạo 3 cụm `hub-k3d`, `aws-k3d`, `azure-k3d`, thiết lập WAN netem (10ms ±2ms) và đồng bộ secrets mTLS (Ansible recap: 40 ok, 11 changed, 0 failed).
+         - `make deploy-hub`: Triển khai toàn bộ cụm Hub Observability. Sau khi Kube API server hoàn tất đăng ký schema CRD Pyrra và nạp ảnh MinIO vào containerd, toàn bộ 9 Pods Hub đạt `1/1 Running` (`prometheus-0` đạt `2/2 Running`).
+         - `make deploy-spokes`: Triển khai workload TeaStore và OTel Collector Spoke cho cụm AWS và Azure. Toàn bộ các microservices đạt `1/1 Running`:
+           - `aws-k3d`: `otel-collector-spoke`, `teastore-webui`, `teastore-auth`, `teastore-image`, `teastore-recommender`, `teastore-registry`.
+           - `azure-k3d`: `otel-collector-spoke`, `teastore-persistence`, `teastore-db`.
+    - **Kết quả nghiệm thu live end-to-end**:
+      - **TeaStore WebUI HTTP Service**: `curl -sI http://localhost:8080/tools.descartes.teastore.webui/` $\rightarrow$ `HTTP/1.1 200 OK` (Server: TeaStoreTomcat).
+      - **Grafana Health & Dashboards**: `curl -sI http://localhost:3000/api/health` $\rightarrow$ `HTTP/1.1 200 OK`. Gọi `/api/search` xác thực toàn bộ 8/8 Dashboards chuẩn SRE và Cost Meter đã được provision tự động vào folder `Multi-Cloud Observability`.
+      - **MinIO Object Storage S3**: `mc ls local` xác nhận 4 buckets (`loki-data`, `raw-telemetry`, `tempo-traces`, `thanos-metrics`) hoạt động trơn tru; dữ liệu OTLP thô liên tục được stream vào `raw-telemetry/year=2026/...`.
+      - **Prometheus Alert Rules**: `/api/v1/rules` xác nhận 4 nhóm luật SigNoz (`SpokeClusterHeartbeatAbsent`, `MicroserviceHighErrorRate`, `CrossCloudWANLatencyDegraded`, `OTelCollectorMemoryHigh`) đều ở trạng thái hoạt động (Active). Luật Heartbeat bắt lỗi chính xác thời điểm cụm khởi động khi chưa có tín hiệu mTLS.
+      - **Mô phỏng WAN Netem**: Ping giữa node `aws-k3d-server-0` và `azure-k3d-server-0` duy trì RTT thực tế 20–39ms với 0% packet loss.
+      - **Automated Test Suite (`make test`)**: 4/4 bài kiểm tra AI Anomaly Detection Engine V3 đạt `OK`, 8/8 Dashboards Grafana JSON hợp lệ, và build thành công 3 Kustomize overlays.
+
 
 

@@ -21,9 +21,9 @@ ENV/
 htmlcov/
 
 # Agent & Prompting metadata
-.agent/
-.agent/**
-*.agent/
+.agents/
+.agents/**
+*.agents/
 
 # Benchmark application source (huge Descartes TeaStore repository)
 Benchmark-app/

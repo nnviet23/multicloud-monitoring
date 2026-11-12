@@ -46,7 +46,9 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": { "lineWidth": 2 },
+          "custom": {
+            "lineWidth": 2
+          },
           "unit": "reqps"
         }
       }
@@ -88,8 +90,13 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "fixedColor": "red", "mode": "fixed" },
-          "custom": { "lineWidth": 2 },
+          "color": {
+            "fixedColor": "red",
+            "mode": "fixed"
+          },
+          "custom": {
+            "lineWidth": 2
+          },
           "unit": "reqps"
         }
       }
@@ -153,7 +160,9 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": { "lineWidth": 2 },
+          "custom": {
+            "lineWidth": 2
+          },
           "unit": "ms"
         }
       }
@@ -180,7 +189,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "(sum by (k8s_cluster_name) (rate(system_cpu_time_seconds_total{state=\"wait\"}[1m])) / (sum by (k8s_cluster_name) (rate(system_cpu_time_seconds_total[1m])) + 0.0001)) * 100",
+          "expr": "(sum by (k8s_cluster_name) (rate(system_cpu_time_seconds_total{k8s_cluster_name=~\"$cluster\", state=\"wait\"}[1m])) / (sum by (k8s_cluster_name) (rate(system_cpu_time_seconds_total{k8s_cluster_name=~\"$cluster\"}[1m])) + 0.0001)) * 100",
           "legendFormat": "{{k8s_cluster_name}} I/O Wait (%wa)",
           "range": true,
           "refId": "A"
@@ -191,7 +200,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "sum by (k8s_cluster_name) (system_network_connections{state=\"ESTABLISHED\"})",
+          "expr": "sum by (k8s_cluster_name) (system_network_connections{k8s_cluster_name=~\"$cluster\", state=\"ESTABLISHED\"})",
           "legendFormat": "{{k8s_cluster_name}} Active Sockets (ESTABLISHED)",
           "range": true,
           "refId": "B"
@@ -199,15 +208,26 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": { "lineWidth": 2 },
+          "custom": {
+            "lineWidth": 2
+          },
           "unit": "percent"
         },
         "overrides": [
           {
-            "matcher": { "id": "byFrameRefID", "options": "B" },
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
             "properties": [
-              { "id": "custom.axisPlacement", "value": "right" },
-              { "id": "unit", "value": "short" }
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
             ]
           }
         ]
@@ -222,7 +242,7 @@
         "y": 8
       },
       "id": 5,
-      "title": "Database & RMI Backend Call Latency (Persistence -> DB & Registry)",
+      "title": "Database & RMI Backend Call Latency & Errors (Persistence -> DB & Registry)",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -250,13 +270,52 @@
           "legendFormat": "P50 {{client}} -> {{server}}",
           "range": true,
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "sum by (client, server) (rate(traces_service_graph_request_failed_total{server=~\"teadb|teastore-db|teastore-registry|teastore-persistence\"}[1m]))",
+          "instant": false,
+          "legendFormat": "Errors: {{client}} -> {{server}} (req/s)",
+          "range": true,
+          "refId": "C"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": { "lineWidth": 2 },
+          "custom": {
+            "lineWidth": 2
+          },
           "unit": "ms"
-        }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "C"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "reqps"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -268,7 +327,7 @@
         "y": 16
       },
       "id": 6,
-      "title": "Application Runtime Saturation: JVM Memory Heap Usage & Thread Count",
+      "title": "Application Runtime Saturation: JVM Heap, Thread Count & GC Pause Time",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -281,7 +340,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "sum by (service_name) (jvm_memory_used_bytes{jvm_memory_type=\"heap\"} or process_runtime_jvm_memory_usage_bytes{type=\"heap\"} or process_runtime_jvm_memory_usage_bytes) / (1024*1024)",
+          "expr": "sum by (service_name) (jvm_memory_used_bytes{service_name=~\"$service\", jvm_memory_type=\"heap\"} or process_runtime_jvm_memory_usage_bytes{service_name=~\"$service\", type=\"heap\"}) / (1024*1024)",
           "legendFormat": "{{service_name}} Heap Used (MB)",
           "range": true,
           "refId": "A"
@@ -292,23 +351,69 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "sum by (service_name) (jvm_thread_count or process_runtime_jvm_threads_count)",
+          "expr": "sum by (service_name) (jvm_thread_count{service_name=~\"$service\"} or process_runtime_jvm_threads_count{service_name=~\"$service\"})",
           "legendFormat": "{{service_name}} Threads",
           "range": true,
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "sum by (service_name) (rate(jvm_gc_duration_seconds_sum{service_name=~\"$service\"}[1m]) or rate(process_runtime_jvm_gc_duration_seconds_sum{service_name=~\"$service\"}[1m])) * 1000",
+          "instant": false,
+          "legendFormat": "{{service_name}} - GC Pause (ms/s)",
+          "range": true,
+          "refId": "C"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": { "lineWidth": 2 },
+          "custom": {
+            "lineWidth": 2
+          },
           "unit": "mbytes"
         },
         "overrides": [
           {
-            "matcher": { "id": "byFrameRefID", "options": "B" },
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
             "properties": [
-              { "id": "custom.axisPlacement", "value": "right" },
-              { "id": "unit", "value": "short" }
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "C"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
             ]
           }
         ]
@@ -377,31 +482,60 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": { "lineWidth": 2 },
+          "custom": {
+            "lineWidth": 2
+          },
           "unit": "percent",
           "min": 0,
           "max": 100
         },
         "overrides": [
           {
-            "matcher": { "id": "byFrameRefID", "options": "B" },
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
             "properties": [
-              { "id": "custom.axisPlacement", "value": "right" },
-              { "id": "unit", "value": "ms" }
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "ms"
+              }
             ]
           },
           {
-            "matcher": { "id": "byFrameRefID", "options": "C" },
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "C"
+            },
             "properties": [
-              { "id": "custom.axisPlacement", "value": "right" },
-              { "id": "unit", "value": "ms" }
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "ms"
+              }
             ]
           },
           {
-            "matcher": { "id": "byFrameRefID", "options": "D" },
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "D"
+            },
             "properties": [
-              { "id": "custom.axisPlacement", "value": "right" },
-              { "id": "unit", "value": "ms" }
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "ms"
+              }
             ]
           }
         ]
@@ -428,7 +562,7 @@
           "type": "prometheus",
           "uid": "thanos-query-ds"
         },
-        "definition": "label_values(up, cluster)",
+        "definition": "label_values(system_cpu_time_seconds_total, k8s_cluster_name)",
         "hide": 0,
         "includeAll": true,
         "label": "Cluster",
@@ -437,7 +571,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(up, cluster)",
+          "query": "label_values(system_cpu_time_seconds_total, k8s_cluster_name)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -513,7 +647,7 @@
     "to": "now"
   },
   "timezone": "browser",
-  "title": "Multi-Cloud RED Metrics & Four Golden Signals",
+  "title": "03. Application & JVM (RED)",
   "uid": "mc-red-metrics",
   "version": 2
 }

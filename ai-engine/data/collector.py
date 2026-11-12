@@ -86,7 +86,7 @@ class PrometheusVectorClient:
         try:
             cmd = [
                 "kubectl", "--context", "k3d-hub-k3d", "-n", "monitoring",
-                "port-forward", "svc/prometheus-server", "9090:80"
+                "port-forward", "svc/prometheus", "9090:9090"
             ]
             self.pf_proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             time.sleep(3)

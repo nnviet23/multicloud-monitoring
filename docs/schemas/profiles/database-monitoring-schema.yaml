@@ -1,0 +1,179 @@
+schema_version: "2.0"
+resource_type: "relational_database"
+target_system: "teastore-db (MySQL 8.0 Community Server on Azure Spoke)"
+methodology: "NON_INVASIVE_MULTI_LAYER_DB_OBSERVABILITY"
+
+included_categories:
+  - "CAT-08: Data Stores & Relational Databases"
+  - "CAT-02: Storage & Filesystem"
+  - "CAT-01: OS & System Kernel"
+  - "CAT-03: Network & Transport (L3/L4 & WAN)"
+  - "CAT-05: Containers & Kubernetes Orchestration"
+  - "CAT-04: Cloud Infrastructure & Perimeter Context"
+
+identity_attributes:
+  database_system:
+    canonical_name: "db.system"
+    type: "string"
+    default: "mysql"
+  database_name:
+    canonical_name: "db.name"
+    type: "string"
+    default: "teadb"
+  service_name:
+    canonical_name: "service.name"
+    type: "string"
+    default: "teastore-db"
+  orchestration:
+    cluster_name: "k8s_cluster_name"
+    default: "azure-k3d"
+    namespace: "k8s.namespace.name"
+    default_namespace: "default"
+    pod_name: "k8s.pod.name"
+    default_pod: "teastore-db-0"
+    node_name: "k8s.node.name"
+  cloud_identity:
+    provider: "cloud.provider"
+    default: "azure"
+    region: "cloud.region"
+    default_region: "southasia"
+    account_id: "cloud.account.id"
+    default_account: "4b8f3a21-9e6c-4f80-b753-2d9a6e1c84f5"
+    resource_id: "cloud.resource_id"
+    default_resource_id: "/subscriptions/4b8f3a21-.../resourceGroups/rg-teastore/providers/Microsoft.Compute/virtualMachines/aks-nodepool-data"
+
+dependencies:
+  application:
+    storage_engine: "InnoDB"
+    database_port: 3306
+    direct_clients:
+      - name: "teastore-persistence"
+        protocol: "JDBC"
+        driver: "mysql-connector-java"
+        port: 3306
+        cluster: "azure-k3d"
+  system:
+    data_directory: "/var/lib/mysql"
+    log_files:
+      error_log: "/var/log/mysql/error.log"
+      slow_query_log: "/var/log/mysql/mysql-slow.log"
+    cgroup:
+      cpu_limit_millicores: 1000
+      memory_limit_mb: 1024
+  cloud:
+    hosting_cluster: "azure-k3d"
+    managed_nodepool: "nodepool-data"
+    virtual_network: "vnet-teastore-southasia"
+    subnet: "snet-aks-internal (10.1.2.0/24)"
+    security_group: "nsg-aks-teastore-internal"
+
+telemetry_signals:
+  metrics:
+    service_graph_db_traffic:
+      category_ref: "CAT-08"
+      metric_name: "traces_service_graph_request_total"
+      type: "counter"
+      unit: "reqps"
+      orientation: 0
+      promql: "sum by (client) (rate(traces_service_graph_request_total{server=~\"teadb|teastore-db\"}[1m]))"
+    service_graph_db_latency:
+      category_ref: "CAT-08"
+      metric_name: "traces_service_graph_request_server_seconds_bucket"
+      type: "histogram"
+      unit: "ms"
+      orientation: -1
+      promql_p95: "histogram_quantile(0.95, sum by (le) (rate(traces_service_graph_request_server_seconds_bucket{server=~\"teadb|teastore-db\"}[1m]))) * 1000"
+      promql_p99: "histogram_quantile(0.99, sum by (le) (rate(traces_service_graph_request_server_seconds_bucket{server=~\"teadb|teastore-db\"}[1m]))) * 1000"
+    service_graph_db_failures:
+      category_ref: "CAT-08"
+      metric_name: "traces_service_graph_request_failed_total"
+      type: "counter"
+      unit: "reqps"
+      orientation: -1
+      promql: "sum by (client) (rate(traces_service_graph_request_failed_total{server=~\"teadb|teastore-db\"}[1m]))"
+    disk_write_io:
+      category_ref: "CAT-02"
+      metric_name: "system_disk_io_bytes_total"
+      type: "counter"
+      unit: "Bps"
+      orientation: 0
+      promql: "sum by (k8s_cluster_name) (rate(system_disk_io_bytes_total{k8s_cluster_name=\"azure-k3d\", direction=\"write\"}[1m]))"
+    disk_io_time:
+      category_ref: "CAT-02"
+      metric_name: "system_disk_operation_time_seconds_total"
+      type: "counter"
+      unit: "seconds"
+      orientation: -1
+      promql: "sum by (k8s_cluster_name) (rate(system_disk_operation_time_seconds_total{k8s_cluster_name=\"azure-k3d\"}[1m]))"
+    cpu_io_wait:
+      category_ref: "CAT-01"
+      metric_name: "system_cpu_time_seconds_total"
+      type: "gauge"
+      unit: "percent"
+      orientation: -1
+      promql: "(sum by (k8s_cluster_name) (rate(system_cpu_time_seconds_total{k8s_cluster_name=\"azure-k3d\", state=\"wait\"}[1m])) / (sum by (k8s_cluster_name) (rate(system_cpu_time_seconds_total{k8s_cluster_name=\"azure-k3d\"}[1m])) + 1e-4)) * 100"
+    tcp_connections:
+      category_ref: "CAT-03"
+      metric_name: "system_network_connections"
+      type: "gauge"
+      unit: "connections"
+      orientation: -1
+      promql: "sum by (k8s_cluster_name, state) (system_network_connections{k8s_cluster_name=\"azure-k3d\", state=~\"ESTABLISHED|CLOSE_WAIT\"})"
+    ai_rca_db_latency:
+      category_ref: "CAT-08"
+      metric_name: "ai_rca_component_latency_ms"
+      type: "gauge"
+      unit: "ms"
+      orientation: -1
+      promql: "ai_rca_component_latency_ms{component=\"db\"}"
+
+  planned_extensible_metrics:
+    status: "PLANNED_EXTENSIBLE_VIA_MYSQLD_EXPORTER"
+    note: "Kích hoạt khi bổ sung deployment mysqld-exporter :9104 trên azure-k3d"
+    metrics:
+      - name: "mysql_global_status_threads_connected"
+        type: "gauge"
+        unit: "count"
+        orientation: -1
+      - name: "mysql_global_status_innodb_buffer_pool_reads"
+        type: "counter"
+        unit: "reads"
+        orientation: -1
+      - name: "mysql_global_status_innodb_row_lock_waits"
+        type: "counter"
+        unit: "waits"
+        orientation: -1
+
+  logs:
+    category_ref: "CAT-08"
+    format: "MySQL Engine Log via OTel filelog receiver"
+    logql_error_stream: '{service_name="teastore-db"} |~ "(?i)(error|aborted connection|table lock|deadlock)"'
+    retention_days: 30
+
+  traces:
+    category_ref: "CAT-08"
+    format: "OpenTelemetry JDBC Span"
+    required_span_attributes:
+      - "db.system: mysql"
+      - "db.name: teadb"
+      - "db.statement: <sanitized SQL>"
+      - "net.peer.name: teastore-db"
+      - "net.peer.port: 3306"
+    exporter: "OTLP gRPC :4317 -> Tempo"
+
+slo_targets:
+  jdbc_query_latency:
+    target_p95_ms: 100
+    target_p99_ms: 300
+  storage_iowait_threshold:
+    warning_percent: 10
+    critical_percent: 25
+  query_failure_rate:
+    target_max_percent: 0.1
+
+correlation_keys:
+  to_persistence_service: "service.name: teastore-persistence"
+  to_traces: "trace_id"
+  to_azure_node: "k8s_cluster_name: azure-k3d"
+  to_storage_volume: "storage.volume.id"
+

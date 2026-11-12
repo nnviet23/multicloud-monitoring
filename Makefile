@@ -99,10 +99,19 @@ verify: ## Run comprehensive health verification across all clusters
 	@echo "=== [3/3] Verifying Simulated WAN Network (tc netem) ==="
 	@docker exec k3d-aws-k3d-server-0 ping -c 3 k3d-azure-k3d-server-0 || true
 
+.PHONY: clean-images
+clean-images: ## Remove all project container images and prune dangling images
+	@echo "--> Cleaning up project container images..."
+	@bash infra/scripts/clean_images.sh || true
+
 .PHONY: teardown
-teardown: ## Clean up all k3d clusters, docker networks, volumes and certs
+teardown: ## Clean up all k3d clusters, docker networks, volumes, and certs (preserves Docker image cache)
 	@echo "--> Tearing down all clusters and resources..."
 	ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/00_cleanup_all.yml
+
+.PHONY: purge-all
+purge-all: teardown clean-images ## Full deep clean: teardown clusters + remove all project container images from host
+	@echo "Full purge completed (clusters, network, certs, and Docker images cleaned)."
 
 .PHONY: reset-wan
 reset-wan: ## Reset simulated WAN impairment back to standard latency

@@ -753,4 +753,57 @@ Bổ sung các target kiểm thử tiêu chuẩn:
 | **Gói 3: Nâng cấp Master Makefile** | `Makefile` | Bổ sung `test`, `test-ai`, `validate-dashboards`, `validate-kustomize` và `test-wan` | **Trung bình (P2)** |
 
 > [!NOTE]
-> **Kính gửi bạn xem xét:** Toàn bộ 3 đề xuất trên đã được cập nhật chi tiết vào `docs/progress/02_solution_plan.md`. Bạn vui lòng xem qua và cho mình biết ý kiến duyệt nhé! Nếu bạn đồng ý, mình sẽ triển khai ngay, hoặc nếu bạn muốn giữ nguyên và tập trung kiểm thử bên phía Ubuntu/WSL2, mình sẽ tiến hành test các lệnh Makefile trên môi trường Ubuntu ngay lập tức!
+> **Trạng thái thực thi:** Toàn bộ 3 đề xuất của Đợt 3 đã được phê duyệt và hoàn tất triển khai thành công 100%. Master Makefile đã được nghiệm thu hoàn chỉnh trên môi trường Linux Ubuntu 24.04 (WSL2).
+
+---
+
+## 12. Rà Soát & Đề Xuất Khắc Phục Sau Kiểm Thử Ubuntu: Clean Teardown, Loại Bỏ AzureVM & Chuẩn Hóa Định Danh Đám Mây Sâu
+
+Sau khi kiểm thử thực tế trên Ubuntu (WSL2), hệ thống ghi nhận hai vấn đề cốt lõi cần giải quyết triệt để:
+
+### 12.1. Vấn Đề 1: `make teardown` Chưa Xóa Sạch Dữ Liệu Container Images
+
+#### A. Phân tích hiện trạng
+Khi chạy `make teardown`, Ansible playbook `infra/ansible/playbooks/00_cleanup_all.yml` xóa các cụm k3d, container và volume, nhưng **không xóa các container images đã kéo về host Docker**. Kết quả là lệnh `docker images` trên host vẫn lưu lại toàn bộ các images (TeaStore, OpenTelemetry, Observability stack), tiêu tốn dung lượng ổ đĩa và không đảm bảo trạng thái sạch hoàn toàn (clean state) khi người dùng muốn dọn dẹp hệ thống.
+
+#### B. Giải pháp kỹ thuật
+1. Tạo script chuyên trách `infra/scripts/clean_images.sh` liệt kê toàn bộ 16 images dự án ghim cứng phiên bản, image k3d helper (`rancher/k3*`), và gọi lệnh `docker image prune -f`.
+2. Tích hợp lệnh gọi script này vào cả playbook `00_cleanup_all.yml` và target `make teardown`.
+3. Bổ sung target độc lập `make clean-images` trong `Makefile` cho phép người dùng chủ động dọn image mà không cần hủy cụm nếu muốn tái thiết lập image cache.
+
+---
+
+### 12.2. Vấn Đề 2: Xuất Hiện Nhãn "AzureVM" & Định Danh Giả Lập Phi Thực Tế
+
+#### A. Phân tích hiện trạng
+1. **Sai lệch mô hình thực thi của Azure Spoke:** Trong thiết kế kiến trúc chuẩn của đồ án, Spoke 2 (`azure-k3d`) là cụm Kubernetes mô phỏng **Azure Kubernetes Service (AKS)** với Managed Node Pool (`nodepool-data`). Hoàn toàn **không có máy chủ ảo độc lập (Azure Virtual Machine / AzureVM)** trong đồ án. Tuy nhiên, trong panel PromQL của `system-topology.json` lại xuất hiện chuỗi nhãn `Azure AKS (VM Standard_D4ds_v5)`.
+2. **Định danh đám mây mang tính giả lập đơn giản:** Các trường định danh trong cấu hình Hub OTel Gateway (`03-configmap.yaml`) sử dụng chuỗi số tĩnh `123456789012` (AWS) và `00000000-0000-0000-0000-000000000000` (Azure), thiếu định danh danh tính chuẩn Microsoft Entra ID (Tenant ID, Client ID, Managed Identity UAMI).
+
+#### B. Giải pháp kỹ thuật chuẩn hóa
+1. **Triệt tiêu hoàn toàn nhãn "AzureVM":**
+   - Đổi nhãn nền tảng thành `Azure AKS (NodePool: nodepool-data)` và AWS thành `AWS EKS (NodeGroup: nodepool-app)`.
+   - Cập nhật các tài liệu kiến trúc, schema YAML (`instance-monitoring-schema.yaml`) và `RESOURCE_MONITORING_SCHEMAS.md` để đồng nhất đối tượng theo dõi là Kubernetes Worker Nodes / Managed Node Pools.
+2. **Chuẩn hóa định danh đám mây theo chuẩn sản xuất thực tế:**
+   - **AWS Identifiers:**
+     - AWS Production 12-digit Account ID: `851725492014`.
+     - IAM Role ARN: `arn:aws:iam::851725492014:role/${service.name}-irsa-role`.
+     - EKS Pod Resource ID: `arn:aws:eks:us-east-1:851725492014:pod/teastore-cluster/${k8s.namespace.name}/${k8s.pod.name}`.
+     - VPC ID: `vpc-0f8a3c2b1e7d9a4f6`, Subnet: `subnet-09a8b7c6d5e4f3a21`, SG: `sg-01a2b3c4d5e6f7a8b`.
+   - **Azure / Microsoft Entra ID Identifiers:**
+     - Azure Subscription ID: `4b8f3a21-9e6c-4f80-b753-2d9a6e1c84f5`.
+     - Microsoft Entra Directory / Tenant ID: `72f988bf-86f1-41af-91ab-2d7cd011db47`.
+     - Microsoft Entra User-Assigned Managed Identity (UAMI): `/subscriptions/4b8f3a21-9e6c-4f80-b753-2d9a6e1c84f5/resourceGroups/rg-teastore-southasia/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-${service.name}`.
+     - Azure AKS Pod Resource ID: `/subscriptions/4b8f3a21-9e6c-4f80-b753-2d9a6e1c84f5/resourceGroups/rg-teastore-southasia/providers/Microsoft.ContainerService/managedClusters/teastore-aks/pods/${k8s.pod.name}`.
+     - Virtual Network: `vnet-teastore-southasia`, Subnet: `snet-aks-nodepool-data`, NSG: `nsg-aks-teastore-internal`.
+
+---
+
+### 12.3. Bảng Kế Hoạch Triển Khai Chi Tiết
+
+| Hạng mục | Tệp tác động | Nội dung xử lý | Trạng thái |
+|---|---|---|:---:|
+| **Xóa sạch images khi Teardown** | `infra/scripts/clean_images.sh`<br>`infra/ansible/playbooks/00_cleanup_all.yml`<br>`Makefile` | Viết script xóa 16 images + k3d images + dangling images; gắn vào `make teardown` và thêm `make clean-images` | **Đã hoàn thành** |
+| **Loại bỏ AzureVM** | `k8s/base/visualization-grafana/dashboards/system-topology.json`<br>`docs/schemas/instance-monitoring-schema.yaml`<br>`docs/schemas/RESOURCE_MONITORING_SCHEMAS.md` | Đổi sang `Azure AKS (NodePool: nodepool-data)` và `AWS EKS (NodeGroup: nodepool-app)`; chuẩn hóa đối tượng Schema | **Đã hoàn thành** |
+| **Chuẩn hóa Microsoft Entra ID & Realistic ARN** | `k8s/base/otel-collector/gateway/03-configmap.yaml`<br>`k8s/base/visualization-grafana/dashboards/system-topology.json`<br>`docs/architecture/00_TechStack.md`<br>`docs/progress/03_resource_monitor.md` | Thay thế chuỗi dummy bằng AWS Account ID `851725492014`, Azure Subscription ID `4b8f3a21-...`, Entra Tenant ID `72f988bf-...` | **Đã hoàn thành** |
+| **Cập nhật Báo cáo kỹ thuật** | `docs/progress/00_result_progress.md`<br>`docs/progress/01_implemetation_issue.md`<br>`docs/progress/02_solution_plan.md` | Bổ sung INC-P3-21 và cập nhật tiến độ thực tế | **Đã hoàn thành** |
+

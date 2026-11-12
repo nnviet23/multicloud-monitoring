@@ -1,125 +1,335 @@
-# Chiến Lược Giám Sát Toàn Diện: Hạ Tầng Hệ Điều Hành, Mạng L3/L4 & Ngữ Cảnh Đa Đám Mây (Full-Stack Infrastructure, OS/Kernel & Cloud Dependency Observability)
+# Chiến Lược Giám Sát Toàn Diện: Taxonomy 8 Danh Mục Chuẩn, Entity Composition & Telemetry Data Contract
 
-> **Tài liệu tham chiếu:** `docs/progress/03_resource_monitor.md`  
-> **Dự án:** Multi-Cloud Monitoring Platform (TeaStore Hub-Spoke Observability)  
-> **Phiên bản:** v3.0.0 (Balanced Full-Stack SRE & USE Method Edition)  
-> **Cập nhật lần cuối:** 2026-11-07  
-> **Mục tiêu:** Chuyển dịch từ mô hình giám sát thiên lệch về siêu dữ liệu đám mây tĩnh (Static Cloud Metadata) sang kiến trúc **Quan sát toàn diện (True Full-Stack Observability)**. Kết hợp chặt chẽ giữa **Chẩn đoán tầng Hệ điều hành, Nhân Linux, Đĩa từ, Mạng L3/L4 theo phương pháp USE (Utilization - Saturation - Errors)** với **Mô hình 6 Trục Phụ Thuộc Đám Mây Sâu (Cloud Dependency Context)** và **Tín hiệu vàng ứng dụng (RED/Golden Signals)**.
+> **Mã tài liệu:** `docs/progress/03_resource_monitor.md`  
+> **Dự án:** Multi-Cloud Monitoring Platform (TeaStore Hub-Spoke Observability & AIOps)  
+> **Phiên bản:** v4.2.0 (OTel SemConv Two-Tier & Telemetry Evolution Edition)  
+> **Cập nhật lần cuối:** 2026-11-12  
+> **Tác giả:** Principal Observability Architect, OpenTelemetry Specification Maintainer & SRE Technical Author  
+> **Kế thừa & Nâng cấp:** Tích hợp nghiên cứu chiến lược SigNoz (`05_SigNoz_strategy.md`), Datadog Core (`06_Datadog_strategy.md`), OpenTelemetry Semantic Conventions Specification (`docs/other-reference/OTelSemanticConv`), AI Anomaly Detection Engine V3 (`04_ai_engine.md`), và hệ thống Schema 2 tầng tại [`docs/schemas/`](../schemas/README.md).
 
 ---
 
-## 1. Triết Lý Thiết Kế: Cân Bằng Giữa "Hành Vi Hệ Thống Động" Và "Ngữ Cảnh Đám Mây Tĩnh"
+## Tóm Tắt Điều Hành (Executive Summary)
 
-Trong vận hành hệ thống phân tán đa đám mây (Multi-Cloud SRE), việc giám sát tài nguyên không thể chỉ dừng lại ở việc gắn nhãn tài nguyên đó thuộc VPC nào hay dùng IAM Role gì. Một chiến lược giám sát chuẩn mực phải trả lời được đồng thời hai câu hỏi:
-1. **WHAT & WHERE (Tầng Ngữ Cảnh Đám Mây - Cloud Dependency Context):** Sự cố đang xảy ra ở đám mây nào (`aws` hay `azure`), vùng nào (`us-east-1` hay `southasia`), nhánh mạng Subnet/Security Group nào, và ảnh hưởng đến danh tính IAM/Resource ARN nào?
-2. **WHY & HOW (Tầng Chẩn Đoán Hệ Điều Hành, Lưu Trữ & Mạng - OS, Kernel, Storage & Network Diagnostics):** Tại sao tài nguyên đó bị suy giảm hiệu năng? Do nghẽn CPU thực thi hay do **CPU I/O Wait (`%wa`)** chờ ổ đĩa MySQL flush dữ liệu? Do thiếu RAM dẫn đến Linux Kernel `OOMKiller` cắt tiến trình (`SIGKILL 9`), do cạn kiệt **Inode (`df -i`)**, hay do **TCP Retransmissions / Packet Drops** trên đường truyền WAN liên cụm?
+Trong các hệ thống phân tán đa đám mây (Multi-Cloud Distributed Systems), việc chỉ phân loại giám sát theo 3 tầng sơ sài (Ứng dụng - Hệ thống - Đám mây) bộc lộ nhiều điểm mù kỹ thuật nghiêm trọng:
+1. **Không phản ánh đúng bản chất ghép tầng (Layering & Decoupling):** Một ứng dụng Web không chỉ có mã nguồn nghiệp vụ mà còn phụ thuộc chặt chẽ vào máy ảo Java (JVM), hạn ngạch container (cgroup limits), socket TCP, và các câu truy vấn cơ sở dữ liệu phía hạ nguồn.
+2. **Thiếu một Hợp đồng Dữ liệu (Data Contract) chặt chẽ:** Khi các nhóm kỹ sư thu thập viễn trắc tự do mà không có một từ điển dữ liệu quy định rõ ràng về đơn vị đo lường (Unit), chiều hướng đánh giá (Orientation: càng cao càng tốt hay càng cao càng xấu), và các nhãn chống va chạm (Anti-collision Compound Keys), dữ liệu đưa vào kho lưu trữ (Thanos, Loki, Tempo) sẽ bị phân mảnh, dẫn đến việc các mô hình Machine Learning / AIOps bị sai lệch hoặc nổ số chiều (Cardinality Explosion).
+3. **Phân biệt 3 Khái niệm Nền tảng của OpenTelemetry:**
+   - **OTel Semantic Convention Domains ([`docs/schemas/categories/`](../schemas/categories/README.md)):** Từ điển thuộc tính và số đo nguyên tử chuẩn hóa theo chuẩn quốc tế của OpenTelemetry Specification.
+   - **OTel Telemetry Schema Evolution (`v1.21.0 -> v1.45.0`):** Bản đồ chuyển đổi tên gọi lịch sử giữa các phiên bản agent, được đồ án xử lý bằng cơ chế **Dual SemConv Fallback**.
+   - **Entity Monitoring Profiles & Data Contracts ([`docs/schemas/profiles/`](../schemas/profiles/README.md) & [`.csv`](../schemas/telemetry-field-inventory.csv)):** Bản thiết kế lắp ghép các Category cho từng loại tài nguyên thực tế trong đồ án kèm ngưỡng SLO và PromQL.
+
+Bản đặc tả **v4.2.0** này tái kiến trúc toàn diện mô hình quan sát của đồ án bằng cách:
+* Thiết lập **Hệ thống phân loại chuẩn 8 Danh mục (Standard Observability Categories Taxonomy: `CAT-01` đến `CAT-08`)** dung hòa giữa Datadog Archetypes, SigNoz Domains và OpenTelemetry Semantic Conventions v1.26+.
+* Chuẩn hóa **Triết lý Lắp ghép Thực thể (Entity-to-Category Composition Matrix)**: Phân tách rõ 4 Thực thể Giám sát Độc lập (Web Application, Compute Instance, Relational Database, Inter-Cloud WAN & Hub).
+* Tách biệt rõ ràng **Resource/Span Attributes (Nhãn định danh)** và **Metrics/Signals (Chuỗi thời gian đo lường)**.
+* Thiết lập **Master Telemetry Data Contract** làm nền tảng đầu vào bất biến cho **8 Universal Features** và thuật toán phân rã vết thực thi **Tempo Trace RCA ($\Delta T = T_{\text{WAN}} + T_{\text{self}} + T_{\text{DB}}$)** của **AI Anomaly Detection Engine V3**.
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────────────────┐
-│ TẦNG 4: APPLICATION & GOLDEN SIGNALS (L7 Workload Behavior - RED Method)                 │
-│ • Rate (QPS), Errors (HTTP 4xx/5xx), Duration (Latency P50/P95/P99), Saturation (JVM/DB) │
-├──────────────────────────────────────────────────────────────────────────────────────────┤
-│ TẦNG 3: CLOUD & KUBERNETES DEPENDENCY CONTEXT (Where & Who - 6 Cloud Vectors)            │
-│ • Identity (IAM Role ARN, Managed Identity), Network Perimeter (VPC/VNet, Subnet, SG)   │
-│ • Storage/Crypto (EBS/Managed Disk, KMS/KeyVault), Governance (Account ID, Cost Tags)    │
-├──────────────────────────────────────────────────────────────────────────────────────────┤
-│ TẦNG 2: DISTRIBUTED L3/L4 NETWORK & SOCKET STACK (Inter-Cluster WAN & Transport)         │
-│ • WAN Latency RTT (10ms ±2ms), Jitter, Packet Drops, Network Errors (rx/tx)              │
-│ • TCP Socket States (ESTABLISHED, TIME_WAIT, CLOSE_WAIT), TCP Retransmissions            │
-├──────────────────────────────────────────────────────────────────────────────────────────┤
-│ TẦNG 1: LINUX OS, KERNEL, COMPUTE & STORAGE FUNDAMENTALS (Why & How - USE Method)        │
-│ • CPU & Load: User/System Time, I/O Wait (%wa), Steal Time, System Load (1m, 5m, 15m)    │
-│ • Memory & Paging: Used/Cached/Free, Swap I/O, Major/Minor Page Faults, OOM Kill Events  │
-│ • Disk & Filesystem: IOPS, Throughput, Disk Queue/Latency, Capacity (df -h), Inodes (df -i)│
-└──────────────────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                   HỆ QUY CHIẾU 8 DANH MỤC GIÁM SÁT CHUẨN (TAXONOMY V4.1.0)                            │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  [CAT-07: Web / HTTP / RPC Microservices (APM)]  ◄──►  [CAT-06: App Runtime & JVM (Tomcat/Java 11)]    │
+│  [CAT-08: Data Stores & Relational Databases]    ◄──►  [CAT-05: Containers & K8s Orchestration]       │
+│  [CAT-03: Network & Transport (L3/L4 & WAN)]     ◄──►  [CAT-04: Cloud Infra & Perimeter Context]       │
+│  [CAT-01: Linux OS & Kernel (USE Method)]        ◄──►  [CAT-02: Storage & Filesystem (Disk/Inodes/S3)] │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. Giám Sát Tầng Hệ Điều Hành, Kernel, Lưu Trữ & Mạng (USE Method & Linux Diagnostics)
+# CHƯƠNG 1: Hệ Thống Phân Loại 8 Danh Mục Giám Sát Chuẩn (Standard Observability Categories Taxonomy)
 
-Áp dụng phương pháp **USE Method (Utilization, Saturation, Errors)** của Brendan Gregg cho toàn bộ các nút máy chủ ảo hóa (`hub-k3d`, `aws-k3d`, `azure-k3d`):
+### 1.1. Giới Hạn Của Mô Hình 3 Tầng Truyền Thống
+Trước phiên bản v4.0.0, việc gom nhóm thành 3 tầng tổng quát (Application, System, Cloud) gây ra 4 sự nhập nhằng trong vận hành thực tế:
+* **Nhập nhằng giữa Runtime và Service:** JVM Garbage Collection pause time bị xếp lẫn với HTTP Server Request Duration, khiến kỹ sư không phân biệt được trễ do thuật toán ứng dụng hay do "Stop-the-World" của Java runtime.
+* **Nhập nhằng giữa OS Kernel và Kubernetes Orchestration:** CPU Throttling do Kubernetes CFS Quota bị nhầm lẫn với hiện tượng CPU Saturation do toàn bộ Node máy chủ bị quá tải tiến trình.
+* **Mất dấu ranh giới Mạng L3/L4 và Mạng WAN liên cụm:** Trễ mạng cục bộ trong cụm K8s và trễ mạng WAN 10ms giữa AWS EKS và Azure AKS bị gộp chung, làm vô hiệu hóa khả năng chẩn đoán suy hao đường truyền của `tc netem`.
+* **Mù mờ về phụ thuộc Database:** Một truy vấn JDBC bị nghẽn ổ đĩa vật lý trên Azure Spoke thường chỉ được nhìn nhận như một lỗi timeout HTTP 504 tại tầng ứng dụng trên AWS Spoke.
 
-### 2.1. Phân Tích CPU, System Load & Hiện Tượng Nghẽn I/O Wait (`%wa`)
-Một sai lầm phổ biến là đồng nhất *System Load Average* cao với việc *CPU bị quá tải*. Trong Linux, Load Average tính cả các tiến trình đang chạy trên CPU (`R` - Runnable) lẫn các tiến trình đang nằm trong hàng đợi không thể ngắt do chờ đọc/ghi đĩa hoặc mạng (`D` - Uninterruptible Sleep).
+### 1.2. Bảng Đối Chiếu Phân Loại Đa Nền Tảng (Taxonomy Alignment Matrix)
+Dựa trên việc dịch ngược mã nguồn Datadog (`06_Datadog_strategy.md`) và SigNoz (`05_SigNoz_strategy.md`), bảng đối chiếu dưới đây định hình **8 Danh mục Chuẩn của Đồ án**:
 
-* **Chỉ số thu thập qua OTel `hostmetrics` (`cpu` & `load` scrapers):**
-  * `system_cpu_time_seconds_total{state="user|system"}`: Mức sử dụng CPU thực tế cho logic ứng dụng và lời gọi hệ thống (Kernel syscalls).
-  * `system_cpu_time_seconds_total{state="wait"}` (**I/O Wait - `%wa`**): Tỷ lệ thời gian CPU rảnh rỗi nhưng phải chờ thao tác I/O hoàn tất. Khi `teastore-db` (MySQL trên Azure Spoke) chịu tải ghi lớn hoặc MinIO (trên Hub) nén TSDB blocks, nếu `%wa` tăng vọt trong khi CPU `user` thấp, đó là bằng chứng xác thực của **nghẽn tầng lưu trữ (Storage Bottleneck)**.
-  * `system_cpu_load_average_1m`, `5m`, `15m`: Đối chiếu với số nhân CPU để phát hiện mức độ bão hòa hàng đợi thực thi (Saturation).
-
-### 2.2. Quản Lý Bộ Nhớ (Memory), Paging & Chẩn Đoán OOM Killer
-* **Chỉ số thu thập (`memory` & `paging` scrapers):**
-  * `system_memory_usage_bytes{state="used|free|buffered|cached|slab_reclaimable"}`: Phân tách rõ bộ nhớ ứng dụng thực sự chiếm dụng (`used`) và bộ nhớ đệm trang của nhân Linux (`cached`/`buffered`).
-  * `system_paging_operations_total{type="major|minor", direction="page_in|page_out"}`: Tốc độ lỗi trang (Page Faults). Khi `major page faults` tăng cao, hệ thống phải đọc trang nhớ từ đĩa, làm suy giảm nghiêm trọng thời gian phản hồi của JVM Tomcat.
-  * **Kiểm soát vòng đời tiến trình & OOM (`SIGTERM` vs `SIGKILL`):** Giám sát sự kiện container bị giết cưỡng bức với `Exit Code 137` (`SIGKILL - 9` từ Linux Kernel OOM Killer, như sự cố `INC-P2-01`) so với việc dừng chủ động an toàn bằng `SIGTERM - 15` (cho phép Tomcat và MySQL đóng kết nối và flush buffer xuống đĩa).
-
-### 2.3. Chẩn Đoán Đĩa Từ (Disk I/O) & Hệ Thống Tệp Tin (Filesystem & Inodes)
-* **Chỉ số thu thập (`disk` & `filesystem` scrapers):**
-  * **Utilization & Throughput:** `system_disk_io_bytes_total` (Tốc độ đọc/ghi MB/s) và `system_disk_operations_total` (IOPS).
-  * **Saturation & Latency:** `system_disk_operation_time_seconds_total` (Thời gian xử lý I/O tích lũy) và `system_disk_pending_operations` (Độ sâu hàng đợi I/O - tương đương cột `aqu-sz` và `await` trong lệnh `iostat -xz 1`).
-  * **Filesystem Capacity (`df -h`):** `system_filesystem_usage_bytes` — cảnh báo khi phân vùng chứa `/var/lib/mysql` hoặc `/data` của MinIO vượt ngưỡng 80%.
-  * **Inode Exhaustion (`df -i`):** `system_filesystem_inodes_usage` — cực kỳ quan trọng đối với Hub Collector và MinIO vì việc ghi hàng chục ngàn tệp JSON nhỏ vào bucket `raw-telemetry` có thể làm cạn kiệt Inode trước khi ổ cứng đầy dung lượng byte.
-
-### 2.4. Chẩn Đoán Ngăn Xếp Mạng L3/L4 & Trạng Thái Socket TCP
-* **Chỉ số thu thập (`network` scraper & Kernel netem):**
-  * **Bandwidth:** `rate(system_network_io_bytes_total[1m])` và `rate(system_network_packets_total[1m])` theo chiều `receive` (RX) và `transmit` (TX).
-  * **Packet Drops & Errors:** `rate(system_network_dropped_total[1m])` và `rate(system_network_errors_total[1m])`. Phản ánh trực tiếp tác động vật lý của bộ mô phỏng suy hao mạng WAN `tc netem` (10ms RTT ±2ms, 0.1% packet loss) lên giao diện mạng `eth0` của các cụm Spoke.
-  * **TCP Connection States (`ss -tulnp` equivalent):** `system_network_connections{protocol="tcp", state="ESTABLISHED|TIME_WAIT|CLOSE_WAIT|SYN_SENT"}`.
-    * Sự gia tăng đột biến của `TIME_WAIT` giữa `teastore-webui` và các dịch vụ con cho thấy việc thiếu tái sử dụng kết nối (HTTP Keep-Alive).
-    * Sự tích tụ của `CLOSE_WAIT` hoặc `SYN_SENT` giữa `teastore-persistence` (Azure) và `teastore-registry` (AWS) chỉ ra hiện tượng treo kết nối qua đường truyền WAN hoặc nghẽn luồng xử lý.
+| Mã Danh Mục | Tên Danh Mục Chuẩn | Datadog Archetype (`manifest.json`) | SigNoz Domain (`SigNozDocs`) | OpenTelemetry SemConv Scope | Phạm Vi Trách Nhiệm Trong Đồ Án |
+| :---: | :--- | :--- | :--- | :--- | :--- |
+| **`CAT-01`** | **OS & System Kernel** | `OS & System` | `Infrastructure / Host` | `system.cpu.*`, `system.memory.*`, `system.paging.*`, `system.cpu.load_average.*` | Giám sát trạng thái nhân Linux (Kernel), tiến trình, bộ nhớ ảo, USE Method. |
+| **`CAT-02`** | **Storage & Filesystem** | `Data Stores / Storage` | `Infrastructure / Disk` | `system.disk.*`, `system.filesystem.*`, `aws.s3.*` | Băng thông đọc/ghi đĩa, Inodes, độ sâu hàng đợi I/O, MinIO Object Storage S3. |
+| **`CAT-03`** | **Network & Transport (L3/L4 & WAN)** | `Network` | `Infrastructure / Network` | `system.network.*`, `net.sock.*`, `rpc.connect.*` | Giao diện mạng `eth0`, rớt gói, TCP Socket states (`ESTABLISHED`, `TIME_WAIT`), WAN RTT. |
+| **`CAT-04`** | **Cloud Infra & Perimeter Context** | `Cloud` (AWS/Azure) | `Cloud Integrations` | `cloud.provider`, `cloud.region`, `network.vpc.*`, `cloud.identity.*` | Siêu dữ liệu đa đám mây (VPC/VNet, Subnet, SG, IAM ARN, KeyVault/KMS, Multi-Cloud Mapping). |
+| **`CAT-05`** | **Containers & K8s Orchestration** | `Containers`, `Kubernetes` | `Infrastructure / K8s` | `k8s.cluster.*`, `k8s.pod.*`, `k8s.node.*`, `container.*` | Trạng thái Pods, cgroup limits, OOMKilled Exit 137, Kubelet stats. |
+| **`CAT-06`** | **Application Runtime & JVM** | `Languages / Java` | `APM / JVM Metrics` | `jvm.memory.*`, `jvm.gc.*`, `jvm.threads.*`, `process_runtime_jvm_*` | Máy ảo Java (OpenJDK 11), Tomcat `CATALINA_OPTS`, Garbage Collection, luồng thực thi. |
+| **`CAT-07`** | **Web / HTTP / RPC Microservices (APM)** | `Web`, `Tracing` | `APM & Services` | `http.server.*`, `http.client.*`, `rpc.system`, `traces_service_graph_*` | Báo cáo RED Signals (Rate, Errors, Duration), phân rã Trace Spans W3C, Service Graph Topology. |
+| **`CAT-08`** | **Data Stores & Relational Databases** | `Data Stores` | `Database Monitoring` | `db.system="mysql"`, `db.name`, `db.statement`, `db.operation` | Hiệu năng truy vấn MySQL 8.0, JDBC spans, MySQL error/slow logs, Node storage backing MySQL. |
 
 ---
 
-## 3. Ma Trận Chẩn Đoán Sự Cố Hạ Tầng (Linux & SRE Troubleshooting Matrix)
+# CHƯƠNG 2: Ma Trận Tổ Hợp Thực Thể (Entity-to-Category Composition Matrix)
 
-Bảng dưới đây kết nối trực tiếp các công cụ dòng lệnh chẩn đoán hệ thống Linux truyền thống với các chỉ số OpenTelemetry / PromQL tự động hóa trên nền tảng giám sát tập trung:
+### 2.1. Triết Lý Lắp Ghép Thực Thể (Entity Composition Philosophy)
+Trong thực tế vận hành SRE, không có kỹ sư nào đi giám sát một "Category đơn lẻ". Một đối tượng vận hành (Target Entity) luôn là **một tập hợp lắp ghép (composition) của nhiều Category**:
 
-| Triệu Chứng Sự Cố | Lệnh Linux Chẩn Đoán Thủ Công | Metric Chuẩn Hóa Trên Thanos / Prometheus | Nguồn Log & Trace Tương Quan (Loki / Tempo) |
-|---|---|---|---|
-| **Load cao nhưng CPU User thấp (Nghẽn I/O)** | `top`, `uptime`, `vmstat 1`, `iostat -xz 1` | `rate(system_cpu_time_seconds_total{state="wait"}[1m])` kết hợp `system_cpu_load_average_1m` | Trace Span JDBC kéo dài bất thường trên `teastore-db`; Slow query log trong Loki. |
-| **Pod Restart / Cạn kiệt bộ nhớ (OOM)** | `dmesg -T \| grep -i oom`, `free -h`, `journalctl -k` | `system_memory_usage_bytes{state="used"}` chạm ngưỡng Limit; `system_paging_operations_total` tăng vọt. | Robusta bắt sự kiện `OOMKilled` (Exit 137) từ K8s API và gửi báo cáo về Telegram. |
-| **Nghẽn ghi đĩa DB hoặc Object Storage** | `iostat -xz 1`, `iotop` | `rate(system_disk_operation_time_seconds_total[1m])` và `system_disk_pending_operations > 0`. | Log cảnh báo Compaction chậm từ Thanos Sidecar hoặc InnoDB flush log từ MySQL. |
-| **Lỗi không tạo được file dù đĩa còn trống** | `df -h` vs `df -i`, `lsblk` | `system_filesystem_inodes_usage{state="used"} / system_filesystem_inodes_usage{state="free"}`. | Log lỗi `No space left on device` tại exporter `awss3` hoặc `minio`. |
-| **Mạng WAN chập chờn, rớt gói, trễ cao** | `ping`, `tc -s qdisc show dev eth0`, `tcpdump -i any` | `rate(system_network_dropped_total[1m]) > 0` và `traces_service_graph_request_server_seconds_bucket`. | Span Waterfall trên Tempo hiển thị độ trễ chênh lệch ~10ms giữa Client Span (AWS) và Server Span (Azure). |
-| **Cạn kiệt cổng kết nối hoặc rò rỉ Socket** | `ss -tan \| awk '{print $1}' \| sort \| uniq -c`, `nc -zv` | `system_network_connections{protocol="tcp", state=~"TIME_WAIT\|CLOSE_WAIT"}`. | Log `Aborted connection` trên MySQL (`INC-P3-08`) hoặc `Connection refused / timeout` trên Tomcat. |
+```mermaid
+graph TD
+    subgraph TargetEntities ["4 ĐỐI TƯỢNG VẬN HÀNH THỰC TẾ (TARGET ENTITIES)"]
+        E1["1. Web Application<br/>(TeaStore Microservices)"]
+        E2["2. Compute Instance<br/>(K8s Worker Nodes)"]
+        E3["3. Relational Database<br/>(teastore-db MySQL 8.0)"]
+        E4["4. Inter-Cloud WAN & Hub<br/>(mc-monitoring-net & hub-k3d)"]
+    end
+
+    subgraph Categories ["8 DANH MỤC GIÁM SÁT CHUẨN"]
+        C1["CAT-01: OS & System Kernel"]
+        C2["CAT-02: Storage & Filesystem"]
+        C3["CAT-03: Network L3/L4 & WAN"]
+        C4["CAT-04: Cloud Context"]
+        C5["CAT-05: Containers & K8s"]
+        C6["CAT-06: Application Runtime & JVM"]
+        C7["CAT-07: Web & Microservices (APM)"]
+        C8["CAT-08: Data Stores & Databases"]
+    end
+
+    E1 ==> C7
+    E1 ==> C6
+    E1 ==> C5
+    E1 -.-> C8
+    E1 -.-> C3
+    E1 -.-> C4
+
+    E2 ==> C1
+    E2 ==> C2
+    E2 ==> C3
+    E2 ==> C5
+    E2 ==> C4
+
+    E3 ==> C8
+    E3 ==> C2
+    E3 ==> C1
+    E3 ==> C3
+    E3 ==> C5
+    E3 ==> C4
+
+    E4 ==> C3
+    E4 ==> C4
+    E4 ==> C2
+    E4 ==> C1
+```
+
+### 2.2. Phân Tích Chi Tiết 4 Cấu Hình Lắp Ghép Cho Đồ Án TeaStore
+
+#### 1. Khi Giám Sát Một Web Application (TeaStore Microservices)
+Một microservice Java (như `teastore-webui` trên `aws-k3d` hoặc `teastore-persistence` trên `azure-k3d`) là sự kết hợp của:
+* **`CAT-07` (Core APM):** Theo dõi Golden Signals (QPS, HTTP 5xx, Latency P95/P99) và các spans liên dịch vụ W3C.
+* **`CAT-06` (Runtime):** Giám sát Heap Memory (256MB), Garbage Collector (SerialGC pause duration), số lượng luồng thực thi Tomcat.
+* **`CAT-05` (Orchestration):** Kiểm tra Pod CPU limits (`cpu.cfs_quota_us`), hiện tượng throttling, và cảnh báo `OOMKilled` (Exit Code 137).
+* **`CAT-08` (Client Dependency):** Đo lường thời gian trễ của lời gọi JDBC `:3306` sang cơ sở dữ liệu `teadb` phía hạ nguồn.
+* **`CAT-03` (Transport):** Kiểm tra trạng thái rò rỉ socket TCP (`TIME_WAIT`, `CLOSE_WAIT`) trên cổng `:8080`.
+* **`CAT-04` (Context):** Định danh vị trí đám mây (`cloud.provider="aws"`, `network.vpc.id="vpc-0f8a3c2b1e7d9a4f6"`, IAM Role IRSA).
+
+#### 2. Khi Giám Sát Một Compute Instance (K8s Worker Nodes: `aws-k3d`, `azure-k3d`, `hub-k3d`)
+Áp dụng triệt để phương pháp luận **USE Method** của Brendan Gregg:
+* **`CAT-01` (Core USE):** Utilization (CPU user/system, Memory used), Saturation (Load Average 1m/5m/15m, CPU wait `%wa`, Major Page Faults), Errors.
+* **`CAT-02` (Storage USE):** Throughput đọc/ghi đĩa (MB/s), IOPS, thời gian chờ đĩa (`system.disk.operation_time`), dung lượng đĩa (`df -h`) và Inodes (`df -i`).
+* **`CAT-03` (Network USE):** Băng thông mạng RX/TX, Packet Drops, Packet Errors trên giao diện mạng vật lý/ảo `eth0`.
+* **`CAT-05` (Node Orchestration):** Số lượng Pods đang chạy trên Node, Kubelet eviction threshold, cgroup memory working set.
+* **`CAT-04` (Host Context):** Mô hình SKU đám mây giả định (`m5.xlarge` trên AWS, `Standard_D4ds_v5` trên Azure), Subnet CIDR, Security Group.
+
+#### 3. Khi Giám Sát Một Relational Database (`teastore-db` MySQL 8.0 trên `azure-k3d`)
+Trong môi trường hiện tại, do chưa triển khai `mysqld-exporter` chuyên dụng, hệ thống áp dụng chiến lược **Giám sát Cơ sở Dữ liệu Đa Chiều Không Xâm Lấn (Non-Invasive Multi-Layer DB Observability)**:
+* **`CAT-08` (Core Database Signals):**
+  * Đo lường từ phía Client qua OpenTelemetry JDBC Instrumentation trên `teastore-persistence`: Span attributes `db.system="mysql"`, `db.name="teadb"`, `db.statement`, `net.peer.name="teastore-db"`, `net.peer.port=3306`.
+  * Pre-aggregated metrics qua `servicegraphconnector`: `traces_service_graph_request_total{server=~"teadb|teastore-db"}` và `traces_service_graph_request_server_seconds_bucket`.
+  * Thu nạp và phân tích MySQL Error & Slow Logs qua OTel `filelog` receiver (`{service_name="teastore-db"}`).
+* **`CAT-02` (Storage Bottleneck):** Theo dõi Disk Write IOPS và thời gian flush log `ib_logfile` của InnoDB xuống phân vùng `/var/lib/mysql` trên nút `azure-k3d`.
+* **`CAT-01` (CPU I/O Wait):** Theo dõi chỉ số `system_cpu_time_seconds_total{state="wait"}`. Nếu `%wa` tăng cao trong khi CPU User thấp, đây là dấu hiệu đặc trưng của nghẽn I/O đĩa MySQL.
+* **`CAT-03` (Transport):** Giám sát lưu lượng mạng và số kết nối TCP `:3306`, hiện tượng kết nối bị treo (`CLOSE_WAIT`).
+* **`CAT-04/05` (Platform Context):** AKS Managed Node Pool `nodepool-data`, Azure VNet `vnet-teastore-southasia`, Network Security Group `nsg-aks-teastore-internal`.
+
+#### 4. Khi Giám Sát Mạng Liên Đám Mây & Central Hub (`mc-monitoring-net` WAN & `hub-k3d`)
+* **`CAT-03` (WAN Bridge):** Đo lường tác động của bộ giả lập suy hao `tc netem` (10ms RTT ±2ms, rớt gói 0.1%), kênh truyền mã hóa mTLS 1.3 (ChaCha20-Poly1305).
+* **`CAT-04` (Multi-Cloud Routing):** Quản lý định tuyến giữa các dải mạng nội bộ giả lập `10.0.0.0/16` (AWS) và `10.1.0.0/16` (Azure).
+* **`CAT-02` (Object Storage):** Giám sát phân vùng lưu trữ MinIO S3 (`raw-telemetry`, `thanos-metrics`, `loki-data`, `tempo-traces`), bảo đảm không bị cạn kiệt Inode khi ghi hàng vạn file block nhỏ.
+* **`CAT-01` (Hub Resource):** Bảo đảm CPU và RAM của Central Gateway không bị quá tải khi tiếp nhận luồng OTLP gRPC streaming liên tục từ 2 cụm Spoke.
 
 ---
 
-## 4. Mô Hình Ngữ Cảnh 6 Trục Phụ Thuộc Đám Mây Sâu (Cloud Dependency Context Layer)
+# CHƯƠNG 3: Ánh Xạ Chi Tiết Từng Schema & Attribute Thực Tế Đã Triển Khai Trong Đồ Án
 
-Sau khi tầng OS, Lưu trữ và Mạng (Mục 2 & 3) cung cấp tín hiệu động để trả lời câu hỏi **"Tại sao lỗi?"**, tầng Ngữ cảnh Đám mây (Cloud Dependency Layer) đóng vai trò làm giàu siêu dữ liệu (Contextual Enrichment) để định vị chính xác tài nguyên đó nằm ở đâu trong kiến trúc Multi-Cloud.
+Chương này tách bạch hoàn toàn giữa **Resource / Span / Log Attributes (Thuộc tính định danh)** và **Metrics / Signals (Số đo định lượng)** nhằm đảm bảo tính chính xác và không bị gộp lẫn.
 
-*(Lưu ý học thuật: Trong môi trường mô phỏng cục bộ bằng `k3d`, các thuộc tính hạ tầng đám mây sâu dưới đây được tiêm chuẩn hóa thông qua chính sách **Synthetic Topology Enrichment via OTTL** tại Hub Gateway nhằm mô phỏng cơ chế thu thập từ AWS IMDSv2 và Azure IMDS trên môi trường đám mây thực tế).*
+### 3.1. Bảng Tổng Kê Resource, Span & Log Attributes Theo 8 Danh Mục Chuẩn
 
-### 4.1. Sáu Trục Phụ Thuộc Đám Mây Cơ Sở (6 Foundational Cloud Vectors)
-1. **Identity & Access Vector (IAM / Entra ID):** `cloud.identity.arn` (IAM Role ARN / User-Assigned Managed Identity), K8s ServiceAccount IRSA.
-2. **Network & Traffic Perimeter Vector:** `network.vpc.id` (`vpc-0a1b2c3d4e5f67890` / `vnet-teastore-southasia`), `network.subnet.id` (`10.0.1.0/24` vs `10.1.2.0/24`), `network.security_group.id`.
-3. **Storage & Persistence Vector:** `storage.volume.id` (AWS EBS `gp3` / Azure Managed Disk `Premium_LRS`), Object Storage Buckets (`thanos-metrics`, `loki-data`, `tempo-traces`, `raw-telemetry`).
-4. **Cryptography & Secrets Vector:** `security.kms.key_arn`, Azure Key Vault CMK URI, chứng chỉ đường truyền `mTLS 1.3 (ChaCha20-Poly1305)`.
-5. **Compute & Platform Vector:** `cloud.provider` (`aws`, `azure`, `hub`), `cloud.platform` (`aws_eks`, `azure_aks`), `cloud.region` (`us-east-1`, `southasia`), `k8s.cluster.name`, `k8s.node.name`.
-6. **Governance, Audit & Billing Vector:** `cloud.account.id`, `cloud.resource_id`, `telemetry.hub.received_time`.
+| Danh Mục | Tên Attribute Chuẩn OTel SemConv | Kiểu Dữ Liệu | Giá Trị Thực Tế Trên Các Cụm (`aws-k3d`, `azure-k3d`, `hub-k3d`) | Cơ Chế Thu Thập (3-Tier Acquisition) | Tính Xác Thực (Authenticity) |
+| :---: | :--- | :---: | :--- | :--- | :---: |
+| **`CAT-01`** | `host.name` | `string` | `"k3d-aws-k3d-server-0"`, `"k3d-azure-k3d-server-0"`, `"k3d-hub-k3d-server-0"` | Node Environment / Hostmetrics | **Đo lường 100%** |
+| | `host.id` | `string` | Machine ID / DMI UUID của container node | Node Environment / Hostmetrics | **Đo lường 100%** |
+| | `host.type` | `string` | `"m5.xlarge"` (AWS simulation), `"Standard_D4ds_v5"` (Azure simulation) | OTTL Synthetic Enrichment | **Enriched Context** |
+| | `os.type` | `string` | `"linux"` | Hostmetrics OS detector | **Đo lường 100%** |
+| | `os.description` | `string` | `"Linux 5.15.x / 6.x Container Host"` | Hostmetrics OS detector | **Đo lường 100%** |
+| **`CAT-02`** | `storage.volume.id` | `string` | `"vol-0a1b2c3d4e5f6g7h8"` (AWS EBS gp3), `"disk-azure-teastore-data"` | OTTL Synthetic Enrichment | **Enriched Context** |
+| | `storage.mount.path` | `string` | `"/var/lib/mysql"`, `"/data"`, `"/var/log"` | Hostmetrics filesystem scraper | **Đo lường 100%** |
+| | `storage.filesystem.type` | `string` | `"ext4"`, `"overlay"`, `"tmpfs"` | Hostmetrics filesystem scraper | **Đo lường 100%** |
+| **`CAT-03`** | `network.interface.name` | `string` | `"eth0"`, `"lo"`, `"flannel.1"` | Hostmetrics network scraper | **Đo lường 100%** |
+| | `net.transport` | `string` | `"ip_tcp"` | Hostmetrics socket / Trace span tag | **Đo lường 100%** |
+| | `net.peer.name` | `string` | `"teastore-persistence"`, `"teastore-db"`, `"hub-collector.mc-monitoring-net"` | OTel Java Agent / JDBC driver | **Đo lường 100%** |
+| | `net.peer.port` | `int` | `8080` (HTTP), `1099` (RMI), `3306` (MySQL), `4317` (OTLP gRPC) | OTel Java Agent / Socket connect | **Đo lường 100%** |
+| | `network.wan.status` | `string` | `"EMULATED_WAN_10MS_RTT"` | OTTL Synthetic Tagging | **Enriched Context** |
+| **`CAT-04`** | `cloud.provider` | `string` | `"aws"` (Spoke 1), `"azure"` (Spoke 2), `"hub"` (Central Hub) | OTTL Hub Gateway Enrichment | **Enriched Context** |
+| | `cloud.platform` | `string` | `"aws_eks"` (Spoke 1), `"azure_aks"` (Spoke 2), `"hub_k3d"` (Hub) | OTTL Hub Gateway Enrichment | **Enriched Context** |
+| | `cloud.region` | `string` | `"us-east-1"` (Spoke 1), `"southasia"` (Spoke 2), `"central-hub"` | OTTL Hub Gateway Enrichment | **Enriched Context** |
+| | `cloud.availability_zone` | `string` | `"us-east-1a"`, `"southasia-1"` | OTTL Hub Gateway Enrichment | **Enriched Context** |
+| | `cloud.account.id` | `string` | `"851725492014"` (AWS 12-digit), `"4b8f3a21-9e6c-4f80-b753-2d9a6e1c84f5"` (Azure) | OTTL Hub Gateway Enrichment | **Enriched Context** |
+| | `cloud.resource_id` | `string` | `"/subscriptions/4b8f3a21-.../resourceGroups/rg-teastore/..."` | OTTL Hub Gateway Enrichment | **Enriched Context** |
+| | `cloud.identity.arn` | `string` | `arn:aws:iam::851725492014:role/teastore-irsa-role`, Azure Managed Identity | K8s IRSA ServiceAccount / OTTL | **Enriched Context** |
+| | `network.vpc.id` | `string` | `"vpc-0f8a3c2b1e7d9a4f6"` (AWS), `"vnet-teastore-southasia"` (Azure) | OTTL Hub Gateway Enrichment | **Enriched Context** |
+| | `network.subnet.id` | `string` | `"subnet-0192837465af"` (`10.0.1.0/24`), `"snet-aks-internal"` (`10.1.2.0/24`) | OTTL Hub Gateway Enrichment | **Enriched Context** |
+| | `network.security_group.id` | `string` | `"sg-01a2b3c4d5e6f7a8b"`, `"nsg-aks-teastore-internal"` | OTTL Hub Gateway Enrichment | **Enriched Context** |
+| | `security.kms.key_arn` | `string` | `arn:aws:kms:us-east-1:851725492014:key/b841e2a0-...`, Azure KeyVault URI | OTTL Hub Gateway Enrichment | **Enriched Context** |
+| | `telemetry.hub.received_time` | `int64` | Unix Epoch timestamp (nano) khi Hub Gateway nhận gói OTLP | OTel Hub Receiver Context | **Đo lường 100%** |
+| **`CAT-05`** | `k8s.cluster.name` | `string` | `"aws-k3d"`, `"azure-k3d"`, `"hub-k3d"` | Node Environment Variable | **Đo lường 100%** |
+| | `k8s.node.name` | `string` | `"k3d-aws-k3d-server-0"`, `"k3d-azure-k3d-server-0"` | K8s Downward API | **Đo lường 100%** |
+| | `k8s.namespace.name` | `string` | `"default"`, `"monitoring"`, `"teastore"` | K8s Downward API | **Đo lường 100%** |
+| | `k8s.pod.name` | `string` | `"teastore-webui-74f8b9-x21z"`, `"teastore-db-0"` | K8s Downward API | **Đo lường 100%** |
+| | `k8s.pod.uid` | `string` | UUID v4 định danh duy nhất của Pod (khóa chống va chạm) | K8s Downward API | **Đo lường 100%** |
+| | `k8s.container.name` | `string` | `"teastore-webui"`, `"teastore-db"`, `"otel-collector"` | K8s Downward API | **Đo lường 100%** |
+| **`CAT-06`** | `process.runtime.name` | `string` | `"OpenJDK Runtime Environment"` | OTel Java Agent v2.10 | **Đo lường 100%** |
+| | `process.runtime.version` | `string` | `"11.0.19+7"` | OTel Java Agent v2.10 | **Đo lường 100%** |
+| | `process.pid` | `int` | PID của tiến trình Java Tomcat bên trong container | OTel Java Agent v2.10 | **Đo lường 100%** |
+| | `jvm.memory.type` | `string` | `"heap"`, `"non_heap"` | OTel Java Agent JMX scraper | **Đo lường 100%** |
+| **`CAT-07`** | `service.name` | `string` | `"teastore-webui"`, `"teastore-auth"`, `"teastore-persistence"`, `"teastore-registry"` | OTel SDK / Service configuration | **Đo lường 100%** |
+| | `service.version` | `string` | `"1.4.1"` | OTel SDK configuration | **Đo lường 100%** |
+| | `service.namespace` | `string` | `"teastore"` | OTel SDK configuration | **Đo lường 100%** |
+| | `http.request.method` | `string` | `"GET"`, `"POST"` | OTel Java Servlet Filter | **Đo lường 100%** |
+| | `http.response.status_code` | `int` | `200`, `404`, `500`, `504` | OTel Java Servlet Filter | **Đo lường 100%** |
+| | `http.route` | `string` | `"/tools.descartes.teastore.webui/"`, `"/login"`, `"/cart"` | OTel Java Servlet Filter | **Đo lường 100%** |
+| | `peer.service` | `string` | `"teastore-registry"` (port 1099), `"teastore-db"` (port 3306) | OTTL Peer Service Mapper | **Đo lường 100%** |
+| | `trace_id` & `span_id` | `string` | W3C 128-bit Trace ID và 64-bit Span ID | OTel Context Propagation | **Đo lường 100%** |
+| **`CAT-08`** | `db.system` | `string` | `"mysql"` | OTel Java Agent JDBC driver | **Đo lường 100%** |
+| | `db.name` | `string` | `"teadb"` | OTel Java Agent JDBC driver | **Đo lường 100%** |
+| | `db.operation` | `string` | `"SELECT"`, `"INSERT"`, `"UPDATE"`, `"DELETE"` | OTel Java Agent JDBC driver | **Đo lường 100%** |
+| | `db.user` | `string` | `"teastore"` | OTel Java Agent JDBC driver | **Đo lường 100%** |
 
-### 4.2. Ma Trận Thuộc Tính Chuẩn Hóa OpenTelemetry (Unified SemConv Matrix)
+### 3.2. Bảng Tổng Kê Metrics & Signals Đo Lường Theo 8 Danh Mục Chuẩn
 
-| Phân Lớp Giám Sát | Nhóm Tín Hiệu | Tên Thuộc Tính / Metric Chuẩn (`SemConv / PromQL`) | Nguồn Thu Thập Thực Tế Trong Hệ Thống | Tính Xác Thực Dữ Liệu (Authenticity) |
-|---|---|---|---|---|
-| **Tầng 1: OS & Kernel** | CPU & I/O Wait | `system.cpu.time` (`state=user,system,wait,idle`) | OTel Spoke `hostmetrics` (cào từ `/proc/stat`) | **Đo lường Vật lý 100%** |
-| | System Load | `system.cpu.load_average.1m / 5m / 15m` | OTel Spoke `hostmetrics` (cào từ `/proc/loadavg`) | **Đo lường Vật lý 100%** |
-| | Memory & Paging | `system.memory.usage`, `system.paging.operations` | OTel Spoke `hostmetrics` (`/proc/meminfo`, `/proc/vmstat`) | **Đo lường Vật lý 100%** |
-| **Tầng 2: Disk & FS** | Disk IOPS & Latency | `system.disk.io`, `system.disk.operation_time`, `system.disk.pending_operations` | OTel Spoke `hostmetrics` (`/proc/diskstats`) | **Đo lường Vật lý 100%** |
-| | Filesystem & Inodes | `system.filesystem.usage`, `system.filesystem.inodes.usage` | OTel Spoke `hostmetrics` (`statfs` syscall) | **Đo lường Vật lý 100%** |
-| **Tầng 3: Network L3/L4**| Traffic & Drops | `system.network.io`, `system.network.dropped`, `system.network.errors` | OTel Spoke `hostmetrics` (`/proc/net/dev` + `tc netem`) | **Đo lường Vật lý 100%** |
-| | TCP Socket States | `system.network.connections` (`ESTABLISHED`, `TIME_WAIT`, ...) | OTel Spoke `hostmetrics` (`/proc/net/tcp`) | **Đo lường Vật lý 100%** |
-| **Tầng 4: K8s & App** | K8s Runtime | `k8s.cluster.name`, `k8s.namespace.name`, `k8s.pod.name`, `service.name` | K8s Downward API & OTel Java Agent v2.10 | **Đo lường Thực tế 100%** |
-| | RED Metrics | `traces_service_graph_request_total`, `..._server_seconds_bucket` | OTel Hub `servicegraphconnector` tính từ Live Traces | **Đo lường Thực tế 100%** |
-| **Tầng 5: Cloud Context**| Cloud Topology | `cloud.provider`, `cloud.region`, `cloud.account.id`, `network.vpc.id`, `cloud.identity.arn` | OTTL Enrichment Processor tại Hub Collector | **Mô phỏng Ngữ cảnh (Synthetic Enrichment)** |
+| Danh Mục | Tên Metric / Signal Chuẩn Hóa | Signal Type | PromQL / Định Dạng Thu Thập | Trạng Thái Triển Khai | Nguồn Thu Thập |
+| :---: | :--- | :---: | :--- | :---: | :--- |
+| **`CAT-01`** | `system_cpu_time_seconds_total` | Metric (Counter) | `rate(system_cpu_time_seconds_total{state=~"user\|system\|wait\|idle"}[1m])` | **Đang chạy Live** | OTel Hostmetrics `/proc/stat` |
+| | `system_cpu_load_average_1m / 5m / 15m` | Metric (Gauge) | `system_cpu_load_average_15m` | **Đang chạy Live** | OTel Hostmetrics `/proc/loadavg` |
+| | `system_memory_usage_bytes` | Metric (Gauge) | `system_memory_usage_bytes{state=~"used\|free\|cached\|buffered"}` | **Đang chạy Live** | OTel Hostmetrics `/proc/meminfo` |
+| | `system_paging_operations_total` | Metric (Counter) | `rate(system_paging_operations_total{type="major"}[1m])` | **Đang chạy Live** | OTel Hostmetrics `/proc/vmstat` |
+| | `system_paging_faults_total` | Metric (Counter) | `rate(system_paging_faults_total[1m])` | **Đang chạy Live** | OTel Hostmetrics `/proc/vmstat` |
+| **`CAT-02`** | `system_disk_io_bytes_total` | Metric (Counter) | `rate(system_disk_io_bytes_total[1m])` | **Đang chạy Live** | OTel Hostmetrics `/proc/diskstats` |
+| | `system_disk_operations_total` | Metric (Counter) | `rate(system_disk_operations_total[1m])` (IOPS) | **Đang chạy Live** | OTel Hostmetrics `/proc/diskstats` |
+| | `system_disk_operation_time_seconds_total` | Metric (Counter) | `rate(system_disk_operation_time_seconds_total[1m])` | **Đang chạy Live** | OTel Hostmetrics `/proc/diskstats` |
+| | `system_disk_pending_operations` | Metric (Gauge) | `system_disk_pending_operations` (Hàng đợi I/O) | **Đang chạy Live** | OTel Hostmetrics `/proc/diskstats` |
+| | `system_filesystem_usage_bytes` | Metric (Gauge) | `system_filesystem_usage_bytes{state="used"}` | **Đang chạy Live** | OTel Hostmetrics `statfs` |
+| | `system_filesystem_inodes_usage` | Metric (Gauge) | `system_filesystem_inodes_usage{state="used"}` | **Đang chạy Live** | OTel Hostmetrics `statfs` |
+| **`CAT-03`** | `system_network_io_bytes_total` | Metric (Counter) | `rate(system_network_io_bytes_total[1m])` | **Đang chạy Live** | OTel Hostmetrics `/proc/net/dev` |
+| | `system_network_packets_total` | Metric (Counter) | `rate(system_network_packets_total[1m])` | **Đang chạy Live** | OTel Hostmetrics `/proc/net/dev` |
+| | `system_network_dropped_total` | Metric (Counter) | `rate(system_network_dropped_total[1m])` | **Đang chạy Live** | OTel Hostmetrics Netem drops |
+| | `system_network_errors_total` | Metric (Counter) | `rate(system_network_errors_total[1m])` | **Đang chạy Live** | OTel Hostmetrics `/proc/net/dev` |
+| | `system_network_connections` | Metric (Gauge) | `system_network_connections{state=~"ESTABLISHED\|TIME_WAIT"}` | **Đang chạy Live** | OTel Hostmetrics `/proc/net/tcp` |
+| | `ai_rca_component_latency_ms{component="wan"}` | Metric (Gauge) | `ai_rca_component_latency_ms{component="wan"}` | **Đang chạy Live** | AI Tempo Trace Analyzer |
+| **`CAT-04`** | `synthetic_cloud_route_health` | Metric (Gauge) | `synthetic_cloud_route_health{cloud_provider=~"aws\|azure"}` | **Đang chạy Live** | AI Synthetic Probe / Health check |
+| **`CAT-05`** | `container_cpu_usage_seconds_total` | Metric (Counter) | `rate(container_cpu_usage_seconds_total[1m])` | **Đang chạy Live** | Kubelet cgroups stats |
+| | `container_memory_working_set_bytes`| Metric (Gauge) | `container_memory_working_set_bytes` | **Đang chạy Live** | Kubelet cgroups stats |
+| | `k8s_pod_restart_count` | Metric (Counter) | `k8s_pod_restart_count` | **Đang chạy Live** | Kubelet Pod stats |
+| | `container_cpu_cfs_throttled_seconds_total` | Metric (Counter) | `rate(container_cpu_cfs_throttled_seconds_total[1m])` | **Đang chạy Live** | Kubelet CFS quota stats |
+| **`CAT-06`** | `jvm_memory_used_bytes` | Metric (Gauge) | `jvm_memory_used_bytes{jvm_memory_type="heap"}` | **Đang chạy Live** | OTel Java Agent v2.10 |
+| | `process_runtime_jvm_memory_usage_bytes` | Metric (Gauge) | `process_runtime_jvm_memory_usage_bytes{type="heap"}` (SemConv 2.x) | **Đang chạy Live** | OTel Java Agent v2.10 |
+| | `jvm_gc_duration_seconds_sum` | Metric (Counter) | `rate(jvm_gc_duration_seconds_sum[1m])` | **Đang chạy Live** | OTel Java Agent v2.10 |
+| | `jvm_thread_count` / `jvm_threads_current` | Metric (Gauge) | `jvm_thread_count or jvm_threads_current` | **Đang chạy Live** | OTel Java Agent v2.10 |
+| | `jvm_cpu_recent_utilization_ratio` | Metric (Gauge) | `jvm_cpu_recent_utilization_ratio` (0.0 - 1.0) | **Đang chạy Live** | OTel Java Agent OperatingSystemMXBean |
+| **`CAT-07`** | `http_server_request_duration_seconds_count` | Metric (Counter) | `sum by (service_name) (rate(http_server_request_duration_seconds_count[1m]))` | **Đang chạy Live** | OTel Java Agent Servlet Filter |
+| | `http_server_request_duration_seconds_bucket` | Metric (Histogram)| `histogram_quantile(0.95, sum by (le, service_name) (rate(http_server_request_duration_seconds_bucket[1m])))` | **Đang chạy Live** | OTel Java Agent Servlet Filter |
+| | `http_client_request_duration_seconds_bucket` | Metric (Histogram)| `histogram_quantile(0.95, sum by (le, service_name) (rate(http_client_request_duration_seconds_bucket[1m])))` | **Đang chạy Live** | OTel Java Agent HTTP Client |
+| | `traces_service_graph_request_total` | Metric (Counter) | `sum by (client, server) (rate(traces_service_graph_request_total[1m]))` | **Đang chạy Live** | Hub `servicegraphconnector` |
+| | `traces_service_graph_request_server_seconds_bucket` | Metric (Histogram)| `histogram_quantile(0.95, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[1m])))` | **Đang chạy Live** | Hub `servicegraphconnector` |
+| | `traces_service_graph_request_failed_total` | Metric (Counter) | `sum by (server) (rate(traces_service_graph_request_failed_total[1m]))` | **Đang chạy Live** | Hub `servicegraphconnector` |
+| | `ai_reconstruction_error` | Metric (Gauge) | `ai_reconstruction_error{model="gru_autoencoder"}` | **Đang chạy Live** | AI Engine V3 Exporter `:9108` |
+| | `ai_rca_component_latency_ms{component="self"}` | Metric (Gauge) | `ai_rca_component_latency_ms{component="self"}` | **Đang chạy Live** | AI Tempo Trace Analyzer |
+| **`CAT-08`** | `traces_service_graph_request_total{server=~"teadb\|teastore-db"}` | Metric (Counter) | `rate(traces_service_graph_request_total{server=~"teadb\|teastore-db"}[1m])` | **Đang chạy Live** | Hub `servicegraphconnector` (JDBC call) |
+| | `traces_service_graph_request_server_seconds_bucket{server=~"teadb\|teastore-db"}` | Metric (Histogram)| `histogram_quantile(0.95, sum by (le) (rate(traces_service_graph_request_server_seconds_bucket{server=~"teadb\|teastore-db"}[1m])))` | **Đang chạy Live** | Hub `servicegraphconnector` (JDBC call) |
+| | `db.statement` | Trace Span Tag | SQL query string gắn trên Span JDBC `:3306` | **Đang chạy Live** | OTel Java Agent JDBC driver |
+| | `mysql_logs` | Log Stream | `{service_name="teastore-db"} \|~ "(?i)(error\|aborted\|timeout)"` | **Đang chạy Live** | OTel `filelog` receiver trên `azure-k3d` |
+| | `ai_rca_component_latency_ms{component="db"}` | Metric (Gauge) | `ai_rca_component_latency_ms{component="db"}` | **Đang chạy Live** | AI Tempo Trace Analyzer |
+| | *`mysql_global_status_threads_connected`* | Metric (Gauge) | `mysql_global_status_threads_connected` | **Planned (Chưa triển khai exporter)** | Cần cài thêm `mysqld-exporter :9104` |
+| | *`mysql_global_status_innodb_buffer_pool_reads`*| Metric (Counter) | `rate(mysql_global_status_innodb_buffer_pool_reads[1m])` | **Planned (Chưa triển khai exporter)** | Cần cài thêm `mysqld-exporter :9104` |
 
 ---
 
-## 5. Chiến Lược Loại Bỏ `unknown_service` Và Bảo Toàn Dữ Liệu Nghiên Cứu
+# CHƯƠNG 4: Hợp Đồng Dữ Liệu Viễn Trắc (Telemetry Data Contract & Hybrid Schema Governance)
 
-1. **Zero Unknown Policy (Định danh 100% nút mạng):**
-   * Các cuộc gọi không mang W3C TraceContext phản hồi như Java RMI (`:1099` tới `teastore-registry`) hoặc JDBC (`:3306` tới `teastore-db`) được bộ quy tắc OTTL Peer Service Enrichment tự động ánh xạ `peer.service` dựa trên cổng đích và giao thức tầng 4.
-2. **Data Integrity & Raw Telemetry Lake:**
-   * Mọi bản ghi Metrics (bao gồm toàn bộ chỉ số OS/Kernel/Network), Logs và Traces sau khi chuẩn hóa đều được sao lưu bất biến (WORM) dưới định dạng OTLP JSON vào bucket `s3://raw-telemetry/` trên MinIO để phục vụ kiểm chứng độc lập và huấn luyện mô hình phát hiện bất thường ở Phase 4.
+### 4.1. Chiến Lược Hybrid Schema Của Đồ Án
+Kế thừa tinh hoa từ nghiên cứu hai nền tảng lớn:
+* **Học hỏi từ SigNoz:** Sử dụng **100% OpenTelemetry Semantic Conventions**, nạp dữ liệu chuẩn OTLP và duy trì tính linh hoạt Schema-on-Read.
+* **Học hỏi từ Datadog:** Áp dụng **Kỷ luật Hợp đồng Dữ liệu (Telemetry Data Contract)** với tệp danh mục quản trị trường viễn trắc tương tự `metadata.csv`, quy định rõ `Unit`, `Orientation` và `Compound Keys` nhằm bảo vệ hệ thống khỏi việc bùng nổ nhãn và sai lệch dữ liệu.
+
+### 4.2. Bảng Master Telemetry Data Contract (20 Hợp Đồng Dữ Liệu Trung Tâm)
+
+| Contract ID | Category | Metric / Signal Name | Type | Unit | Orientation | Required Compound Keys | Consumer (Dashboard / SLO / AI) |
+| :---: | :---: | :--- | :---: | :---: | :---: | :--- | :--- |
+| **`CTR-01`** | `CAT-07` | `http_server_request_duration_seconds_count` | Counter | `requests` | `0` (Neutral) | `k8s_cluster_name`, `service_name`, `http_status_code` | `red-metrics.json` (QPS), Pyrra SLO, AI Feature `qps` |
+| **`CTR-02`** | `CAT-07` | `http_server_request_duration_seconds_bucket` | Histogram | `seconds` | `-1` (Lower better) | `k8s_cluster_name`, `service_name`, `le` | `red-metrics.json`, Pyrra SLO, AI Feature `server_latency_p95` |
+| **`CTR-03`** | `CAT-07` | `http_client_request_duration_seconds_bucket` | Histogram | `seconds` | `-1` (Lower better) | `k8s_cluster_name`, `service_name`, `le` | `red-metrics.json`, AI Feature `client_latency_p95` |
+| **`CTR-04`** | `CAT-07` | `traces_service_graph_request_total` | Counter | `requests` | `0` (Neutral) | `client`, `server`, `connection_type` | `red-metrics.json` (Service Graph Topology) |
+| **`CTR-05`** | `CAT-06` | `jvm_memory_used_bytes` / `process_runtime_jvm...` | Gauge | `bytes` | `-1` (Lower better) | `k8s_cluster_name`, `service_name`, `area="heap"` | `red-metrics.json`, AI Feature `max_pod_ram_pct` |
+| **`CTR-06`** | `CAT-06` | `jvm_gc_duration_seconds_sum` / `process_runtime_jvm...` | Counter | `seconds` | `-1` (Lower better) | `k8s_cluster_name`, `service_name` | `red-metrics.json`, AI Feature `gc_pause_rate` |
+| **`CTR-07`** | `CAT-06` | `jvm_thread_count` / `process_runtime_jvm_threads...` | Gauge | `threads` | `-1` (Lower better) | `k8s_cluster_name`, `service_name` | `red-metrics.json`, JVM Thread Saturation Alert |
+| **`CTR-08`** | `CAT-05` | `container_cpu_cfs_throttled_seconds_total` | Counter | `seconds` | `-1` (Lower better) | `k8s_cluster_name`, `pod`, `container` | `slo-governance.json`, Robusta Alerting |
+| **`CTR-09`** | `CAT-05` | `k8s_pod_restart_count` / OOMKilled Signal | Counter | `restarts` | `-1` (Lower better) | `k8s_cluster_name`, `pod`, `namespace` | `slo-governance.json`, Robusta Telegram Alert |
+| **`CTR-10`** | `CAT-01` | `system_cpu_time_seconds_total{state="wait"}` (%wa) | Counter | `seconds` | `-1` (Lower better) | `k8s_cluster_name`, `host_name` | `k8s-infrastructure.json` (Storage I/O Bottleneck) |
+| **`CTR-11`** | `CAT-01` | `system_cpu_load_average_15m` | Gauge | `1` (Ratio) | `-1` (Lower better) | `k8s_cluster_name`, `host_name` | `k8s-infrastructure.json` (Node Saturation) |
+| **`CTR-12`** | `CAT-02` | `system_disk_operation_time_seconds_total` | Counter | `seconds` | `-1` (Lower better) | `k8s_cluster_name`, `device` | `k8s-infrastructure.json` (Disk Latency) |
+| **`CTR-13`** | `CAT-02` | `system_filesystem_inodes_usage{state="used"}` | Gauge | `inodes` | `-1` (Lower better) | `k8s_cluster_name`, `mountpoint` | MinIO Storage Alert (Inode Exhaustion Guard) |
+| **`CTR-14`** | `CAT-03` | `rate(system_network_dropped_total[1m])` | Gauge | `packets/s`| `-1` (Lower better) | `k8s_cluster_name`, `device="eth0"` | `wan-telemetry.json` (WAN Netem Validation) |
+| **`CTR-15`** | `CAT-03` | `system_network_connections{state="TIME_WAIT"}` | Gauge | `sockets` | `-1` (Lower better) | `k8s_cluster_name`, `protocol="tcp"` | SRE Connection Leak Matrix |
+| **`CTR-16`** | `CAT-08` | `traces_service_graph_request_total{server=~"teadb\|teastore-db"}` | Counter | `requests` | `0` (Neutral) | `client`, `server`, `connection_type` | `database-monitoring-schema.yaml`, Service Graph DB |
+| **`CTR-17`** | `CAT-08` | `traces_service_graph_request_server_seconds_bucket{server=~"teadb\|teastore-db"}` | Histogram | `seconds` | `-1` (Lower better) | `server`, `le` | `database-monitoring-schema.yaml`, DB Latency P95/P99 |
+| **`CTR-18`** | `CAT-03` | `ai_rca_component_latency_ms{component="wan"}` | Gauge | `milliseconds`| `-1` (Lower better) | `cloud_provider`, `service_name` | Panel 7 `red-metrics.json`, AI Trace RCA Report |
+| **`CTR-19`** | `CAT-07` | `ai_rca_component_latency_ms{component="self"}` | Gauge | `milliseconds`| `-1` (Lower better) | `cloud_provider`, `service_name` | Panel 7 `red-metrics.json`, AI Trace RCA Report |
+| **`CTR-20`** | `CAT-08` | `ai_rca_component_latency_ms{component="db"}` | Gauge | `milliseconds`| `-1` (Lower better) | `cloud_provider`, `service_name` | Panel 7 `red-metrics.json`, AI Trace RCA Report |
+
+*(Ghi chú Orientation: `0` = Neutral/Theo dõi luồng; `+1` = Càng cao càng tốt; `-1` = Càng cao càng xấu/Nguy cơ sự cố).*
+
+### 4.3. Cung Cấp Đầu Vào Chuẩn Cho AI Anomaly Detection Engine V3
+Hợp đồng dữ liệu trên liên kết trực tiếp với mã nguồn Python của module AI (`collector.py` và `detector.py`):
+1. **8 PromQL Universal Features Matrix (Đồng bộ 100% với `docs/progress/04_ai_engine.md`):**
+   * `qps` $\leftarrow$ `CTR-01`: Tần suất yêu cầu máy chủ (`http_server_request_duration_seconds_count`).
+   * `server_latency_p95` $\leftarrow$ `CTR-02`: Phân vị trễ P95 xử lý của máy chủ (`http_server_request_duration_seconds_bucket`).
+   * `client_latency_p95` $\leftarrow$ `CTR-03`: Phân vị trễ P95 cuộc gọi client đi ra ngoài (`http_client_request_duration_seconds_bucket`).
+   * `error_rate_5xx` $\leftarrow$ `CTR-01`: Tần suất lỗi mã 5xx (`http_response_status_code=~"5.."`).
+   * `max_pod_cpu_pct`: Tỷ lệ CPU cao nhất trong nhóm pods của dịch vụ (`jvm_cpu_recent_utilization_ratio`).
+   * `max_pod_ram_pct` $\leftarrow$ `CTR-05`: Tỷ lệ bộ nhớ Heap cao nhất trong nhóm pods so với giới hạn Max Heap.
+   * `ram_floor_2m_pct`: Sàn bộ nhớ RAM trong 2 phút (chỉ số vàng phát hiện rò rỉ bộ nhớ thực sự).
+   * `gc_pause_rate` $\leftarrow$ `CTR-06`: Tần suất dừng hệ thống để thu dọn rác JVM (`jvm_gc_duration_seconds_sum`).
+2. **Tempo Trace RCA Decomposition Formula:**
+   Khi Autoencoder phát hiện bất thường, bộ phân giải vết thực thi kích hoạt để chứng minh nguyên nhân gốc rễ:
+   $$\Delta T_{\text{total}} = T_{\text{WAN}} (\text{CTR-18}) + T_{\text{self}} (\text{CTR-19}) + T_{\text{DB}} (\text{CTR-20})$$
+   Dữ liệu được xuất ngược về Prometheus qua exporter `:9108` và hiển thị trên **Panel 7 Dual Y-Axis của Dashboard `red-metrics.json`**.
+
+---
+
+# CHƯƠNG 5: Ma Trận Chẩn Đoán Sự Cố Liên Danh Mục (Cross-Category Linux, Network & SRE Troubleshooting Matrix)
+
+Bảng ma trận dưới đây là kim chỉ nam cho kỹ sư vận hành SRE và các tác tử tự động hóa, liên kết giữa các lệnh chẩn đoán Linux truyền thống với các chỉ số viễn trắc tự động trên nền tảng:
+
+| Triệu Chứng Sự Cố | Lệnh Linux Chẩn Đoán Thủ Công | Category Đại Diện | Metric Chuẩn Hóa Trên Thanos / Prometheus | Tương Quan Trace / Log & AI RCA | Hành Động Khắc Phục Khuyến Nghị |
+| :--- | :--- | :---: | :--- | :--- | :--- |
+| **System Load cao nhưng CPU User thấp** | `top`, `vmstat 1`, `iostat -xz 1` | `CAT-01` + `CAT-02` | `system_cpu_time_seconds_total{state="wait"}` (%wa tăng cao) kết hợp `system_cpu_load_average_1m` | Slow query log trong Loki; Tempo Trace hiển thị $T_{\text{DB}}$ chiếm $>80\%$ tổng trễ. | Tối ưu hóa chỉ mục Index trên MySQL, tăng `innodb_buffer_pool_size`, hoặc nâng cấp SSD IOPS. |
+| **Tomcat / JVM dừng xử lý đột ngột (Hang/Freeze)** | `jstat -gcutil <pid> 1000`, `jstack <pid>` | `CAT-06` + `CAT-07` | `jvm_gc_duration_seconds_sum` tăng vọt; `http_server_request_duration_seconds_bucket` dạt về vô cùng. | AI Anomaly Engine phát cảnh báo `gc_pause_rate` bất thường; Trace Span báo lỗi timeout HTTP 504. | Khắc phục rò rỉ bộ nhớ Java (Memory Leak), chuyển đổi SerialGC sang G1GC, tăng Heap Max lên 512MB. |
+| **Pod bị K8s tiêu diệt (Exit Code 137)** | `dmesg -T \| grep -i oom`, `kubectl describe pod` | `CAT-05` + `CAT-01` | `container_memory_working_set_bytes` chạm ngưỡng Limit; `system_paging_operations_total` tăng vọt. | Robusta phát hiện sự kiện `OOMKilled` và bắn snapshot Pod về Telegram. | Nâng cgroup memory limit trong Helm values; điều chỉnh tham số `-Xmx` của Java không vượt quá 75% cgroup limit. |
+| **CPU bị bóp hiệu năng (Throttling)** | `cat /sys/fs/cgroup/cpu/cpu.stat` | `CAT-05` | `rate(container_cpu_cfs_throttled_seconds_total[1m]) > 0.2` | P95 latency tăng cao trong khi Node CPU còn trống $>60\%$. | Tăng CPU CFS Quota (`resources.limits.cpu`) trong Kubernetes Deployment manifest. |
+| **Mạng WAN liên cụm trễ cao, rớt gói** | `ping`, `tc -s qdisc show dev eth0`, `tcpdump` | `CAT-03` | `rate(system_network_dropped_total[1m]) > 0` và `ai_rca_component_latency_ms{component="wan"} > 50ms` | Waterfall Trace trên Tempo bộc lộ khoảng cách trễ 10ms-180ms giữa WebUI (AWS) và Persistence (Azure). | Kiểm tra quy tắc `tc netem` trên container bridge, kiểm tra tắc nghẽn mTLS 1.3 crypto handshake. |
+| **Rò rỉ kết nối TCP Socket** | `ss -tan \| awk '{print $1}' \| sort \| uniq -c` | `CAT-03` | `system_network_connections{state="TIME_WAIT"} > 5000` | Tomcat ghi log `java.net.SocketException: Too many open files`. | Bật HTTP Keep-Alive connection pooling trên HTTP Client; tăng `net.ipv4.ip_local_port_range`. |
+| **Cạn kiệt Inode đĩa cứng (Disk not full)** | `df -h` so sánh với `df -i` | `CAT-02` | `system_filesystem_inodes_usage{state="used"} / ... > 0.90` | MinIO hoặc Thanos Sidecar log lỗi `No space left on device` dù dung lượng byte còn trống hàng chục GB. | Rút ngắn thời gian lưu trữ block nhỏ tạm thời; gom cụm TSDB blocks; tăng kích thước khối block nén. |
+| **Nghẽn hàng đợi MySQL Connection Pool** | `mysqladmin status`, `SHOW PROCESSLIST` | `CAT-08` | `traces_service_graph_request_server_seconds_bucket{server=~"teadb\|teastore-db"}` P95 tăng vọt $> 1000\text{ms}$ | Persistence service log lỗi `Communications link failure` hoặc `Cannot get connection from pool`. | Nâng `max_connections` trong `my.cnf`; cấu hình HikariCP connection pool timeout hợp lý phía Spring/Tomcat. |
+
+---
+
+# CHƯƠNG 6: Kết Luận & Lộ Trình Vận Hành (Conclusion & Operational Roadmap)
+
+Bản đặc tả **v4.1.0** đã giải quyết triệt để các phát hiện kiểm toán và nâng chuẩn giám sát tài nguyên của đồ án tốt nghiệp:
+1. **Thiết lập chuẩn mực kiến trúc:** Xóa bỏ sự nhập nhằng giữa các tầng công nghệ bằng **8 Danh mục Chuẩn (`CAT-01` đến `CAT-08`)** và triết lý **Entity Composition** bao quát 4 Thực thể Giám sát Độc lập.
+2. **Kỷ luật dữ liệu nghiêm ngặt:** Triển khai **Master Telemetry Data Contract** đồng bộ trực tiếp với 4 tệp schema máy đọc (`docs/schemas/`) và mã nguồn AI Engine.
+3. **Phản ánh trung thực năng lực hệ thống:** Phân định rõ ràng giữa các số đo đã đo lường trực tiếp 100% (JDBC Spans, OTel Hostmetrics, Service Graph) và các năng lực mở rộng có kế hoạch (`mysqld-exporter`).
+4. **Cơ sở khoa học vững chắc:** Đảm bảo toàn bộ các thí nghiệm kiểm thử tải Locust, tiêm lỗi Chaos Engineering và suy diễn phát hiện bất thường ở **Phase 4** đều vận hành trên một nền tảng dữ liệu trong sạch, chính xác và có khả năng tái lập 100%.

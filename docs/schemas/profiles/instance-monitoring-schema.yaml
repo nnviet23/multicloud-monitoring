@@ -1,7 +1,14 @@
-schema_version: "1.0"
+schema_version: "2.0"
 resource_type: "compute_instance"
-target_system: "Kubernetes Worker Nodes / Multi-Cloud Cloud VMs"
+target_system: "Kubernetes Worker Nodes / Multi-Cloud Compute Nodes (AWS EKS & Azure AKS)"
 methodology: "USE_METHOD"
+
+included_categories:
+  - "CAT-01: OS & System Kernel"
+  - "CAT-02: Storage & Filesystem"
+  - "CAT-03: Network & Transport (L3/L4 & WAN)"
+  - "CAT-05: Containers & Kubernetes Orchestration"
+  - "CAT-04: Cloud Infrastructure & Perimeter Context"
 
 identity_attributes:
   cluster_name:
@@ -48,8 +55,8 @@ dependencies:
     network_stack: "Linux TCP/IP Stack, netfilter, tc netem traffic control"
   cloud:
     compute_profile:
-      aws_simulation_sku: "m5.xlarge (4 vCPU, 16 GiB RAM)"
-      azure_simulation_sku: "Standard_D4ds_v5 (4 vCPU, 16 GiB RAM)"
+      aws_simulation_sku: "EKS NodeGroup: m5.xlarge (4 vCPU, 16 GiB RAM)"
+      azure_simulation_sku: "AKS Managed NodePool: Standard_D4ds_v5 (4 vCPU, 16 GiB RAM)"
     network_profile:
       cidr: "172.28.0.0/16 (Docker Bridge mc-monitoring-net)"
       wan_emulation: "tc qdisc netem delay 10ms 2ms loss 0.1%"
@@ -60,102 +67,138 @@ telemetry_signals:
   metrics:
     cpu:
       utilization:
+        category_ref: "CAT-01"
         metric_name: "system_cpu_time_seconds_total"
         type: "counter"
         unit: "seconds"
+        orientation: 0
         promql: "sum by (k8s_cluster_name, state) (rate(system_cpu_time_seconds_total{state=~\"user|system\"}[1m]))"
       saturation_load:
+        category_ref: "CAT-01"
         metric_name: "system_cpu_load_average_1m"
         type: "gauge"
         unit: "threads"
+        orientation: -1
         promql: "system_cpu_load_average_1m"
       saturation_wait:
+        category_ref: "CAT-01"
         metric_name: "system_cpu_time_seconds_total"
         type: "gauge"
         unit: "percent"
+        orientation: -1
         promql: "(sum by (k8s_cluster_name) (rate(system_cpu_time_seconds_total{state=\"wait\"}[1m])) / (sum by (k8s_cluster_name) (rate(system_cpu_time_seconds_total[1m])) + 1e-4)) * 100"
       errors_steal:
+        category_ref: "CAT-01"
         metric_name: "system_cpu_time_seconds_total"
         type: "counter"
         unit: "seconds"
+        orientation: -1
         promql: "rate(system_cpu_time_seconds_total{state=\"steal\"}[1m])"
 
     memory:
       utilization:
+        category_ref: "CAT-01"
         metric_name: "system_memory_usage_bytes"
         type: "gauge"
         unit: "bytes"
+        orientation: -1
         promql: "sum by (k8s_cluster_name, state) (system_memory_usage_bytes{state=~\"used|free|cached|buffered\"})"
       saturation_paging_ops:
+        category_ref: "CAT-01"
         metric_name: "system_paging_operations_total"
         type: "counter"
         unit: "ops/s"
+        orientation: -1
         promql: "sum by (k8s_cluster_name, direction) (rate(system_paging_operations_total[1m]))"
       errors_paging_faults:
+        category_ref: "CAT-01"
         metric_name: "system_paging_faults_total"
         type: "counter"
         unit: "faults/s"
+        orientation: -1
         promql: "sum by (k8s_cluster_name, type) (rate(system_paging_faults_total[1m])) or sum by (k8s_cluster_name, type) (rate(system_paging_operations_total[1m]))"
 
     disk_and_storage:
       utilization_throughput:
+        category_ref: "CAT-02"
         metric_name: "system_disk_io_bytes_total"
         type: "counter"
         unit: "Bps"
+        orientation: 0
         promql: "sum by (k8s_cluster_name, direction) (rate(system_disk_io_bytes_total[1m]))"
       utilization_iops:
+        category_ref: "CAT-02"
         metric_name: "system_disk_operations_total"
         type: "counter"
         unit: "iops"
+        orientation: 0
         promql: "sum by (k8s_cluster_name, direction) (rate(system_disk_operations_total[1m]))"
       saturation_queue_length:
+        category_ref: "CAT-02"
         metric_name: "system_disk_pending_operations"
         type: "gauge"
         unit: "count"
+        orientation: -1
         promql: "sum by (k8s_cluster_name) (system_disk_pending_operations)"
       saturation_latency_ms:
+        category_ref: "CAT-02"
         metric_name: "system_disk_operation_time_seconds_total"
         type: "gauge"
         unit: "ms"
+        orientation: -1
         promql: "(sum by (k8s_cluster_name) (rate(system_disk_operation_time_seconds_total[1m])) / (sum by (k8s_cluster_name) (rate(system_disk_operations_total[1m])) + 1e-4)) * 1000"
 
     filesystem:
       utilization_space_percent:
+        category_ref: "CAT-02"
         metric_name: "system_filesystem_usage_bytes"
         type: "gauge"
         unit: "percent"
+        orientation: -1
         promql: "(sum by (k8s_cluster_name, mountpoint) (system_filesystem_usage_bytes{state=\"used\"}) / sum by (k8s_cluster_name, mountpoint) (system_filesystem_usage_bytes)) * 100"
       saturation_inode_percent:
+        category_ref: "CAT-02"
         metric_name: "system_filesystem_inodes_usage"
         type: "gauge"
         unit: "percent"
+        orientation: -1
         promql: "(sum by (k8s_cluster_name, mountpoint) (system_filesystem_inodes_usage{state=\"used\"}) / (sum by (k8s_cluster_name, mountpoint) (system_filesystem_inodes_usage) + 1e-4)) * 100"
 
     network:
       utilization_throughput:
+        category_ref: "CAT-03"
         metric_name: "system_network_io_bytes_total"
         type: "counter"
         unit: "Bps"
+        orientation: 0
         promql: "sum by (k8s_cluster_name, direction) (rate(system_network_io_bytes_total[1m]))"
       utilization_packet_rate:
+        category_ref: "CAT-03"
         metric_name: "system_network_packets_total"
         type: "counter"
         unit: "pps"
+        orientation: 0
         promql: "sum by (k8s_cluster_name, direction) (rate(system_network_packets_total[1m]))"
       saturation_tcp_sockets:
+        category_ref: "CAT-03"
         metric_name: "system_network_connections"
         type: "gauge"
         unit: "count"
+        orientation: -1
         promql: "sum by (k8s_cluster_name, state) (system_network_connections{state=~\"ESTABLISHED|TIME_WAIT|CLOSE_WAIT\"})"
       errors_packet_errors:
+        category_ref: "CAT-03"
         metric_name: "system_network_errors_total"
         type: "counter"
         unit: "errors/s"
+        orientation: -1
         promql: "sum by (k8s_cluster_name, direction) (rate(system_network_errors_total[1m]))"
       errors_packet_drops:
+        category_ref: "CAT-03"
         metric_name: "system_network_dropped_total"
         type: "counter"
         unit: "drops/s"
+        orientation: -1
         promql: "sum by (k8s_cluster_name, direction) (rate(system_network_dropped_total[1m]))"
 
 slo_targets:
@@ -179,4 +222,3 @@ correlation_keys:
   to_hosted_webapps: "k8s_cluster_name"
   to_network_topology: ["network.subnet.id", "network.vpc.id"]
   to_raw_telemetry_lake: ["cloud.provider", "cloud.region"]
-

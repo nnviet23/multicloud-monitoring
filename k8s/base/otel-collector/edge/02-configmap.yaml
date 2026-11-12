@@ -121,6 +121,7 @@ data:
     exporters:
       otlp/hub:
         endpoint: k3d-hub-k3d-server-0:4317
+        compression: gzip
         tls:
           ca_file: /etc/otelcol/certs/ca.crt
           cert_file: /etc/otelcol/certs/client.crt
@@ -134,7 +135,7 @@ data:
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [memory_limiter, filter/drop_noise, resourcedetection, probabilistic_sampler, transform/cluster_id, batch]
+          processors: [memory_limiter, filter/drop_noise, resourcedetection, transform/cluster_id, batch]
           exporters: [otlp/hub, debug]
         logs:
           receivers: [otlp, filelog]

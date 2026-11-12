@@ -1,5 +1,7 @@
 {
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -9,15 +11,26 @@
   "panels": [
     {
       "collapsed": false,
-      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      },
       "id": 1,
       "title": "Total Telemetry Ingestion Rate (All Signals)",
       "description": "Tổng lưu lượng telemetry (Metrics, Logs, Traces) nạp vào hệ thống Hub Gateway mỗi giây từ AWS và Azure.",
       "type": "stat",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "sum(rate(otelcol_receiver_accepted_metric_points[1m])) + sum(rate(otelcol_receiver_accepted_spans[1m])) + sum(rate(otelcol_receiver_accepted_log_records[1m]))",
           "instant": true,
@@ -26,7 +39,10 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "fixedColor": "blue", "mode": "fixed" },
+          "color": {
+            "fixedColor": "blue",
+            "mode": "fixed"
+          },
           "custom": {},
           "decimals": 1,
           "unit": "pps"
@@ -35,15 +51,26 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 0 },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 8,
+        "y": 0
+      },
       "id": 2,
       "title": "Projected Monthly Telemetry Volume",
       "description": "Ước tính tổng dung lượng dữ liệu quan sát nạp vào kho lưu trữ trong 30 ngày (GB/tháng).",
       "type": "stat",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "(sum(rate(otelcol_exporter_sent_metric_points[5m])) * 0.0005 + sum(rate(otelcol_exporter_sent_spans[5m])) * 0.001 + sum(rate(otelcol_exporter_sent_log_records[5m])) * 0.0008) * 86400 * 30 / 1024",
           "instant": true,
@@ -52,7 +79,10 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "fixedColor": "green", "mode": "fixed" },
+          "color": {
+            "fixedColor": "green",
+            "mode": "fixed"
+          },
           "custom": {},
           "decimals": 2,
           "unit": "decgbytes"
@@ -61,15 +91,26 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 0 },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
       "id": 3,
       "title": "Estimated Monthly Cloud WAN Egress Cost ($0.09/GB)",
       "description": "Ước tính chi phí truyền dữ liệu WAN xuyên đám mây từ Spoke (AWS/Azure) về Central Hub theo đơn giá AWS Egress chuẩn ($0.09/GB).",
       "type": "stat",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "((sum(rate(otelcol_exporter_sent_spans{exporter=~\"otlp.*\"}[5m])) * 0.001 + sum(rate(otelcol_exporter_sent_metric_points{exporter=~\"otlp.*\"}[5m])) * 0.0005) * 86400 * 30 / 1024) * 0.09",
           "instant": true,
@@ -78,7 +119,10 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "fixedColor": "yellow", "mode": "fixed" },
+          "color": {
+            "fixedColor": "yellow",
+            "mode": "fixed"
+          },
           "custom": {},
           "decimals": 2,
           "unit": "currencyUSD"
@@ -87,15 +131,26 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
       "id": 4,
       "title": "Telemetry Ingestion Rate by Multi-Cloud Cluster",
       "description": "Lưu lượng metrics & logs nạp theo từng cụm (AWS Spoke vs Azure Spoke vs Central Hub).",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "sum by (k8s_cluster_name) (rate(otelcol_receiver_accepted_metric_points[1m]))",
           "legendFormat": "Metrics - {{k8s_cluster_name}}",
@@ -103,7 +158,10 @@
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "sum by (k8s_cluster_name) (rate(otelcol_receiver_accepted_log_records[1m]))",
           "legendFormat": "Logs - {{k8s_cluster_name}}",
@@ -113,22 +171,36 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": { "fillOpacity": 10, "lineWidth": 2 },
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
           "unit": "pps"
         }
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
       "id": 5,
-      "title": "Trace Volume Reduction Waterfall (Edge Pre-filtering & Tail-sampling)",
-      "description": "Hiệu quả tối ưu hóa chi phí: Tỷ lệ Trace Spans được sinh ra vs Lọc bỏ nhiễu tại Edge vs Giữ lại tại Central Hub Gateway.",
+      "title": "Trace Volume Reduction Waterfall (Edge Noise Filter & Hub Tail-Sampling)",
+      "description": "So sánh tổng lượng Spans sinh ra vs. Spans rác Healthcheck bị chặn tại Spoke Edge (filter/drop_noise) vs. Spans lưu trữ thực tế xuống Tempo sau khi qua tail_sampling tại Hub Gateway (bảo toàn 100% lỗi & trễ cao).",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "sum(rate(otelcol_receiver_accepted_spans[1m]))",
           "legendFormat": "Spans Received at Collector",
@@ -136,7 +208,10 @@
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "sum(rate(otelcol_processor_filter_spans_filtered[1m]))",
           "legendFormat": "Noise Spans Dropped at Edge (Health Checks)",
@@ -144,7 +219,10 @@
           "refId": "B"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "sum(rate(otelcol_exporter_sent_spans[1m]))",
           "legendFormat": "Sampled Spans Ingested to Tempo",
@@ -154,32 +232,68 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": { "fillOpacity": 15, "lineWidth": 2 },
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          },
           "unit": "pps"
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "Noise Spans Dropped at Edge (Health Checks)" },
-            "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+            "matcher": {
+              "id": "byName",
+              "options": "Noise Spans Dropped at Edge (Health Checks)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "Sampled Spans Ingested to Tempo" },
-            "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }]
+            "matcher": {
+              "id": "byName",
+              "options": "Sampled Spans Ingested to Tempo"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
           }
         ]
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
       "id": 6,
       "title": "Top 10 High-Cardinality Metrics Inspector",
       "description": "Theo dõi các metrics có số lượng chuỗi thời gian (time series) cao nhất nhằm phát hiện rò rỉ nhãn vô hạn (unbounded label cardinality).",
       "type": "table",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "topk(10, count by (__name__) ({__name__=~\".+\"}))",
           "format": "table",
@@ -189,31 +303,64 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": { "align": "auto" }
+          "custom": {
+            "align": "auto"
+          }
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "__name__" },
-            "properties": [{ "id": "displayName", "value": "Metric Name" }]
+            "matcher": {
+              "id": "byName",
+              "options": "__name__"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Metric Name"
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "Value" },
-            "properties": [{ "id": "displayName", "value": "Active Time Series Count" }, { "id": "unit", "value": "short" }]
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Active Time Series Count"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
           }
         ]
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
       "id": 7,
       "title": "Logs Ingestion Rate by Service (Loki)",
       "description": "Phân tích lưu lượng log nạp vào Loki theo từng microservice để kiểm soát chi phí lưu trữ log stream.",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "sum by (service_name) (rate(otelcol_receiver_accepted_log_records{service_name=~\"$service\"}[1m]))",
           "legendFormat": "{{service_name}} Logs/s",
@@ -223,22 +370,36 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": { "fillOpacity": 15, "lineWidth": 2 },
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          },
           "unit": "reqps"
         }
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 20 },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
       "id": 8,
       "title": "Collector Health: Pipeline Memory RSS & Dropped Telemetry Points",
       "description": "Giám sát sức khỏe bộ nhớ của OTel Collector Pods và tỷ lệ điểm dữ liệu bị drop do bộ đệm đầy (queue full) hoặc cạn bộ nhớ (memory pressure).",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "sum by (pod) (container_memory_working_set_bytes{pod=~\"otel-collector.*\"})",
           "legendFormat": "Memory RSS - {{pod}}",
@@ -246,7 +407,10 @@
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "sum by (pod) (rate(otelcol_processor_dropped_metric_points[1m])) + sum by (pod) (rate(otelcol_processor_dropped_spans[1m]))",
           "legendFormat": "Dropped Telemetry Points/s - {{pod}}",
@@ -256,16 +420,33 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": { "lineWidth": 2 },
+          "custom": {
+            "lineWidth": 2
+          },
           "unit": "bytes"
         },
         "overrides": [
           {
-            "matcher": { "id": "byFrameRefID", "options": "B" },
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
             "properties": [
-              { "id": "custom.axisPlacement", "value": "right" },
-              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } },
-              { "id": "unit", "value": "pps" }
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "unit",
+                "value": "pps"
+              }
             ]
           }
         ]
@@ -294,7 +475,7 @@
           "type": "prometheus",
           "uid": "thanos-query-ds"
         },
-        "definition": "label_values(up, cluster)",
+        "definition": "label_values(system_cpu_time_seconds_total, k8s_cluster_name)",
         "hide": 0,
         "includeAll": true,
         "label": "Cluster",
@@ -303,7 +484,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(up, cluster)",
+          "query": "label_values(system_cpu_time_seconds_total, k8s_cluster_name)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -379,7 +560,7 @@
     "to": "now"
   },
   "timezone": "browser",
-  "title": "Multi-Cloud Telemetry Ingestion, Cardinality & Cost Meter",
+  "title": "08. Telemetry & Cost Governance",
   "uid": "mc-cost-telemetry",
   "version": 1
 }

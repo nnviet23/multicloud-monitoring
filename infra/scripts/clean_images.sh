@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Script: clean_images.sh
+# Purpose: Clean up all version-pinned container images for TeaStore and
+#          Observability Stack from the host Docker daemon upon teardown.
+# Reference: infra/README.md
+# ==============================================================================
+set -euo pipefail
+
+# 1. TeaStore Benchmark Application Images (v1.4.1)
+TEASTORE_IMAGES=(
+  "descartesresearch/teastore-webui:1.4.1"
+  "descartesresearch/teastore-registry:1.4.1"
+  "descartesresearch/teastore-auth:1.4.1"
+  "descartesresearch/teastore-image:1.4.1"
+  "descartesresearch/teastore-recommender:1.4.1"
+  "descartesresearch/teastore-persistence:1.4.1"
+  "descartesresearch/teastore-db:1.4.1"
+)
+
+# 2. OpenTelemetry & Telemetry Instrumentation
+OTEL_IMAGES=(
+  "ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java:2.10.0"
+  "otel/opentelemetry-collector-contrib:0.114.0"
+)
+
+# 3. Observability Backends & Governance Stack (Hub)
+OBSERVABILITY_IMAGES=(
+  "minio/minio:RELEASE.2025-10-15T17-29-55Z"
+  "prom/prometheus:v2.50.0"
+  "quay.io/thanos/thanos:v0.36.1"
+  "grafana/loki:2.9.4"
+  "grafana/tempo:2.4.0"
+  "grafana/grafana:11.5.0"
+  "ghcr.io/pyrra-dev/pyrra:v0.7.3"
+  "robustadev/robusta-runner:0.53.0"
+)
+
+ALL_PROJECT_IMAGES=(
+  "${TEASTORE_IMAGES[@]}"
+  "${OTEL_IMAGES[@]}"
+  "${OBSERVABILITY_IMAGES[@]}"
+)
+
+echo "======================================================================"
+echo "Cleaning up ${#ALL_PROJECT_IMAGES[@]} project container images on Docker host..."
+echo "======================================================================"
+
+for img in "${ALL_PROJECT_IMAGES[@]}"; do
+  echo "--> Removing image ${img}..."
+  docker rmi -f "${img}" 2>/dev/null || true
+done
+
+echo "--> Removing k3d internal helper images..."
+K3D_IMAGES=$(docker images "rancher/k3*" -q)
+if [ -n "$K3D_IMAGES" ]; then
+  docker rmi -f $K3D_IMAGES 2>/dev/null || true
+fi
+
+echo "--> Pruning dangling Docker images..."
+docker image prune -f
+
+echo "======================================================================"
+echo "All project images and dangling images have been cleaned up."
+echo "======================================================================"
+

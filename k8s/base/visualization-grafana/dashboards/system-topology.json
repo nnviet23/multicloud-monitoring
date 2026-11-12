@@ -219,7 +219,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(sum by (service_name) (label_replace(rate(traces_service_graph_request_total{server!=\"unknown\", server!=\"user\"}[5m]), \"service_name\", \"$1\", \"server\", \"(.*)\")) > 0, \"cloud_provider_platform\", \"AWS EKS (EC2 Nitro m5.xlarge)\", \"service_name\", \"teastore-(webui|auth|image|recommender|registry)\"), \"cloud_provider_platform\", \"Azure AKS (VM Standard_D4ds_v5)\", \"service_name\", \"teastore-persistence|teadb|teastore-db\"), \"cloud_region_az\", \"us-east-1 (AZ: us-east-1a)\", \"service_name\", \"teastore-(webui|auth|image|recommender|registry)\"), \"cloud_region_az\", \"southasia (Zone: southasia-1)\", \"service_name\", \"teastore-persistence|teadb|teastore-db\"), \"iam_identity_arn\", \"arn:aws:iam::123456789012:role/$1-irsa-role\", \"service_name\", \"teastore-(.*)\"), \"iam_identity_arn\", \"/subscriptions/.../uami-teastore-db\", \"service_name\", \"teadb|teastore-db\"), \"vpc_vnet_id\", \"vpc-0a1b2c3d4e5f67890 (CIDR: 10.0.0.0/16)\", \"service_name\", \"teastore-(webui|auth|image|recommender|registry)\"), \"vpc_vnet_id\", \"vnet-teastore-southasia (CIDR: 10.1.0.0/16)\", \"service_name\", \"teastore-persistence|teadb|teastore-db\")",
+          "expr": "label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(sum by (service_name) (label_replace(rate(traces_service_graph_request_total{server!=\"unknown\", server!=\"user\"}[5m]), \"service_name\", \"$1\", \"server\", \"(.*)\")) > 0, \"cloud_provider_platform\", \"AWS EKS (NodeGroup: nodepool-app)\", \"service_name\", \"teastore-(webui|auth|image|recommender|registry)\"), \"cloud_provider_platform\", \"Azure AKS (NodePool: nodepool-data)\", \"service_name\", \"teastore-persistence|teadb|teastore-db\"), \"cloud_region_az\", \"us-east-1 (AZ: us-east-1a)\", \"service_name\", \"teastore-(webui|auth|image|recommender|registry)\"), \"cloud_region_az\", \"southasia (Zone: southasia-1)\", \"service_name\", \"teastore-persistence|teadb|teastore-db\"), \"iam_identity_arn\", \"arn:aws:iam::851725492014:role/$1-irsa-role\", \"service_name\", \"teastore-(.*)\"), \"iam_identity_arn\", \"/subscriptions/4b8f3a21-9e6c-4f80-b753-2d9a6e1c84f5/.../uami-teastore-db\", \"service_name\", \"teadb|teastore-db\"), \"vpc_vnet_id\", \"vpc-0f8a3c2b1e7d9a4f6 (CIDR: 10.0.0.0/16)\", \"service_name\", \"teastore-(webui|auth|image|recommender|registry)\"), \"vpc_vnet_id\", \"vnet-teastore-southasia (CIDR: 10.1.0.0/16)\", \"service_name\", \"teastore-persistence|teadb|teastore-db\")",
           "format": "table",
           "instant": true,
           "refId": "A"
@@ -378,6 +378,18 @@
           "legendFormat": "P50 {{client}} -> {{server}}",
           "range": true,
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum by (le, client, server) (rate(traces_service_graph_request_server_seconds_bucket{server!=\"unknown\"}[1m]))) * 1000",
+          "instant": false,
+          "legendFormat": "P99 {{client}} -> {{server}}",
+          "range": true,
+          "refId": "C"
         }
       ],
       "fieldConfig": {
@@ -565,7 +577,7 @@
           "type": "prometheus",
           "uid": "thanos-query-ds"
         },
-        "definition": "label_values(k8s_cluster_name)",
+        "definition": "label_values(system_cpu_time_seconds_total, k8s_cluster_name)",
         "hide": 0,
         "includeAll": true,
         "label": "Cluster",
@@ -574,7 +586,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(k8s_cluster_name)",
+          "query": "label_values(system_cpu_time_seconds_total, k8s_cluster_name)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -650,7 +662,7 @@
     "to": "now"
   },
   "timezone": "browser",
-  "title": "Multi-Cloud System Topology & Deep Cloud Dependencies",
+  "title": "02. Topology & Cloud Context",
   "uid": "mc-system-topology",
   "version": 4
 }

@@ -1,5 +1,7 @@
 {
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -8,8 +10,227 @@
   "liveNow": false,
   "panels": [
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "max": 400,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 250
+              },
+              {
+                "color": "red",
+                "value": 350
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      },
+      "id": 201,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "pluginVersion": "11.5.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "clamp_max(sum(rate(system_cpu_time_seconds_total{k8s_cluster_name=~\"$cluster\", state!=\"idle\"}[1m])) * 100, 400)",
+          "instant": true,
+          "legendFormat": "CPU Used",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "CPU Usage (400%)",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "max": 9.59,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 6.5
+              },
+              {
+                "color": "red",
+                "value": 8.5
+              }
+            ]
+          },
+          "unit": "decgbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 0
+      },
+      "id": 202,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "pluginVersion": "11.5.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "avg(system_memory_usage_bytes{k8s_cluster_name=~\"$cluster\", state=\"used\"}) / (1024*1024*1024)",
+          "instant": true,
+          "legendFormat": "RAM Used",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Memory Usage (9.59 GB)",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "max": 1007,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 700
+              },
+              {
+                "color": "red",
+                "value": 900
+              }
+            ]
+          },
+          "unit": "decgbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "id": 203,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "pluginVersion": "11.5.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "avg(system_filesystem_usage_bytes{k8s_cluster_name=~\"$cluster\", state=\"used\", device=\"/dev/sde\"}) / (1024*1024*1024)",
+          "instant": true,
+          "legendFormat": "Disk Used",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Disk Space Usage (1007 GB WSL2 VHDX)",
+      "type": "gauge",
+      "description": "Dung lượng ổ đĩa ảo VHDX tự động co giãn tối đa 1007 GB (1 TB) được Docker Desktop/WSL2 cấp phát mặc định cho Linux ext4."
+    },
+    {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
       "id": 100,
       "title": "Row 1: Compute, Load & CPU Saturation (top / uptime / vmstat)",
       "type": "row",
@@ -17,45 +238,79 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 1 },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 7
+      },
       "id": 1,
       "title": "Panel 1: CPU Utilization Breakdown (User vs System vs Idle vs Wait)",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "sum by (k8s_cluster_name, state) (rate(system_cpu_time_seconds_total[1m]))",
+          "expr": "sum by (k8s_cluster_name, state) (rate(system_cpu_time_seconds_total{k8s_cluster_name=~\"$cluster\"}[1m]))",
           "legendFormat": "{{k8s_cluster_name}} ({{state}})",
           "range": true,
           "refId": "A"
         }
       ],
       "fieldConfig": {
-        "defaults": { "custom": { "fillOpacity": 15, "lineWidth": 2, "stacking": { "mode": "normal" } }, "unit": "s" }
+        "defaults": {
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "s"
+        }
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 1 },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 7
+      },
       "id": 2,
       "title": "Panel 2: CPU I/O Wait (%wa) & Steal Saturation Alert",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "(sum by (k8s_cluster_name) (rate(system_cpu_time_seconds_total{state=\"wait\"}[1m])) / (sum by (k8s_cluster_name) (rate(system_cpu_time_seconds_total[1m])) + 0.0001)) * 100",
+          "expr": "(sum by (k8s_cluster_name) (rate(system_cpu_time_seconds_total{k8s_cluster_name=~\"$cluster\", state=\"wait\"}[1m])) / (sum by (k8s_cluster_name) (rate(system_cpu_time_seconds_total{k8s_cluster_name=~\"$cluster\"}[1m])) + 0.0001)) * 100",
           "legendFormat": "{{k8s_cluster_name}} - I/O Wait (%wa)",
           "range": true,
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "(sum by (k8s_cluster_name) (rate(system_cpu_time_seconds_total{state=\"steal\"}[1m])) / (sum by (k8s_cluster_name) (rate(system_cpu_time_seconds_total[1m])) + 0.0001)) * 100",
+          "expr": "(sum by (k8s_cluster_name) (rate(system_cpu_time_seconds_total{k8s_cluster_name=~\"$cluster\", state=\"steal\"}[1m])) / (sum by (k8s_cluster_name) (rate(system_cpu_time_seconds_total{k8s_cluster_name=~\"$cluster\"}[1m])) + 0.0001)) * 100",
           "legendFormat": "{{k8s_cluster_name}} - Steal Time (%st)",
           "range": true,
           "refId": "B"
@@ -63,14 +318,25 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": { "lineWidth": 2 },
+          "custom": {
+            "lineWidth": 2
+          },
           "unit": "percent",
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 10 },
-              { "color": "red", "value": 25 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 25
+              }
             ]
           }
         }
@@ -78,52 +344,82 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 1 },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 7
+      },
       "id": 3,
       "title": "Panel 3: System Load Average (1m, 5m, 15m) vs Available Cores",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "system_cpu_load_average_1m",
+          "expr": "system_cpu_load_average_1m{k8s_cluster_name=~\"$cluster\"}",
           "legendFormat": "{{k8s_cluster_name}} Load 1m",
           "range": true,
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "system_cpu_load_average_5m",
+          "expr": "system_cpu_load_average_5m{k8s_cluster_name=~\"$cluster\"}",
           "legendFormat": "{{k8s_cluster_name}} Load 5m",
           "range": true,
           "refId": "B"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "system_cpu_load_average_15m",
+          "expr": "system_cpu_load_average_15m{k8s_cluster_name=~\"$cluster\"}",
           "legendFormat": "{{k8s_cluster_name}} Load 15m",
           "range": true,
           "refId": "C"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "count by (k8s_cluster_name) (count by (k8s_cluster_name, cpu) (system_cpu_time_seconds_total))",
+          "expr": "count by (k8s_cluster_name) (count by (k8s_cluster_name, cpu) (system_cpu_time_seconds_total{k8s_cluster_name=~\"$cluster\"}))",
           "legendFormat": "{{k8s_cluster_name}} CPU Cores",
           "range": true,
           "refId": "D"
         }
       ],
       "fieldConfig": {
-        "defaults": { "custom": { "lineWidth": 2 }, "unit": "short" }
+        "defaults": {
+          "custom": {
+            "lineWidth": 2
+          },
+          "unit": "short"
+        }
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      },
       "id": 101,
       "title": "Row 2: Memory & Paging Saturation (free -m & vmstat)",
       "type": "row",
@@ -131,57 +427,101 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
       "id": 4,
       "title": "Panel 4: Memory Utilization & Breakdown (Used, Free, Cached, Buffered)",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "sum by (k8s_cluster_name, state) (system_memory_usage_bytes{state=~\"used|free|cached|buffered\"})",
+          "expr": "sum by (k8s_cluster_name, state) (system_memory_usage_bytes{k8s_cluster_name=~\"$cluster\", state=~\"used|free|cached|buffered\"})",
           "legendFormat": "{{k8s_cluster_name}} ({{state}})",
           "range": true,
           "refId": "A"
         }
       ],
       "fieldConfig": {
-        "defaults": { "custom": { "fillOpacity": 20, "lineWidth": 2, "stacking": { "mode": "normal" } }, "unit": "bytes" }
+        "defaults": {
+          "custom": {
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "bytes"
+        }
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
       "id": 5,
       "title": "Panel 5: Memory Swap & Paging Activity (Operations & Faults / sec)",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "sum by (k8s_cluster_name, direction) (rate(system_paging_operations_total[1m]))",
+          "expr": "sum by (k8s_cluster_name, direction) (rate(system_paging_operations_total{k8s_cluster_name=~\"$cluster\"}[1m]))",
           "legendFormat": "{{k8s_cluster_name}} Paging Ops ({{direction}})",
           "range": true,
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "sum by (k8s_cluster_name, type) (rate(system_paging_faults_total[1m])) or sum by (k8s_cluster_name, type) (rate(system_paging_operations_total[1m]))",
+          "expr": "sum by (k8s_cluster_name, type) (rate(system_paging_faults_total{k8s_cluster_name=~\"$cluster\"}[1m])) or sum by (k8s_cluster_name, type) (rate(system_paging_operations_total{k8s_cluster_name=~\"$cluster\"}[1m]))",
           "legendFormat": "{{k8s_cluster_name}} Faults ({{type}})",
           "range": true,
           "refId": "B"
         }
       ],
       "fieldConfig": {
-        "defaults": { "custom": { "lineWidth": 2 }, "unit": "ops" }
+        "defaults": {
+          "custom": {
+            "lineWidth": 2
+          },
+          "unit": "ops"
+        }
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
       "id": 102,
       "title": "Row 3: Disk I/O & Filesystem Saturation (iostat & df -h)",
       "type": "row",
@@ -189,37 +529,65 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 19 },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 25
+      },
       "id": 6,
       "title": "Panel 6: Disk Throughput (Read/Write Bps) & IOPS",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "sum by (k8s_cluster_name, direction) (rate(system_disk_io_bytes_total[1m]))",
+          "expr": "sum by (k8s_cluster_name, direction) (rate(system_disk_io_bytes_total{k8s_cluster_name=~\"$cluster\"}[1m]))",
           "legendFormat": "{{k8s_cluster_name}} Throughput {{direction}}",
           "range": true,
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "sum by (k8s_cluster_name, direction) (rate(system_disk_operations_total[1m]))",
+          "expr": "sum by (k8s_cluster_name, direction) (rate(system_disk_operations_total{k8s_cluster_name=~\"$cluster\"}[1m]))",
           "legendFormat": "{{k8s_cluster_name}} IOPS {{direction}}",
           "range": true,
           "refId": "B"
         }
       ],
       "fieldConfig": {
-        "defaults": { "custom": { "lineWidth": 2 }, "unit": "Bps" },
+        "defaults": {
+          "custom": {
+            "lineWidth": 2
+          },
+          "unit": "Bps"
+        },
         "overrides": [
           {
-            "matcher": { "id": "byFrameRefID", "options": "B" },
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
             "properties": [
-              { "id": "custom.axisPlacement", "value": "right" },
-              { "id": "unit", "value": "iops" }
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "iops"
+              }
             ]
           }
         ]
@@ -227,37 +595,65 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 19 },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 25
+      },
       "id": 7,
       "title": "Panel 7: Disk Saturation: I/O Latency (ms) & Queue Length",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "(sum by (k8s_cluster_name) (rate(system_disk_operation_time_seconds_total[1m])) / (sum by (k8s_cluster_name) (rate(system_disk_operations_total[1m])) + 0.0001)) * 1000",
+          "expr": "(sum by (k8s_cluster_name) (rate(system_disk_operation_time_seconds_total{k8s_cluster_name=~\"$cluster\"}[1m])) / (sum by (k8s_cluster_name) (rate(system_disk_operations_total{k8s_cluster_name=~\"$cluster\"}[1m])) + 0.0001)) * 1000",
           "legendFormat": "{{k8s_cluster_name}} Latency (ms)",
           "range": true,
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "sum by (k8s_cluster_name) (system_disk_pending_operations)",
+          "expr": "sum by (k8s_cluster_name) (system_disk_pending_operations{k8s_cluster_name=~\"$cluster\"})",
           "legendFormat": "{{k8s_cluster_name}} Pending Ops (Queue)",
           "range": true,
           "refId": "B"
         }
       ],
       "fieldConfig": {
-        "defaults": { "custom": { "lineWidth": 2 }, "unit": "ms" },
+        "defaults": {
+          "custom": {
+            "lineWidth": 2
+          },
+          "unit": "ms"
+        },
         "overrides": [
           {
-            "matcher": { "id": "byFrameRefID", "options": "B" },
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
             "properties": [
-              { "id": "custom.axisPlacement", "value": "right" },
-              { "id": "unit", "value": "short" }
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
             ]
           }
         ]
@@ -265,11 +661,19 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 19 },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 25
+      },
       "id": 8,
       "title": "Panel 8: Filesystem Usage (%) & Inode Saturation (%)",
       "type": "table",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "transformations": [
         {
           "id": "merge",
@@ -278,17 +682,23 @@
       ],
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "(sum by (k8s_cluster_name, mountpoint) (system_filesystem_usage_bytes{state=\"used\"}) / sum by (k8s_cluster_name, mountpoint) (system_filesystem_usage_bytes)) * 100",
+          "expr": "(sum by (k8s_cluster_name, mountpoint) (system_filesystem_usage_bytes{k8s_cluster_name=~\"$cluster\", state=\"used\"}) / sum by (k8s_cluster_name, mountpoint) (system_filesystem_usage_bytes{k8s_cluster_name=~\"$cluster\"})) * 100",
           "format": "table",
           "instant": true,
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "(sum by (k8s_cluster_name, mountpoint) (system_filesystem_inodes_usage{state=\"used\"}) / (sum by (k8s_cluster_name, mountpoint) (system_filesystem_inodes_usage) + 0.0001)) * 100",
+          "expr": "(sum by (k8s_cluster_name, mountpoint) (system_filesystem_inodes_usage{k8s_cluster_name=~\"$cluster\", state=\"used\"}) / (sum by (k8s_cluster_name, mountpoint) (system_filesystem_inodes_usage{k8s_cluster_name=~\"$cluster\"}) + 0.0001)) * 100",
           "format": "table",
           "instant": true,
           "refId": "B"
@@ -296,32 +706,64 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": { "align": "auto" },
+          "custom": {
+            "align": "auto"
+          },
           "unit": "percent",
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 75 },
-              { "color": "red", "value": 90 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 75
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
             ]
           }
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "Value #A" },
-            "properties": [{ "id": "displayName", "value": "Disk Space Used (%)" }]
+            "matcher": {
+              "id": "byName",
+              "options": "Value #A"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Disk Space Used (%)"
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "Value #B" },
-            "properties": [{ "id": "displayName", "value": "Inodes Used (%)" }]
+            "matcher": {
+              "id": "byName",
+              "options": "Value #B"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Inodes Used (%)"
+              }
+            ]
           }
         ]
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 27 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 33
+      },
       "id": 103,
       "title": "Row 4: Network Stack & TCP Sockets (netstat / ss -tan)",
       "type": "row",
@@ -329,37 +771,65 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 34
+      },
       "id": 9,
       "title": "Panel 9: Network Interface Throughput (Rx/Tx Bps) & Packet Rates",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "sum by (k8s_cluster_name, direction) (rate(system_network_io_bytes_total[1m]))",
+          "expr": "sum by (k8s_cluster_name, direction) (rate(system_network_io_bytes_total{k8s_cluster_name=~\"$cluster\"}[1m]))",
           "legendFormat": "{{k8s_cluster_name}} Traffic ({{direction}})",
           "range": true,
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "sum by (k8s_cluster_name, direction) (rate(system_network_packets_total[1m]))",
+          "expr": "sum by (k8s_cluster_name, direction) (rate(system_network_packets_total{k8s_cluster_name=~\"$cluster\"}[1m]))",
           "legendFormat": "{{k8s_cluster_name}} Packets ({{direction}})",
           "range": true,
           "refId": "B"
         }
       ],
       "fieldConfig": {
-        "defaults": { "custom": { "lineWidth": 2 }, "unit": "Bps" },
+        "defaults": {
+          "custom": {
+            "lineWidth": 2
+          },
+          "unit": "Bps"
+        },
         "overrides": [
           {
-            "matcher": { "id": "byFrameRefID", "options": "B" },
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
             "properties": [
-              { "id": "custom.axisPlacement", "value": "right" },
-              { "id": "unit", "value": "pps" }
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "pps"
+              }
             ]
           }
         ]
@@ -367,29 +837,55 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 34
+      },
       "id": 10,
       "title": "Panel 10: TCP Connection Saturation by State (ESTABLISHED, TIME_WAIT, CLOSE_WAIT)",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "sum by (k8s_cluster_name, state) (system_network_connections)",
+          "expr": "sum by (k8s_cluster_name, state) (system_network_connections{k8s_cluster_name=~\"$cluster\"})",
           "legendFormat": "{{k8s_cluster_name}} ({{state}})",
           "range": true,
           "refId": "A"
         }
       ],
       "fieldConfig": {
-        "defaults": { "custom": { "fillOpacity": 15, "lineWidth": 2, "stacking": { "mode": "normal" } }, "unit": "short" }
+        "defaults": {
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "short"
+        }
       }
     }
   ],
   "refresh": "5s",
   "schemaVersion": 39,
-  "tags": ["multicloud", "kubernetes", "capacity", "infrastructure", "use-method"],
+  "tags": [
+    "multicloud",
+    "kubernetes",
+    "capacity",
+    "infrastructure",
+    "use-method"
+  ],
   "templating": {
     "list": [
       {
@@ -454,9 +950,12 @@
       }
     ]
   },
-  "time": { "from": "now-15m", "to": "now" },
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
   "timezone": "browser",
-  "title": "Multi-Cloud Kubernetes Infrastructure & Capacity (OS & Kernel USE)",
+  "title": "04. Compute & OS Kernel (USE)",
   "uid": "mc-k8s-infrastructure",
   "version": 2
 }

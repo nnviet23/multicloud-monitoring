@@ -1,0 +1,141 @@
+schema_version: "2.0"
+resource_type: "inter_cloud_wan_and_hub"
+target_system: "mc-monitoring-net WAN Bridge & hub-k3d Central Ingestion/MinIO"
+methodology: "WAN_DEGRADATION_AND_INGESTION_GOVERNANCE"
+
+included_categories:
+  - "CAT-03: Network & Transport (L3/L4 & WAN)"
+  - "CAT-02: Storage & Filesystem"
+  - "CAT-04: Cloud Infrastructure & Perimeter Context"
+  - "CAT-01: OS & System Kernel"
+  - "CAT-05: Containers & Kubernetes Orchestration"
+
+identity_attributes:
+  network_path:
+    canonical_name: "network.wan.status"
+    type: "string"
+    default: "EMULATED_WAN_10MS_RTT"
+  network_transport:
+    canonical_name: "net.transport"
+    type: "string"
+    default: "ip_tcp"
+  security_tunnel:
+    type: "string"
+    default: "mTLS 1.3 (ChaCha20-Poly1305)"
+  central_hub:
+    cluster_name: "k8s_cluster_name"
+    default: "hub-k3d"
+    cloud_provider: "cloud.provider"
+    default_provider: "hub"
+    cloud_region: "cloud.region"
+    default_region: "central-hub"
+
+dependencies:
+  network_fabric:
+    docker_bridge: "mc-monitoring-net (172.28.0.0/16)"
+    traffic_control:
+      tool: "tc qdisc netem"
+      configured_delay: "10ms +-2ms"
+      configured_loss: "0.1%"
+    mtls_ports:
+      otlp_grpc_gateway: 4317
+      otlp_http_gateway: 4318
+      thanos_receive: 10901
+  central_storage:
+    engine: "MinIO S3 Object Storage"
+    buckets:
+      - "raw-telemetry"
+      - "thanos-metrics"
+      - "loki-data"
+      - "tempo-traces"
+  routing_topology:
+    aws_spoke_cidr: "10.0.0.0/16"
+    azure_spoke_cidr: "10.1.0.0/16"
+    hub_gateway_fqdn: "hub-collector.mc-monitoring-net"
+
+telemetry_signals:
+  metrics:
+    wan_network_io_bytes:
+      category_ref: "CAT-03"
+      metric_name: "system_network_io_bytes_total"
+      type: "counter"
+      unit: "Bps"
+      orientation: 0
+      promql: "sum by (k8s_cluster_name, direction) (rate(system_network_io_bytes_total{device=\"eth0\"}[1m]))"
+    wan_packet_drops:
+      category_ref: "CAT-03"
+      metric_name: "system_network_dropped_total"
+      type: "counter"
+      unit: "drops/s"
+      orientation: -1
+      promql: "sum by (k8s_cluster_name) (rate(system_network_dropped_total{device=\"eth0\"}[1m]))"
+    wan_network_errors:
+      category_ref: "CAT-03"
+      metric_name: "system_network_errors_total"
+      type: "counter"
+      unit: "errors/s"
+      orientation: -1
+      promql: "sum by (k8s_cluster_name) (rate(system_network_errors_total{device=\"eth0\"}[1m]))"
+    ai_rca_wan_latency:
+      category_ref: "CAT-03"
+      metric_name: "ai_rca_component_latency_ms"
+      type: "gauge"
+      unit: "ms"
+      orientation: -1
+      promql: "ai_rca_component_latency_ms{component=\"wan\"}"
+    tcp_established_connections:
+      category_ref: "CAT-03"
+      metric_name: "system_network_connections"
+      type: "gauge"
+      unit: "sockets"
+      orientation: 0
+      promql: "sum by (k8s_cluster_name) (system_network_connections{state=\"ESTABLISHED\"})"
+    minio_storage_used_bytes:
+      category_ref: "CAT-02"
+      metric_name: "system_filesystem_usage_bytes"
+      type: "gauge"
+      unit: "bytes"
+      orientation: -1
+      promql: "sum by (k8s_cluster_name) (system_filesystem_usage_bytes{k8s_cluster_name=\"hub-k3d\", state=\"used\"})"
+    minio_inodes_used_ratio:
+      category_ref: "CAT-02"
+      metric_name: "system_filesystem_inodes_usage"
+      type: "gauge"
+      unit: "ratio"
+      orientation: -1
+      promql: "sum by (k8s_cluster_name) (system_filesystem_inodes_usage{k8s_cluster_name=\"hub-k3d\", state=\"used\"}) / sum by (k8s_cluster_name) (system_filesystem_inodes_usage{k8s_cluster_name=\"hub-k3d\"})"
+    hub_gateway_cpu_load:
+      category_ref: "CAT-01"
+      metric_name: "system_cpu_load_average_15m"
+      type: "gauge"
+      unit: "1"
+      orientation: -1
+      promql: "system_cpu_load_average_15m{k8s_cluster_name=\"hub-k3d\"}"
+
+  logs:
+    category_ref: "CAT-03"
+    format: "OTel Collector Hub Ingestion Log"
+    logql_error_stream: '{service_name="otel-collector-hub"} |~ "(?i)(tls: bad certificate|connection reset|refused|rate limit)"'
+    retention_days: 30
+
+  traces:
+    category_ref: "CAT-03"
+    format: "Cross-Cloud Span Propagation"
+    trace_propagation_header: "traceparent (W3C standard)"
+    waterfall_decomp_signals:
+      t_wan: "Span start delta between client span on aws-k3d and server span on azure-k3d"
+
+slo_targets:
+  wan_rtt_thresholds:
+    normal_p95_ms: 15
+    warning_p95_ms: 50
+    critical_p95_ms: 150
+  packet_drop_rate_max: 0.005
+  minio_inode_headroom_min: 0.15
+
+correlation_keys:
+  to_edge_spoke_aws: "k8s_cluster_name: aws-k3d"
+  to_edge_spoke_azure: "k8s_cluster_name: azure-k3d"
+  to_traces: "trace_id"
+  to_wan_dashboard: "uid: mc-wan-telemetry"
+

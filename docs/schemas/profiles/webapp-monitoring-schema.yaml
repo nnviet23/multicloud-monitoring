@@ -1,7 +1,15 @@
-schema_version: "1.0"
+schema_version: "2.0"
 resource_type: "web_application"
 target_system: "TeaStore Microservices"
 methodology: "RED_GOLDEN_SIGNALS"
+
+included_categories:
+  - "CAT-07: Web / HTTP / RPC Microservices (APM)"
+  - "CAT-06: Application Runtime & Virtual Machine (JVM)"
+  - "CAT-05: Containers & Kubernetes Orchestration"
+  - "CAT-08: Data Stores & Relational Databases (Client Dependency)"
+  - "CAT-03: Network & Transport (L3/L4 & WAN)"
+  - "CAT-04: Cloud Infrastructure & Perimeter Context"
 
 identity_attributes:
   service_name:
@@ -85,49 +93,63 @@ dependencies:
 telemetry_signals:
   metrics:
     rate:
+      category_ref: "CAT-07"
       metric_name: "traces_service_graph_request_total"
       type: "counter"
       unit: "reqps"
+      orientation: 0
       promql: "sum by (server) (rate(traces_service_graph_request_total[1m]))"
     errors:
+      category_ref: "CAT-07"
       metric_name: "traces_service_graph_request_failed_total"
       type: "counter"
       unit: "reqps"
+      orientation: -1
       promql: "sum by (server) (rate(traces_service_graph_request_failed_total[1m]))"
     duration:
+      category_ref: "CAT-07"
       metric_name: "traces_service_graph_request_server_seconds_bucket"
       type: "histogram"
       unit: "ms"
+      orientation: -1
       promql_p50: "histogram_quantile(0.50, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000"
       promql_p90: "histogram_quantile(0.90, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000"
       promql_p95: "histogram_quantile(0.95, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000"
       promql_p99: "histogram_quantile(0.99, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000"
     saturation:
       jvm_heap_used_mb:
+        category_ref: "CAT-06"
         metric_name: "jvm_memory_used_bytes"
         alternate_name: "process_runtime_jvm_memory_usage_bytes"
         type: "gauge"
         unit: "MBytes"
+        orientation: -1
         promql: "sum by (service_name) (jvm_memory_used_bytes{jvm_memory_type=\"heap\"} or process_runtime_jvm_memory_usage_bytes{type=\"heap\"}) / (1024*1024)"
       jvm_threads:
+        category_ref: "CAT-06"
         metric_name: "jvm_thread_count"
         alternate_name: "process_runtime_jvm_threads_count"
         type: "gauge"
         unit: "count"
+        orientation: -1
         promql: "sum by (service_name) (jvm_thread_count or process_runtime_jvm_threads_count)"
       jvm_gc_time:
+        category_ref: "CAT-06"
         metric_name: "jvm_gc_duration_seconds_sum"
         type: "counter"
         unit: "seconds"
+        orientation: -1
         promql: "sum by (service_name) (rate(jvm_gc_duration_seconds_sum[1m]))"
 
   logs:
+    category_ref: "CAT-07"
     format: "OTLP LogRecord / stdout"
     parser: "regex_parser"
     logql_error_stream: '{exporter="OTLP", service_name=~"teastore-.*"} |~ "(?i)(error|exception|fail|timeout)"'
     retention_days: 30
 
   traces:
+    category_ref: "CAT-07"
     format: "W3C TraceContext (traceparent, tracestate)"
     sampling_rate: 0.20
     error_sampling_rate: 1.00
@@ -151,4 +173,3 @@ correlation_keys:
   to_logs: ["trace_id", "service.name"]
   to_compute_instance: ["k8s_cluster_name", "k8s.node.name"]
   to_cloud_perimeter: ["network.subnet.id", "network.vpc.id"]
-
