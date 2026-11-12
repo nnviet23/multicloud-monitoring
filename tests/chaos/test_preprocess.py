@@ -84,6 +84,31 @@ class BlockedSplitTest(unittest.TestCase):
         self.assertEqual(sum(v["embargo_rows"] for v in audit.values()), 5 * 3 + 4 * 3)
         self.assertTrue(len(train) and len(val))
 
+    def test_training_fill_never_reads_validation_values(self):
+        """End to end: changing only validation values must not change train baselines."""
+        p99s = []
+        for val_value in (100.0, 200.0):
+            with tempfile.TemporaryDirectory() as tmp:
+                tmp = Path(tmp)
+                target = tmp / "raw" / "20990101_teastore_normal-a_run01" / "metrics" / "entity_features.csv"
+                target.parent.mkdir(parents=True)
+                df = frame(400).drop(columns=["source_run"])
+                df["qps"] = 1.0
+                df.loc[120:159, "qps"] = val_value          # 4th 40-row block -> validation
+                df.loc[160:179, "qps"] = np.nan             # missing right after it (12 embargo + 8 train rows)
+                df.to_csv(target, index=False)
+                cfg = yaml.safe_load((ROOT / "ai-engine/configs/model_config.yaml").read_text())
+                cfg["data"].update(raw_csv_paths=[str(target)], processed_dir=str(tmp / "processed"),
+                                   entity_baselines_path=str(tmp / "baselines.json"), split_strategy="blocked",
+                                   split_block_rows=40, val_every_n_blocks=4, embargo_rows=12)
+                (tmp / "config.yaml").write_text(yaml.safe_dump(cfg))
+                subprocess.run([sys.executable, str(ROOT / "ai-engine/data/preprocess.py"), "--config", str(tmp / "config.yaml")],
+                               check=True, capture_output=True, cwd=ROOT)
+                baselines = json.loads((tmp / "baselines.json").read_text())
+                p99s.append(baselines["aws:teastore-webui"]["features"]["qps"]["p99"])
+        self.assertEqual(p99s[0], p99s[1])
+        self.assertEqual(p99s[0], 1.0)
+
     def test_baselines_use_training_rows_only(self):
         df = frame(400)
         df, _, baselines, _ = self.prepare(df)

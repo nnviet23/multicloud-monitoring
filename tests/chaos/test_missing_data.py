@@ -31,7 +31,8 @@ class MissingDataLeakageTests(unittest.TestCase):
                                    service_name="teastore-test", qps="" if index < 30 else future_value)
                         writer.writerow(row)
                 cfg = copy.deepcopy(config)
-                cfg["data"].update(raw_csv_path=str(folder / "raw.csv"),
+                cfg["data"].update(raw_csv_path=str(folder / "raw.csv"), raw_csv_paths=[],
+                                   split_strategy="chronological",
                                    processed_dir=str(folder / "processed"),
                                    entity_baselines_path=str(folder / "baselines.json"),
                                    window_size=6, val_split=0.25)

@@ -452,9 +452,7 @@ def main():
         interval = float(data_cfg.get("sampling_interval_seconds", 10))
         max_gap = float(data_cfg.get("max_gap_seconds", 2.5 * interval))
         df = assign_segments(df, max_gap)
-        # Causal forward fill along each (run, entity) timeline; no statistic is fit here.
-        df[features] = df[features].replace([np.inf, -np.inf], np.nan)
-        df[features] = df.groupby(["source_run", "cloud_provider", "service_name"])[features].ffill().fillna(0.0)
+        # The split depends only on row positions, so it is assigned before filling.
         df, split_audit = split_entities_blocked(
             df,
             block_rows=int(data_cfg.get("split_block_rows", 60)),
@@ -462,6 +460,11 @@ def main():
             embargo_rows=int(data_cfg.get("embargo_rows", window_size)),
             window_size=window_size,
         )
+        # Causal forward fill inside each split of each (run, entity) timeline, so a
+        # training row is never filled from a validation value (and vice versa).
+        df = df.sort_values(["source_run", "cloud_provider", "service_name", "timestamp"])
+        df[features] = df[features].replace([np.inf, -np.inf], np.nan)
+        df[features] = df.groupby(["source_run", "cloud_provider", "service_name", "split"])[features].ffill().fillna(0.0)
         train_df = df[df["split"] == "train"]
         val_df = df[df["split"] == "val"]
         baselines = compute_entity_baselines(train_df, features, scale_floors)
