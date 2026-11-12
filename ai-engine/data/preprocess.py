@@ -22,8 +22,12 @@ import os
 import json
 import yaml
 import argparse
+import sys
 import numpy as np
 import pandas as pd
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")))
+from models.guards import fit_slo_guards  # noqa: E402
 
 
 def load_config(config_path):
@@ -169,6 +173,36 @@ def split_entities_blocked(df, block_rows, val_every, embargo_rows, window_size)
             "end_ts": float(grp["timestamp"].max()),
         }
     return df, audit
+
+
+def load_training_probes(df, raw_paths, tolerance_seconds=6.0):
+    """Probe latencies from <run>/workload/probe.csv recorded during training rows only.
+
+    A probe is kept when the nearest collector cycle of the same run (within
+    `tolerance_seconds`) is a training row, so validation periods never shape
+    the guard limits. Failed probes are excluded (they are not latency samples).
+    """
+    kept, sources = [], []
+    for path in raw_paths:
+        probe_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(path))), "workload", "probe.csv")
+        if not os.path.isfile(probe_path):
+            continue
+        run = os.path.basename(os.path.dirname(os.path.dirname(os.path.abspath(path))))
+        probes = pd.read_csv(probe_path)
+        probes = probes[probes["probe_ok"] == 1]
+        cycles = (df[df["source_run"] == run].groupby("timestamp")["split"]
+                  .agg(lambda labels: "train" if (labels == "train").all() else "other").sort_index())
+        if cycles.empty or probes.empty:
+            continue
+        stamps = cycles.index.to_numpy(dtype=np.float64)
+        pos = np.clip(np.searchsorted(stamps, probes["timestamp"].to_numpy(dtype=np.float64)), 1, len(stamps) - 1)
+        left, right = stamps[pos - 1], stamps[pos]
+        t = probes["timestamp"].to_numpy(dtype=np.float64)
+        nearest = np.where(np.abs(t - left) <= np.abs(right - t), pos - 1, pos)
+        ok = (np.abs(stamps[nearest] - t) <= tolerance_seconds) & (cycles.to_numpy()[nearest] == "train")
+        kept.extend(probes["probe_ms"].to_numpy(dtype=np.float64)[ok].tolist())
+        sources.append({"file": probe_path, "probes_ok": int(len(probes)), "probes_in_train": int(ok.sum())})
+    return kept, sources
 
 
 def build_chunk_windows(df, baselines, features, window_size, stride, split):
@@ -441,6 +475,7 @@ def main():
             for key in sorted(set(train_counts) | set(val_counts))
         }
         segments = int(df.groupby(["source_run", "cloud_provider", "service_name"])["segment"].nunique().sum())
+        probe_ms, probe_sources = load_training_probes(df, raw_paths)
     else:
         df = df.sort_values(["cloud_provider", "service_name", "timestamp"]).reset_index(drop=True)
         # Step 1: Chronological train/val split per entity BEFORE computing baselines or windows
@@ -453,6 +488,14 @@ def main():
             train_df, val_df, baselines, features, window_size=window_size, stride=stride
         )
         segments = None
+        probe_ms, probe_sources = [], []
+
+    # SLO guard / recovery limits from fault-free *training* rows and probes only.
+    slo_guards = fit_slo_guards(train_df, probe_ms)
+    slo_guards["fit_scope"] = "train_only"
+    slo_guards["probe_sources"] = probe_sources
+    with open(os.path.join(processed_dir, "slo_guards.json"), "w", encoding="utf-8") as f:
+        json.dump(slo_guards, f, indent=2)
 
     with open(baselines_path, "w", encoding="utf-8") as f:
         json.dump(baselines, f, indent=2)
@@ -500,6 +543,8 @@ def main():
         "train_shape": list(train_windows.shape),
         "val_shape": list(val_windows.shape),
         "physical_scale_floors": scale_floors,
+        "slo_guards_file": os.path.join(processed_dir, "slo_guards.json"),
+        "slo_guard_probe_samples": len(probe_ms),
     }
     with open(os.path.join(processed_dir, "preprocess_summary.json"), "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)

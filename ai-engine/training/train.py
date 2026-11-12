@@ -282,6 +282,12 @@ def main():
             "rca_trigger_threshold": round(max(0.40, f_p99 * 1.5), 4),
         }
 
+    guards_path = os.path.join(processed_dir, "slo_guards.json")
+    slo_guards = None
+    if os.path.isfile(guards_path):
+        with open(guards_path, "r", encoding="utf-8") as f:
+            slo_guards = json.load(f)
+
     # 5. Validate `likelihood_pct` Calibration before interpreting as fault probability
     fault_mses = compute_reference_fault_mse(gru_model, tcn_model, features, window_size, device)
     likelihood_cal = validate_likelihood_calibration(
@@ -312,6 +318,7 @@ def main():
         "likelihood_calibration": likelihood_cal,
         "feature_rca_baselines": feature_rca_baselines,
         "isolation_forest_val_normal_pct": round(iso_normal_acc, 2),
+        "slo_guards": slo_guards,
         "training_duration_sec": round(time.time() - t0, 2),
     }
 

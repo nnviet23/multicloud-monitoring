@@ -76,7 +76,9 @@ log "run ${RUN_ID} start duration=${DURATION}s interval=${INTERVAL}s users=${MIN
 PF_LOOP=$!
 
 TRAFFIC=""
+PROBE=""
 cleanup() {
+  [[ -n "${PROBE}" ]] && { kill -TERM "${PROBE}" 2>/dev/null; wait "${PROBE}" 2>/dev/null; }
   [[ -n "${TRAFFIC}" ]] && { kill -TERM "${TRAFFIC}" 2>/dev/null; wait "${TRAFFIC}" 2>/dev/null; }
   kill -STOP "${PF_LOOP}" 2>/dev/null
   pkill -P "${PF_LOOP}" 2>/dev/null
@@ -101,6 +103,12 @@ TRAFFIC=$!
 log "traffic generator pid=${TRAFFIC}; warm-up ${WARMUP}s before sampling"
 sleep "${WARMUP}"
 
+# Detector-equivalent end-to-end probe (same function and 10s cadence as the
+# online detector); fault-free probe logs calibrate the SLO guard limits.
+"${PY}" scripts/probe_logger.py "${OUT}/workload/probe.csv" "${DURATION}" "${INTERVAL}" \
+  > "${OUT}/system/probe_logger.log" 2>&1 &
+PROBE=$!
+
 "${PY}" ai-engine/data/collector.py \
   --prometheus-url http://localhost:9090 \
   --duration "${DURATION}" --interval "${INTERVAL}" \
@@ -111,6 +119,7 @@ COLLECTOR_RC=$?
 log "collector exited rc=${COLLECTOR_RC}"
 cleanup
 TRAFFIC=""
+PROBE=""
 log "run ${RUN_ID} end"
 echo "RUN_DONE ${RUN_ID} collector_rc=${COLLECTOR_RC} rows=$(($(wc -l < "${OUT}/metrics/entity_features.csv") - 1))"
 exit "${COLLECTOR_RC}"

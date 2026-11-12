@@ -33,6 +33,7 @@ if ROOT not in sys.path:
 from models.gru_autoencoder import GRUAutoencoder  # noqa: E402
 from models.tcn_autoencoder import TCNAutoencoder  # noqa: E402
 from models.scoring import DualSlidingWindowScorer, MultiEntityScorer, compute_batch_directional_errors  # noqa: E402
+from models.guards import GuardLimits  # noqa: E402
 
 # Entity a fault is expected to be localised to (any one of them counts).
 FAULT_TARGETS = {
@@ -61,6 +62,7 @@ class ModelBundle:
         self.floors = self.cfg["data"]["physical_scale_floors"]
         with open(os.path.join(self.models_dir, "threshold_config.json"), encoding="utf-8") as f:
             self.meta = json.load(f)
+        self.limits = GuardLimits(self.meta.get("slo_guards"))
         with open(os.path.join(self.models_dir, "entity_baselines.json"), encoding="utf-8") as f:
             self.baselines = json.load(f)
         m = self.cfg["model"]
@@ -122,8 +124,13 @@ class ModelBundle:
         return np.mean(sample, axis=0), np.mean(feat, axis=0)
 
 
-def samples_from_csv(path):
-    """Collector CSV -> ordered samples (one per cycle), all labelled normal."""
+def samples_from_csv(path, limits=None):
+    """Collector CSV -> ordered samples (one per cycle), all labelled normal.
+
+    Entity response health uses the detector's per-entity limits; the cluster-level
+    probe is assumed healthy (the run is fault-free).
+    """
+    limits = limits or GuardLimits()
     df = pd.read_csv(path)
     run = os.path.basename(os.path.dirname(os.path.dirname(path))) if path.endswith("metrics/entity_features.csv") else path
     samples = []
@@ -134,7 +141,9 @@ def samples_from_csv(path):
             if any(m in str(raw.get("missing_metrics", "") or "").split(";") for m in ("max_pod_cpu_pct", "max_pod_ram_pct")):
                 continue
             eid = f"{raw['cloud_provider']}:{raw['service_name']}"
-            healthy = raw["server_latency_p95"] < 0.50 and raw["client_latency_p95"] < 0.05 and raw["error_rate_5xx"] <= 0.05
+            healthy = (raw["server_latency_p95"] < limits.entity(eid, "server_healthy_s")
+                       and raw["client_latency_p95"] < limits.entity(eid, "client_healthy_s")
+                       and raw["error_rate_5xx"] <= 0.05)
             entities[eid] = {"raw": raw, "healthy": bool(healthy), "token": None}
         if entities:
             samples.append({"t": float(ts), "entities": entities, "label": 0, "phase": "normal"})
@@ -234,7 +243,7 @@ def evaluate(bundle, normal_csvs, chaos_dirs, settle=30, interval=10, threshold=
               "threshold": float(threshold if threshold is not None else bundle.meta["recommended_threshold_p99"]),
               "normal": [], "chaos": []}
     for path in normal_csvs:
-        name, samples = samples_from_csv(path)
+        name, samples = samples_from_csv(path, bundle.limits)
         report["normal"].append(summarize_normal(name, replay(bundle, samples, threshold), interval))
     for directory in chaos_dirs:
         name, samples, phases = samples_from_chaos(directory, settle)

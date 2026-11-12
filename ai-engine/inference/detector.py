@@ -48,6 +48,7 @@ if ai_engine_root not in sys.path:
 from models.gru_autoencoder import GRUAutoencoder
 from models.tcn_autoencoder import TCNAutoencoder
 from inference.streaming import HistogramDeltas, LatencyRecovery, TraceEvidence
+from models.guards import GuardLimits
 from models.scoring import (
     UPPER_BOUND_SATURATION_METRICS,
     ACTIVE_RESOURCE_METRICS,
@@ -1078,6 +1079,8 @@ def main():
     rca_baselines = threshold_meta["feature_rca_baselines"]
     err_dist = threshold_meta["error_distribution"]
     dw_cfg = threshold_meta.get("dual_sliding_window", {})
+    # Latency/probe limits learned from fault-free training data (old constants as floors).
+    limits = GuardLimits(threshold_meta.get("slo_guards"))
 
     # The IsolationForest artifact produced by train.py is an offline baseline only;
     # it is intentionally not part of the online verdict.
@@ -1147,6 +1150,7 @@ def main():
     endpoints = cfg.get("observability_endpoints", {})
     prom_client = PrometheusVectorClient(endpoints.get("prometheus_url", "http://localhost:9090"))
     tempo_analyzer = TempoTraceAnalyzer(endpoints.get("tempo_url", "http://localhost:3200"))
+    tempo_analyzer.evidence.limits = limits
     metrics_server = PrometheusMetricsServer(port=args.metrics_port) if args.metrics_port > 0 else None
     alert_sink = TelegramAlertSink(
         token=args.telegram_token,
@@ -1154,7 +1158,7 @@ def main():
         cooldown_seconds=args.telegram_cooldown,
     )
     entity_buffers = {}
-    recovery = LatencyRecovery()
+    recovery = LatencyRecovery(limits=limits)
     sample_idx = 0
     consecutive_probe_failures = 0
     consecutive_slow_probes = 0
@@ -1203,7 +1207,7 @@ def main():
             else:
                 consecutive_probe_failures += 1
 
-            if probe_ms > 500.0 or not probe_ok:
+            if probe_ms > limits.probe_slow_ms or not probe_ok:
                 consecutive_slow_probes += 1
             else:
                 consecutive_slow_probes = 0
@@ -1221,8 +1225,8 @@ def main():
 
             is_cluster_response_healthy = (
                 probe_ok
-                and probe_ms < 480.0
-                and webui_lat_ms < 520.0
+                and probe_ms < limits.probe_healthy_ms
+                and webui_lat_ms < limits.entry_healthy_ms
                 and total_5xx <= 0.05
                 and total_wan_drops == 0.0
             )
@@ -1267,7 +1271,7 @@ def main():
                     eid, fresh.get("server"), fresh.get("client"),
                     probe_ok and telemetry_ok, probe_ms, raw_dict["error_rate_5xx"],
                     client_required=fresh.get("client_required", False))
-                if confirmed and raw_dict["server_latency_p95"] < 0.25:
+                if confirmed and raw_dict["server_latency_p95"] < limits.entity(eid, "server_recovered_s"):
                     tempo_analyzer.evidence.forget(eid, loop_start)
                 latency_indices = [features.index(name) for name in ("server_latency_p95", "client_latency_p95", "error_rate_5xx")]
                 if confirmed and any(row[index] > 2.0 for row in buf for index in latency_indices):
@@ -1284,8 +1288,8 @@ def main():
 
                 entity_healthy = (
                     is_cluster_response_healthy
-                    and raw_dict["server_latency_p95"] < 0.50
-                    and raw_dict["client_latency_p95"] < 0.05
+                    and raw_dict["server_latency_p95"] < limits.entity(eid, "server_healthy_s")
+                    and raw_dict["client_latency_p95"] < limits.entity(eid, "client_healthy_s")
                     and raw_dict["error_rate_5xx"] <= 0.05
                 )
 
@@ -1364,8 +1368,8 @@ def main():
                 guard_reasons.append(f"End-to-End Multi-Cloud Probe Failure (HTTP {probe_code}, {consecutive_probe_failures}x)")
             if consecutive_slow_probes >= 2 and (
                 max(trace_summary.get("wan_links", {}).values(), default=0.0) >= 65.0
-                or probe_ms >= 500.0
-                or webui_lat_ms >= 550.0
+                or probe_ms >= limits.probe_slow_ms
+                or webui_lat_ms >= limits.entry_slo_ms
             ):
                 guard_triggered = True
                 guard_reasons.append(

@@ -1,6 +1,8 @@
 """Fresh counter deltas, bounded trace evidence, and latency recovery state."""
 import math
 
+from models.guards import GuardLimits
+
 
 class HistogramDeltas:
     """Quantiles from consecutive cumulative histogram exports, not a 1m average.
@@ -58,17 +60,20 @@ class LatencyRecovery:
     Latency/error recovery and independently confirmed low CPU have separate
     rules. Memory and GC history is retained throughout.
     """
-    def __init__(self, confirmations=2, min_requests=5):
+    def __init__(self, confirmations=2, min_requests=5, limits=None):
         self.confirmations = confirmations
         self.min_requests = min_requests
+        self.limits = limits or GuardLimits()
         self.state = {}
 
     def update(self, entity, server, client, probe_ok, probe_ms, error_rate=0.0, client_required=False):
         state = self.state.setdefault(entity, {"count": 0, "token": None, "probes": 0})
-        state["probes"] = state["probes"] + 1 if probe_ok and probe_ms < 400.0 else 0
-        healthy = (server is not None and (not client_required or client is not None) and server["value"] < 0.25
-                   and (client is None or client["value"] < 0.05)
-                   and probe_ok and probe_ms < 400.0 and error_rate == 0.0)
+        probe_limit = self.limits.probe_recovered_ms
+        state["probes"] = state["probes"] + 1 if probe_ok and probe_ms < probe_limit else 0
+        healthy = (server is not None and (not client_required or client is not None)
+                   and server["value"] < self.limits.entity(entity, "server_recovered_s")
+                   and (client is None or client["value"] < self.limits.entity(entity, "client_healthy_s"))
+                   and probe_ok and probe_ms < probe_limit and error_rate == 0.0)
         if not healthy:
             state["count"] = 0
             return False
@@ -118,8 +123,9 @@ class TraceEvidence:
     Cached evidence explains an alert; it never drives model input or SLO guards.
     Reading the cache cannot extend its expiry. Recovery invalidates the entity.
     """
-    def __init__(self, ttl=90.0):
+    def __init__(self, ttl=90.0, limits=None):
         self.ttl = ttl
+        self.limits = limits or GuardLimits()
         self.links = {}
         self.db = None
         self.cleared_at = {}
@@ -178,8 +184,8 @@ class TraceEvidence:
             return None
         raw = entity["raw"]
         any_entrypoint_slow = any(
-            r["raw"].get("server_latency_p95", 0.0) > 0.50
-            for r in entity_results.values()
+            r["raw"].get("server_latency_p95", 0.0) > self.limits.entity(eid, "server_healthy_s")
+            for eid, r in entity_results.items()
         )
         if raw["server_latency_p95"] <= 0.05 and entity.get("mse", 0.0) <= 0.35 and not any_entrypoint_slow:
             return None
@@ -194,7 +200,9 @@ class TraceEvidence:
             if entity is None:
                 continue
             raw = entity["raw"]
-            if raw["client_latency_p95"] <= 0.05 and raw["server_latency_p95"] <= 0.25:
+            eid = value["entity"]
+            if (raw["client_latency_p95"] <= self.limits.entity(eid, "client_healthy_s")
+                    and raw["server_latency_p95"] <= self.limits.entity(eid, "server_recovered_s")):
                 continue
             result[link] = {**value, "age_seconds": round(now - value["observed_at"], 1)}
         return result

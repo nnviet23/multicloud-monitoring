@@ -114,7 +114,17 @@ def restore(name, image, cloud, baseline):
     return current
 
 
-def evaluate(records, phases, settle):
+def probe_slow_ms():
+    """Learned slow-probe limit of the deployed model (old 500ms constant if absent)."""
+    sys.path.insert(0, str(ROOT / "ai-engine"))
+    from models.guards import GuardLimits
+    path = ROOT / "ai-engine" / "models" / "saved" / "threshold_config.json"
+    meta = json.loads(path.read_text()) if path.exists() else {}
+    return GuardLimits(meta.get("slo_guards")).probe_slow_ms
+
+
+def evaluate(records, phases, settle, slow_ms=None):
+    slow_ms = probe_slow_ms() if slow_ms is None else slow_ms
     rows = []
     for phase in phases:
         start = datetime.fromisoformat(phase["start"]).timestamp()
@@ -129,7 +139,7 @@ def evaluate(records, phases, settle):
         rca_ok = any(expected in cause for cause in causes) if fault else True
         coverage = len(selected) >= 3 and all(r.get("entity_count", 0) >= 6
             and r.get("telemetry_complete", True) and r.get("verdict") != "UNKNOWN" for r in selected)
-        probes_healthy = bool(selected) and all(r.get("probe_ok") and r.get("probe_ms", 0) < 500
+        probes_healthy = bool(selected) and all(r.get("probe_ok") and r.get("probe_ms", 0) < slow_ms
                                                 for r in selected)
         # Fault tests require model detection and exact-cloud RCA, not just an SLO guard.
         passed = coverage and (bool(model_alerts) and rca_ok if fault else not alerts and probes_healthy)
