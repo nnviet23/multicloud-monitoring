@@ -24,13 +24,14 @@
 | **Metrics Long-Term** | Thanos | `v0.36.1` | `quay.io/thanos/thanos:v0.36.1` | Receive, Query, Store, Compact, Ruler |
 | **Logs Backend** | Grafana Loki | `v2.9.4` | `grafana/loki:2.9.4` | Chunk-based Log TSDB không index full-text |
 | **Traces Backend** | Grafana Tempo | `v2.4.0` | `grafana/tempo:2.4.0` | Parquet block Trace TSDB & TraceQL |
-| **Object Storage** | MinIO Server | `RELEASE.2025-10-15T17-29-55Z` | `minio/minio:RELEASE.2025-10-15T17-29-55Z` | S3-compatible storage (bản mới nhất được hỗ trợ) |
+| **Object Storage** | MinIO Server (Chainguard build) | `RELEASE.2026-10-23T20-06-51Z` | `cgr.dev/chainguard/minio@sha256:0dab2f9fee1c1139ae8753b5e35bb4461af2a276cfe0923a2504c75a6170bc64` | S3-compatible storage. Ghim theo digest vì `minio/minio` (Docker Hub) và `quay.io/minio/minio` không còn pull công khai (kiểm tra 2026-11-12); image chạy UID 65532 |
 | **Object Storage CLI** | MinIO Client (`mc`) | `RELEASE.2025-10-15T17-29-55Z` | `minio/mc:RELEASE.2025-10-15T17-29-55Z` | Khởi tạo 3 buckets tự động qua Job |
 | **Visualization** | Grafana | `11.5.0` | `grafana/grafana:11.5.0` | UI hiển thị dashboards tập trung |
 | **SLO Management** | Pyrra | `v0.7.3` | `ghcr.io/pyrra-dev/pyrra:v0.7.3` | Quản lý SLO Multi-Burn-Rate |
 | **Alert Automation** | Robusta Runner | `0.53.0` | `robustadev/robusta-runner:0.53.0` | Khảo sát ngữ cảnh pod lỗi tự động |
 | **Alert Forwarder** | Robusta Forwarder | `0.53.0` | `robustadev/robusta-forwarder:0.53.0` | Lắng nghe sự kiện K8s API Server |
 | **Benchmark App** | TeaStore WebUI/Services | `1.4.1` | `descartesresearch/teastore-webui:1.4.1` | Pinned tag chính thức (loại bỏ :latest từ sample) |
+| **Edge API Gateway** | NGINX (AWS Spoke) | `1.27.3` | `nginx:1.27.3-alpine` | Reverse proxy & rate limiter trước TeaStore WebUI |
 | **Database** | MySQL Server | `8.0.36` | `mysql:8.0.36` | Cơ sở dữ liệu quan hệ cho Persistence |
 | **Load Testing** | Locust | `2.24.0` | `locustio/locust:2.24.0` | Bộ sinh tải phân tán kịch bản Python |
 | **Network Emulation** | Linux iproute2 (`tc`) | `6.1.0` | `iproute2=6.1.0-1` | Tiêm suy hao mạng WAN trễ & mất gói |

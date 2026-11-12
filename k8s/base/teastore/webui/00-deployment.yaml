@@ -54,6 +54,10 @@ spec:
               value: "otlp"
             - name: OTEL_METRICS_EXPORTER
               value: "otlp"
+            # 10s export (agent default is 60s) so request counters/histograms advance
+            # every AI sampling cycle; the AI collector samples every 10s.
+            - name: OTEL_METRIC_EXPORT_INTERVAL
+              value: "10000"
             - name: OTEL_LOGS_EXPORTER
               value: "otlp"
           resources:
@@ -61,7 +65,9 @@ spec:
               cpu: 100m
               memory: 192Mi
             limits:
-              memory: 512Mi
+              # -Xmx256m heap + metaspace/threads + OTel Java agent exceeded 512Mi (OOMKilled
+              # under page rendering); 768Mi matches the original 4-cluster design.
+              memory: 768Mi
           volumeMounts:
             - name: otel-auto-instrumentation
               mountPath: /otel-auto-instrumentation

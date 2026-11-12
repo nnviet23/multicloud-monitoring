@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-api-gateway
+  labels:
+    app: nginx-api-gateway
+spec:
+  # Public storefront entrypoint (k3d host port 8080 -> AWS loadbalancer)
+  type: LoadBalancer
+  selector:
+    app: nginx-api-gateway
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

@@ -23,6 +23,10 @@
       - name: azure-k3d
         port_mappings:
           - "31111:31111@loadbalancer"
+          - "31114:31114@loadbalancer"
+      - name: gcp-k3d
+        port_mappings:
+          - "31113:31113@loadbalancer"
   tasks:
     - name: Create dedicated Docker bridge network for inter-cluster simulated WAN
       command: >

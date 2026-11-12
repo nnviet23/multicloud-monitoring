@@ -12,6 +12,8 @@
         context: k3d-aws-k3d
       - name: azure-k3d
         context: k3d-azure-k3d
+      - name: gcp-k3d
+        context: k3d-gcp-k3d
     target_containers:
       - k3d-hub-k3d-server-0
       - k3d-hub-k3d-serverlb
@@ -19,6 +21,8 @@
       - k3d-aws-k3d-serverlb
       - k3d-azure-k3d-server-0
       - k3d-azure-k3d-serverlb
+      - k3d-gcp-k3d-server-0
+      - k3d-gcp-k3d-serverlb
 
   tasks:
     - name: Inspect current container IPv4 addresses

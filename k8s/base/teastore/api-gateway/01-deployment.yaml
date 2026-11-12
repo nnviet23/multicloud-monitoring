@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-api-gateway
+  labels:
+    app: nginx-api-gateway
+    tier: edge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-api-gateway
+  template:
+    metadata:
+      labels:
+        app: nginx-api-gateway
+        tier: edge
+    spec:
+      containers:
+        - name: nginx-api-gateway
+          image: nginx:1.27.3-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+          resources:
+            requests:
+              cpu: 20m
+              memory: 24Mi
+            limits:
+              cpu: 300m
+              memory: 96Mi
+          readinessProbe:
+            httpGet:
+              path: /gateway-health
+              port: 8080
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /gateway-health
+              port: 8080
+            periodSeconds: 15
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: nginx-api-gateway-config

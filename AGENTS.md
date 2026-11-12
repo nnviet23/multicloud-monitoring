@@ -1,7 +1,7 @@
 # Repository Agent Guide
 
 ## Mission
-Build and evaluate a reproducible multi-cloud observability platform using TeaStore, OpenTelemetry, three local k3d clusters, and an extensible Hub-Spoke design.
+Build and evaluate a reproducible multi-cloud observability platform using TeaStore, OpenTelemetry, four local k3d clusters (hub + 3 spokes), and an extensible Hub-Spoke design.
 
 ## Read selectively
 - Start with `PLAN.md` for current phase and decisions.
@@ -9,9 +9,10 @@ Build and evaluate a reproducible multi-cloud observability platform using TeaSt
 - Read detailed architecture, schemas, and research notes only when the task needs them.
 
 ## Fixed project context
-- `aws-k3d`: Spoke 1, AWS-like label; TeaStore compute services and Locust load generator.
-- `azure-k3d`: Spoke 2, Azure-like label; TeaStore persistence/data services and MySQL.
-- `hub-k3d`: central hub receiving telemetry from both spokes.
+- `aws-k3d`: Spoke 1, AWS-like label; edge `nginx-api-gateway`, TeaStore WebUI, Image, Registry, and Locust load generator.
+- `azure-k3d`: Spoke 2, Azure-like label; TeaStore Auth, Persistence and MySQL.
+- `gcp-k3d`: Spoke 3, GCP-like label; TeaStore Recommender (ML).
+- `hub-k3d`: central hub receiving telemetry from all spokes.
 - Local provider names are simulation labels, not real cloud deployments.
 - Architecture baseline: **Phương án A** (Edge-Filtered Ingestion with Centralized Processing & Batch Ingestion). Initial trace sampling rate is **20%** at edge collectors (with 100% preservation of error traces and high latency); AI streaming inference is deferred to a subsequent phase.
 - Telemetry Ingestion Optimization: Edge pre-filtering (`filter/drop_noise`) drops health probes at Spoke before traversing WAN; Hub Central Gateway executes tail-based sampling (`tail_sampling`) preserving 100% error traces and high-latency spans (>1500ms).
@@ -49,7 +50,7 @@ Build and evaluate a reproducible multi-cloud observability platform using TeaSt
 
 ## Naming
 - Kubernetes resources: lowercase kebab-case.
-- Cluster IDs: `aws-k3d`, `azure-k3d`, `hub-k3d`.
+- Cluster IDs: `aws-k3d`, `azure-k3d`, `gcp-k3d`, `hub-k3d`.
 - Experiment IDs: `YYYYMMDD_<workload>_<scenario>_<runNN>`.
 - Config snapshots: `config_<component>_<version-or-commit>_<YYYYMMDD>.yaml`.
 - Reports: `report_<topic>_<YYYYMMDD>.md`.

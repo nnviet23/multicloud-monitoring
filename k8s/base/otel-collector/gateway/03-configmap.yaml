@@ -56,14 +56,18 @@ data:
             statements:
               - set(attributes["cloud.provider"], "aws") where attributes["k8s.cluster.name"] == "aws-k3d" or attributes["cloud.provider"] == "amazon"
               - set(attributes["cloud.provider"], "azure") where attributes["k8s.cluster.name"] == "azure-k3d" or attributes["cloud.provider"] == "microsoft"
+              - set(attributes["cloud.provider"], "gcp") where attributes["k8s.cluster.name"] == "gcp-k3d" or attributes["cloud.provider"] == "google"
               - set(attributes["cloud.region"], "us-east-1") where attributes["cloud.provider"] == "aws" or attributes["k8s.cluster.name"] == "aws-k3d"
               - set(attributes["cloud.region"], "southasia") where attributes["cloud.provider"] == "azure" or attributes["k8s.cluster.name"] == "azure-k3d"
+              - set(attributes["cloud.region"], "asia-southeast1") where attributes["cloud.provider"] == "gcp" or attributes["k8s.cluster.name"] == "gcp-k3d"
               - set(attributes["cloud.region"], "local-datacenter") where attributes["cloud.provider"] == "hub" or attributes["k8s.cluster.name"] == "hub-k3d"
               - set(attributes["cloud.account.id"], "851725492014") where attributes["cloud.provider"] == "aws"
               - set(attributes["cloud.account.id"], "4b8f3a21-9e6c-4f80-b753-2d9a6e1c84f5") where attributes["cloud.provider"] == "azure"
+              - set(attributes["cloud.account.id"], "teastore-ml-sim") where attributes["cloud.provider"] == "gcp"
               - set(attributes["microsoft.entra.tenant_id"], "72f988bf-86f1-41af-91ab-2d7cd011db47") where attributes["cloud.provider"] == "azure"
               - set(attributes["cloud.platform"], "aws_eks") where attributes["cloud.provider"] == "aws"
               - set(attributes["cloud.platform"], "azure_aks") where attributes["cloud.provider"] == "azure"
+              - set(attributes["cloud.platform"], "gcp_kubernetes_engine") where attributes["cloud.provider"] == "gcp"
               - set(attributes["network.vpc.id"], "vpc-0f8a3c2b1e7d9a4f6") where attributes["cloud.provider"] == "aws"
               - set(attributes["network.vnet.id"], "vnet-teastore-southasia") where attributes["cloud.provider"] == "azure"
               - set(attributes["network.subnet.id"], "subnet-09a8b7c6d5e4f3a21") where attributes["cloud.provider"] == "aws"
@@ -80,14 +84,18 @@ data:
             statements:
               - set(attributes["cloud.provider"], "aws") where attributes["k8s.cluster.name"] == "aws-k3d" or attributes["cloud.provider"] == "amazon"
               - set(attributes["cloud.provider"], "azure") where attributes["k8s.cluster.name"] == "azure-k3d" or attributes["cloud.provider"] == "microsoft"
+              - set(attributes["cloud.provider"], "gcp") where attributes["k8s.cluster.name"] == "gcp-k3d" or attributes["cloud.provider"] == "google"
               - set(attributes["cloud.region"], "us-east-1") where attributes["cloud.provider"] == "aws" or attributes["k8s.cluster.name"] == "aws-k3d"
               - set(attributes["cloud.region"], "southasia") where attributes["cloud.provider"] == "azure" or attributes["k8s.cluster.name"] == "azure-k3d"
+              - set(attributes["cloud.region"], "asia-southeast1") where attributes["cloud.provider"] == "gcp" or attributes["k8s.cluster.name"] == "gcp-k3d"
               - set(attributes["cloud.region"], "local-datacenter") where attributes["cloud.provider"] == "hub" or attributes["k8s.cluster.name"] == "hub-k3d"
               - set(attributes["cloud.account.id"], "851725492014") where attributes["cloud.provider"] == "aws"
               - set(attributes["cloud.account.id"], "4b8f3a21-9e6c-4f80-b753-2d9a6e1c84f5") where attributes["cloud.provider"] == "azure"
+              - set(attributes["cloud.account.id"], "teastore-ml-sim") where attributes["cloud.provider"] == "gcp"
               - set(attributes["microsoft.entra.tenant_id"], "72f988bf-86f1-41af-91ab-2d7cd011db47") where attributes["cloud.provider"] == "azure"
               - set(attributes["cloud.platform"], "aws_eks") where attributes["cloud.provider"] == "aws"
               - set(attributes["cloud.platform"], "azure_aks") where attributes["cloud.provider"] == "azure"
+              - set(attributes["cloud.platform"], "gcp_kubernetes_engine") where attributes["cloud.provider"] == "gcp"
               - set(attributes["network.vpc.id"], "vpc-0f8a3c2b1e7d9a4f6") where attributes["cloud.provider"] == "aws"
               - set(attributes["network.vnet.id"], "vnet-teastore-southasia") where attributes["cloud.provider"] == "azure"
               - set(attributes["network.subnet.id"], "subnet-09a8b7c6d5e4f3a21") where attributes["cloud.provider"] == "aws"
@@ -108,11 +116,11 @@ data:
               # 3. Khớp cho Persistence
               - set(attributes["peer.service"], "teastore-persistence") where attributes["peer.service"] == nil and (IsMatch(attributes["server.address"], ".*persistence.*") or IsMatch(attributes["url.full"], ".*persistence.*") or attributes["net.peer.name"] == "teastore-persistence" or attributes["net.peer.port"] == 31111 or attributes["server.port"] == 31111)
               # 4. Khớp cho Auth
-              - set(attributes["peer.service"], "teastore-auth") where attributes["peer.service"] == nil and (IsMatch(attributes["server.address"], ".*auth.*") or IsMatch(attributes["url.full"], ".*auth.*") or attributes["net.peer.name"] == "teastore-auth")
+              - set(attributes["peer.service"], "teastore-auth") where attributes["peer.service"] == nil and (IsMatch(attributes["server.address"], ".*auth.*") or IsMatch(attributes["url.full"], ".*auth.*") or attributes["net.peer.name"] == "teastore-auth" or attributes["net.peer.port"] == 31114 or attributes["server.port"] == 31114)
               # 5. Khớp cho Image
               - set(attributes["peer.service"], "teastore-image") where attributes["peer.service"] == nil and (IsMatch(attributes["server.address"], ".*image.*") or IsMatch(attributes["url.full"], ".*image.*") or attributes["net.peer.name"] == "teastore-image")
               # 6. Khớp cho Recommender
-              - set(attributes["peer.service"], "teastore-recommender") where attributes["peer.service"] == nil and (IsMatch(attributes["server.address"], ".*recommender.*") or IsMatch(attributes["url.full"], ".*recommender.*") or attributes["net.peer.name"] == "teastore-recommender")
+              - set(attributes["peer.service"], "teastore-recommender") where attributes["peer.service"] == nil and (IsMatch(attributes["server.address"], ".*recommender.*") or IsMatch(attributes["url.full"], ".*recommender.*") or attributes["net.peer.name"] == "teastore-recommender" or attributes["net.peer.port"] == 31113 or attributes["server.port"] == 31113)
               # 7. Khớp cho WebUI
               - set(attributes["peer.service"], "teastore-webui") where attributes["peer.service"] == nil and (IsMatch(attributes["server.address"], ".*webui.*") or IsMatch(attributes["url.full"], ".*webui.*") or attributes["net.peer.name"] == "teastore-webui")
               # 8. Fallback cho client spans: trích xuất từ server.address hoặc net.peer.name
@@ -126,14 +134,18 @@ data:
               - set(attributes["cloud.region"], "local-datacenter") where attributes["cloud.region"] == nil
               - set(attributes["cloud.provider"], "aws") where attributes["k8s.cluster.name"] == "aws-k3d" or attributes["cloud.provider"] == "amazon"
               - set(attributes["cloud.provider"], "azure") where attributes["k8s.cluster.name"] == "azure-k3d" or attributes["cloud.provider"] == "microsoft"
+              - set(attributes["cloud.provider"], "gcp") where attributes["k8s.cluster.name"] == "gcp-k3d" or attributes["cloud.provider"] == "google"
               - set(attributes["cloud.region"], "us-east-1") where attributes["cloud.provider"] == "aws" or attributes["k8s.cluster.name"] == "aws-k3d"
               - set(attributes["cloud.region"], "southasia") where attributes["cloud.provider"] == "azure" or attributes["k8s.cluster.name"] == "azure-k3d"
+              - set(attributes["cloud.region"], "asia-southeast1") where attributes["cloud.provider"] == "gcp" or attributes["k8s.cluster.name"] == "gcp-k3d"
               - set(attributes["cloud.region"], "local-datacenter") where attributes["cloud.provider"] == "hub" or attributes["k8s.cluster.name"] == "hub-k3d"
               - set(attributes["cloud.account.id"], "851725492014") where attributes["cloud.provider"] == "aws"
               - set(attributes["cloud.account.id"], "4b8f3a21-9e6c-4f80-b753-2d9a6e1c84f5") where attributes["cloud.provider"] == "azure"
+              - set(attributes["cloud.account.id"], "teastore-ml-sim") where attributes["cloud.provider"] == "gcp"
               - set(attributes["microsoft.entra.tenant_id"], "72f988bf-86f1-41af-91ab-2d7cd011db47") where attributes["cloud.provider"] == "azure"
               - set(attributes["cloud.platform"], "aws_eks") where attributes["cloud.provider"] == "aws"
               - set(attributes["cloud.platform"], "azure_aks") where attributes["cloud.provider"] == "azure"
+              - set(attributes["cloud.platform"], "gcp_kubernetes_engine") where attributes["cloud.provider"] == "gcp"
               - set(attributes["cluster"], attributes["k8s.cluster.name"])
               - set(attributes["cloud"], attributes["cloud.provider"])
               - set(attributes["region"], attributes["cloud.region"])
@@ -157,6 +169,17 @@ data:
             type: probabilistic
             probabilistic:
               sampling_percentage: 5
+
+      # telemetry.hub.received_time changes on every export. As a Prometheus label
+      # (resource_to_telemetry_conversion) it creates a new series per export, so
+      # rate() is always 0 and cardinality grows without bound. Drop it only on the
+      # Prometheus path; the raw S3 archive keeps it (AGENTS.md rule 7).
+      transform/drop_hub_received_time:
+        error_mode: ignore
+        metric_statements:
+          - context: resource
+            statements:
+              - delete_key(attributes, "telemetry.hub.received_time")
 
       batch:
         send_batch_size: 512
@@ -196,8 +219,12 @@ data:
           exporters: [otlp/tempo, awss3, debug]
         metrics:
           receivers: [otlp, hostmetrics]
+          processors: [memory_limiter, transform/normalize_cloud, transform/drop_hub_received_time, batch]
+          exporters: [prometheus, debug]
+        metrics/archive:
+          receivers: [otlp, hostmetrics]
           processors: [memory_limiter, transform/normalize_cloud, batch]
-          exporters: [prometheus, awss3, debug]
+          exporters: [awss3]
         metrics/servicegraph:
           receivers: [servicegraph]
           processors: [batch]

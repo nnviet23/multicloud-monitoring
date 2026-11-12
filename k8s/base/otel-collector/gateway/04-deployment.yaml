@@ -45,7 +45,9 @@ spec:
               cpu: 100m
               memory: 128Mi
             limits:
-              memory: 512Mi
+              # 512Mi was OOMKilled when 3 spokes (aws, azure, gcp) flushed retry queues at once;
+              # memory_limiter thresholds are percentages, so they scale with this limit.
+              memory: 1Gi
       volumes:
         - name: config
           configMap:

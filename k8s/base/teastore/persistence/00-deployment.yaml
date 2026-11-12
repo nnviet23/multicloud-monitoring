@@ -58,6 +58,10 @@ spec:
               value: "otlp"
             - name: OTEL_METRICS_EXPORTER
               value: "otlp"
+            # 10s export (agent default is 60s) so request counters/histograms advance
+            # every AI sampling cycle; the AI collector samples every 10s.
+            - name: OTEL_METRIC_EXPORT_INTERVAL
+              value: "10000"
             - name: OTEL_LOGS_EXPORTER
               value: "otlp"
           resources:

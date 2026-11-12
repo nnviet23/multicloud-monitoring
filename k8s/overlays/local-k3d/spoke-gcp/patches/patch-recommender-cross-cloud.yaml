@@ -1,0 +1,23 @@
+# Register teastore-recommender in the AWS registry with an address reachable from
+# other clusters (GCP node + NodePort 31113) instead of its pod IP.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: teastore-recommender
+  namespace: teastore
+spec:
+  template:
+    spec:
+      containers:
+        - name: teastore-recommender
+          env:
+            - name: SERVICE_PORT
+              value: "31113"
+            - name: HOST_NAME
+              value: "k3d-gcp-k3d-server-0"
+            - name: REGISTRY_HOST
+              value: "k3d-aws-k3d-server-0"
+            - name: REGISTRY_PORT
+              value: "31112"
+            - name: USE_POD_IP
+              $patch: delete

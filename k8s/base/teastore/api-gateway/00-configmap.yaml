@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-api-gateway-config
+  labels:
+    app: nginx-api-gateway
+data:
+  nginx.conf: |
+    worker_processes auto;
+    events {
+      worker_connections 1024;
+    }
+    http {
+      include       /etc/nginx/mime.types;
+      default_type  application/octet-stream;
+      sendfile      on;
+      keepalive_timeout 65;
+
+      # Edge rate limiting & burst protection
+      limit_req_zone $binary_remote_addr zone=edge_rate_limit:10m rate=120r/s;
+
+      upstream teastore_webui_backend {
+        server teastore-webui.teastore.svc.cluster.local:8080 max_fails=3 fail_timeout=5s;
+        keepalive 32;
+      }
+
+      server {
+        listen 8080;
+        server_name _;
+
+        location = /gateway-health {
+          access_log off;
+          default_type application/json;
+          return 200 '{"status":"healthy","gateway":"aws-nginx-api-gateway","cloud":"aws"}';
+        }
+
+        location / {
+          limit_req zone=edge_rate_limit burst=250 nodelay;
+          proxy_http_version 1.1;
+          proxy_set_header Connection "";
+          proxy_set_header Host $http_host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Edge-Gateway "aws-nginx-api-gateway";
+          proxy_set_header X-Cloud-Provider "aws";
+          proxy_connect_timeout 5s;
+          proxy_send_timeout 30s;
+          proxy_read_timeout 30s;
+          proxy_next_upstream error timeout http_502 http_503;
+          proxy_pass http://teastore_webui_backend;
+        }
+      }
+    }

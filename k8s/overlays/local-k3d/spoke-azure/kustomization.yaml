@@ -1,11 +1,16 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# Spoke 2 - Azure (Enterprise IAM & Core Transactional Data)
+#   teastore-auth (NodePort 31114), teastore-persistence (NodePort 31111), teastore-db
 resources:
   - ../../../base/teastore/namespace
   - ../../../base/teastore/mysql
   - ../../../base/teastore/persistence
+  - ../../../base/teastore/auth
   - ../../../base/otel-collector/edge
 
 patches:
   - path: patches/patch-cluster-identity.yaml
+  - path: patches/patch-auth-cross-cloud.yaml
+  - path: patches/patch-auth-service-nodeport.yaml

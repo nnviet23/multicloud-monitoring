@@ -9,7 +9,7 @@ data:
       - name: multicloud-signoz-alerts
         rules:
           - alert: SpokeClusterHeartbeatAbsent
-            expr: absent(up{cluster="aws-k3d"} == 1) or absent(up{cluster="azure-k3d"} == 1)
+            expr: absent(up{cluster="aws-k3d"} == 1) or absent(up{cluster="azure-k3d"} == 1) or absent(up{cluster="gcp-k3d"} == 1)
             for: 2m
             labels:
               severity: critical
@@ -17,7 +17,7 @@ data:
               strategy: signoz-heartbeat
             annotations:
               summary: "Mất tín hiệu Heartbeat từ cụm Spoke đa đám mây (Absent Data)"
-              description: "Không nhận được bất kỳ số liệu telemetry nào từ cụm Spoke (AWS hoặc Azure) về Central Hub trong hơn 2 phút. Có thể do đứt kết nối mạng WAN hoặc Collector Spoke bị dừng."
+              description: "Không nhận được bất kỳ số liệu telemetry nào từ cụm Spoke (AWS, Azure hoặc GCP) về Central Hub trong hơn 2 phút. Có thể do đứt kết nối mạng WAN hoặc Collector Spoke bị dừng."
 
           - alert: MicroserviceHighErrorRate
             expr: (sum by (server) (rate(traces_service_graph_request_failed_total[2m])) / (sum by (server) (rate(traces_service_graph_request_total[2m])) + 0.0001)) * 100 > 5

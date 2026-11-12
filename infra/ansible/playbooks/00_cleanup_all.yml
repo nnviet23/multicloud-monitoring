@@ -39,6 +39,7 @@
         - "{{ pki_dir }}/certs-hub"
         - "{{ pki_dir }}/certs-spoke1"
         - "{{ pki_dir }}/certs-spoke2"
+        - "{{ pki_dir }}/certs-spoke3"
 
     - name: Display cleanup summary
       debug:

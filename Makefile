@@ -10,6 +10,7 @@ SHELL := /bin/bash
 HUB_CTX    := k3d-hub-k3d
 AWS_CTX    := k3d-aws-k3d
 AZURE_CTX  := k3d-azure-k3d
+GCP_CTX    := k3d-gcp-k3d
 
 .PHONY: help
 help: ## Display this help message
@@ -34,7 +35,7 @@ pull-images: ## Pre-pull all version-pinned container images on host
 	@bash infra/scripts/pull_images.sh
 
 .PHONY: import-images
-import-images: ## Import pre-pulled images into all 3 k3d clusters
+import-images: ## Import pre-pulled images into all 4 k3d clusters
 	@bash infra/scripts/import_k3d_images.sh
 
 .PHONY: pki-generate
@@ -49,7 +50,7 @@ pki-generate: ## Generate Root CA and mTLS 1.3 certificates for Hub & Spokes
 setup: env-setup pull-images ## Run complete prerequisites setup (env + pull images)
 
 .PHONY: infra
-infra: pki-generate ## Provision 3 k3d clusters, WAN bridge, CoreDNS & mTLS secrets via Ansible
+infra: pki-generate ## Provision 4 k3d clusters, WAN bridge, CoreDNS & mTLS secrets via Ansible
 	@echo "--> Provisioning infrastructure via Ansible master playbook..."
 	ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbooks/site.yml
 	@echo "Importing container images into freshly provisioned clusters..."
@@ -66,12 +67,14 @@ deploy-spokes: ## Deploy TeaStore Workloads and Edge OTel Collectors on Spokes
 	kubectl --context $(AWS_CTX) apply -k k8s/overlays/local-k3d/spoke-aws
 	@echo "--> Deploying Data Spoke on $(AZURE_CTX)..."
 	kubectl --context $(AZURE_CTX) apply -k k8s/overlays/local-k3d/spoke-azure
+	@echo "--> Deploying ML Spoke on $(GCP_CTX)..."
+	kubectl --context $(GCP_CTX) apply -k k8s/overlays/local-k3d/spoke-gcp
 
 .PHONY: deploy
-deploy: deploy-hub deploy-spokes ## Deploy complete system (Hub + Spoke 1 AWS + Spoke 2 Azure)
+deploy: deploy-hub deploy-spokes ## Deploy complete system (Hub + Spoke 1 AWS + Spoke 2 Azure + Spoke 3 GCP)
 	@echo "======================================================================"
-	@echo "Multi-Cloud System successfully deployed on all 3 clusters!"
-	@echo "  - TeaStore WebUI:   http://localhost:8080/tools.descartes.teastore.webui/"
+	@echo "Multi-Cloud System successfully deployed on all 4 clusters!"
+	@echo "  - TeaStore WebUI:   http://localhost:8080/tools.descartes.teastore.webui/ (via AWS nginx-api-gateway)"
 	@echo "  - Grafana:          http://localhost:3000 (admin / MultiCloudSecurePassword2026!)"
 	@echo "  - MinIO Console:    http://localhost:9001 (admin / MultiCloudSecurePassword2026!)"
 	@echo "  - Thanos Query UI:  http://localhost:9090"
@@ -84,6 +87,7 @@ verify: ## Run comprehensive health verification across all clusters
 	@kubectl --context $(HUB_CTX) get nodes
 	@kubectl --context $(AWS_CTX) get nodes
 	@kubectl --context $(AZURE_CTX) get nodes
+	@kubectl --context $(GCP_CTX) get nodes
 	@echo ""
 	@echo "=== [2/3] Verifying Workload Pods ==="
 	@echo "--- Hub Cluster (monitoring & storage) ---"
@@ -95,9 +99,13 @@ verify: ## Run comprehensive health verification across all clusters
 	@echo "--- Azure Spoke (teastore & monitoring) ---"
 	@kubectl --context $(AZURE_CTX) get pods -n teastore
 	@kubectl --context $(AZURE_CTX) get pods -n monitoring
+	@echo "--- GCP Spoke (teastore & monitoring) ---"
+	@kubectl --context $(GCP_CTX) get pods -n teastore
+	@kubectl --context $(GCP_CTX) get pods -n monitoring
 	@echo ""
 	@echo "=== [3/3] Verifying Simulated WAN Network (tc netem) ==="
 	@docker exec k3d-aws-k3d-server-0 ping -c 3 k3d-azure-k3d-server-0 || true
+	@docker exec k3d-aws-k3d-server-0 ping -c 3 k3d-gcp-k3d-server-0 || true
 
 .PHONY: clean-images
 clean-images: ## Remove all project container images and prune dangling images
@@ -130,16 +138,18 @@ validate-dashboards: ## Validate JSON syntax of all 8 Grafana Dashboards
 
 .PHONY: validate-kustomize
 validate-kustomize: ## Dry-run Kustomize build across Hub and Spokes
-	@echo "--> Dry-run validating Kustomize manifests for all 3 clusters..."
+	@echo "--> Dry-run validating Kustomize manifests for all 4 clusters..."
 	@kubectl kustomize k8s/overlays/local-k3d/hub > /dev/null
 	@kubectl kustomize k8s/overlays/local-k3d/spoke-aws > /dev/null
 	@kubectl kustomize k8s/overlays/local-k3d/spoke-azure > /dev/null
+	@kubectl kustomize k8s/overlays/local-k3d/spoke-gcp > /dev/null
 	@echo "All Kustomize manifests build successfully!"
 
 .PHONY: test-wan
-test-wan: ## Test simulated WAN latency and packet loss between AWS and Azure
+test-wan: ## Test simulated WAN latency and packet loss between AWS and Azure/GCP
 	@echo "--> Testing cross-cluster WAN RTT (AWS Spoke <-> Azure Spoke)..."
 	@docker exec k3d-aws-k3d-server-0 ping -c 5 k3d-azure-k3d-server-0 || true
+	@docker exec k3d-aws-k3d-server-0 ping -c 5 k3d-gcp-k3d-server-0 || true
 
 .PHONY: test
 test: test-ai validate-dashboards validate-kustomize ## Run all automated system tests (AI, Dashboards, Manifests)

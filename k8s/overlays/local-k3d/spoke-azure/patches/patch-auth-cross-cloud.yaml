@@ -1,0 +1,23 @@
+# Register teastore-auth in the AWS registry with an address reachable from other
+# clusters (Azure node + NodePort 31114) instead of its pod IP.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: teastore-auth
+  namespace: teastore
+spec:
+  template:
+    spec:
+      containers:
+        - name: teastore-auth
+          env:
+            - name: SERVICE_PORT
+              value: "31114"
+            - name: HOST_NAME
+              value: "k3d-azure-k3d-server-0"
+            - name: REGISTRY_HOST
+              value: "k3d-aws-k3d-server-0"
+            - name: REGISTRY_PORT
+              value: "31112"
+            - name: USE_POD_IP
+              $patch: delete

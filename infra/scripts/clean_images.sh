@@ -26,7 +26,7 @@ OTEL_IMAGES=(
 
 # 3. Observability Backends & Governance Stack (Hub)
 OBSERVABILITY_IMAGES=(
-  "minio/minio:RELEASE.2025-10-15T17-29-55Z"
+  "cgr.dev/chainguard/minio@sha256:0dab2f9fee1c1139ae8753b5e35bb4461af2a276cfe0923a2504c75a6170bc64"
   "prom/prometheus:v2.50.0"
   "quay.io/thanos/thanos:v0.36.1"
   "grafana/loki:2.9.4"

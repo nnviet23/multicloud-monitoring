@@ -1,0 +1,9 @@
+# The public entrypoint on AWS is nginx-api-gateway (LoadBalancer :8080);
+# teastore-webui is only reached through the gateway.
+apiVersion: v1
+kind: Service
+metadata:
+  name: teastore-webui
+  namespace: teastore
+spec:
+  type: ClusterIP

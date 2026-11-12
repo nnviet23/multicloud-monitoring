@@ -24,6 +24,7 @@
 
 ### Phase 1 — Local infrastructure
 - [x] Use Ansible to provision three k3d clusters: `aws-k3d`, `azure-k3d`, `hub-k3d`.
+- [x] Restore Spoke 3 `gcp-k3d` (Recommender) and AWS `nginx-api-gateway` on the Kustomize layout; verified on the live lab 2026-11-12.
 - [x] Connect clusters through a documented Docker network / simulated WAN (`mc-monitoring-net`: `172.28.0.0/16`).
 - [x] Add controlled latency and packet loss only through a reproducible profile (`tc/netem`: delay 10ms 2ms, loss 0.1%).
 - [x] Verify cluster reachability, DNS, time synchronization assumptions, and resource limits (`05_verify_clusters.yml`).

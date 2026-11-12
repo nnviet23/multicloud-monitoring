@@ -85,3 +85,4 @@ EOF
 
 generate_spoke_cert "certs-spoke1"
 generate_spoke_cert "certs-spoke2"
+generate_spoke_cert "certs-spoke3"

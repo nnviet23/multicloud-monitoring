@@ -164,6 +164,10 @@ Auto-calibration cho entity mới chỉ dùng mẫu khi probe end-to-end và 5xx
 và ghi vào overlay `models/saved/entity_baselines.runtime.json` (gitignored);
 `entity_baselines.json` do huấn luyện tạo ra không bị sửa lúc runtime.
 `ram_floor_2m_pct` dùng cửa sổ thời gian 120 giây ở cả collector lẫn detector.
+`max_pod_cpu_pct` = CPU của pod bận nhất tính theo **% của một core** từ
+`rate(jvm_cpu_time_seconds_total[1m])`. Công thức cũ
+(`jvm_cpu_recent_utilization_ratio * jvm_cpu_count`) bão hòa ở 100% trên host 16
+core nên dữ liệu/model huấn luyện trước 2026-11-12 không so sánh được với dữ liệu mới.
 
 RCA giữ bằng chứng trace có ID/tuổi tối đa 90 giây trong cùng sự cố, vô hiệu
 khi phục hồi và lọc trường hợp CPU làm nhiễu suy luận WAN. `likelihood_pct` là

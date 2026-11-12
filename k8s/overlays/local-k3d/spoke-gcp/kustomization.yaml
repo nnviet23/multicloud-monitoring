@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Spoke 3 - GCP (AI / ML Recommendation Platform)
+#   teastore-recommender (NodePort 31113)
+resources:
+  - ../../../base/teastore/namespace
+  - ../../../base/teastore/recommender
+  - ../../../base/otel-collector/edge
+
+patches:
+  - path: patches/patch-cluster-identity.yaml
+  - path: patches/patch-recommender-cross-cloud.yaml
+  - path: patches/patch-recommender-service-nodeport.yaml

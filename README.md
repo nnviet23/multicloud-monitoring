@@ -24,7 +24,7 @@ Toàn bộ phiên bản công nghệ được **ghim cứng (pinned version)** t
 | Lớp kiến trúc | Thành phần | Phiên bản ghim cứng | Vai trò kỹ thuật |
 |---|---|---|---|
 | **OS & Host Runtime** | Ubuntu / Docker Engine | `26.04` / `29.8.2` | Nền tảng điều phối container máy trạm |
-| **Simulated Clusters** | k3s / k3d | `v1.31.2+k3s1` / `v5.6.0` | 3 cụm K8s siêu nhẹ (`hub-k3d`, `aws-k3d`, `azure-k3d`) |
+| **Simulated Clusters** | k3s / k3d | `v1.31.2+k3s1` / `v5.6.0` | 4 cụm K8s siêu nhẹ (`hub-k3d`, `aws-k3d`, `azure-k3d`, `gcp-k3d`) |
 | **Automation** | Ansible Core / Kustomize | `2.15.8` / `v5.3.0` | Tự động hóa hạ tầng và cấu hình declarative |
 | **Telemetry Agents** | OTel Java Agent / Contrib | `v2.10.0` / `0.114.0` | Bytecode auto-instrumentation & Edge/Gateway collector |
 | **Time-Series Metrics** | Prometheus / Thanos | `v2.50.0` / `v0.36.1` | TSDB metrics & lưu trữ phân tán dài hạn |
@@ -39,10 +39,13 @@ Toàn bộ phiên bản công nghệ được **ghim cứng (pinned version)** t
 
 ## 3. Phân Bổ Mô Hình Cụm Hub - Spoke
 
-- **Spoke 1 — `aws-k3d` (Mô phỏng AWS EKS — us-east-1):**  
-  Đảm nhận tầng tính toán người dùng (Compute Layer): `teastore-webui` (LoadBalancer 8080), `teastore-auth`, `teastore-image`, `teastore-recommender`, `teastore-registry` (NodePort 31112), và OTel Spoke Edge Collector.
-- **Spoke 2 — `azure-k3d` (Mô phỏng Azure AKS — southasia):**  
-  Đảm nhận tầng dữ liệu và lưu trữ (Data Layer): `teastore-persistence` (NodePort 31111), `teastore-db` (MySQL 8.0), và OTel Spoke Edge Collector.
+- **Spoke 1 — `aws-k3d` (Mô phỏng AWS EKS — us-east-1; Edge Gateway, Storefront & Media):**  
+  `nginx-api-gateway` (LoadBalancer 8080, reverse proxy + rate limit), `teastore-webui` (ClusterIP, chỉ đi qua gateway), `teastore-image`, `teastore-registry` (NodePort 31112), và OTel Spoke Edge Collector.
+- **Spoke 2 — `azure-k3d` (Mô phỏng Azure AKS — southasia; Enterprise IAM & Core Transactional Data):**  
+  `teastore-auth` (NodePort 31114), `teastore-persistence` (NodePort 31111), `teastore-db` (MySQL 8.0), và OTel Spoke Edge Collector.
+- **Spoke 3 — `gcp-k3d` (Mô phỏng GCP GKE — asia-southeast1; AI/ML Recommendation Platform):**  
+  `teastore-recommender` (NodePort 31113) và OTel Spoke Edge Collector.
+- **Gọi chéo cloud:** service ngoài AWS đăng ký vào registry AWS bằng `HOST_NAME=k3d-<cloud>-k3d-server-0` + NodePort (overlay `k8s/overlays/local-k3d/spoke-*`), nên mọi request WebUI → Auth/Persistence/Recommender đều đi qua WAN mô phỏng.
 - **Hub — `hub-k3d` (Trung tâm Quan sát & Lưu trữ):**  
   OTel Hub Gateway (LoadBalancer 4317 mTLS), MinIO (9000/9001), Prometheus + Thanos (9090), Loki (3100), Tempo (3200), Grafana (3000), Pyrra (9099), Robusta Runner, và AI Anomaly Detection Plane.
 - **Mạng WAN mô phỏng (`mc-monitoring-net`):**  

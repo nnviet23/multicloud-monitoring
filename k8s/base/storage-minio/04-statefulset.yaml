@@ -18,7 +18,7 @@ spec:
     spec:
       initContainers:
         - name: init-buckets
-          image: minio/minio:RELEASE.2025-10-15T17-29-55Z
+          image: cgr.dev/chainguard/minio@sha256:0dab2f9fee1c1139ae8753b5e35bb4461af2a276cfe0923a2504c75a6170bc64
           imagePullPolicy: IfNotPresent
           command:
             - /bin/sh
@@ -30,7 +30,7 @@ spec:
               mountPath: /data
       containers:
         - name: minio
-          image: minio/minio:RELEASE.2025-10-15T17-29-55Z
+          image: cgr.dev/chainguard/minio@sha256:0dab2f9fee1c1139ae8753b5e35bb4461af2a276cfe0923a2504c75a6170bc64
           imagePullPolicy: IfNotPresent
           command:
             - /bin/sh

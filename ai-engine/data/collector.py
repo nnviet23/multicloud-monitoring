@@ -49,9 +49,13 @@ ENTITY_VECTOR_QUERIES = {
     "server_latency_p95": 'histogram_quantile(0.95, sum by (le, cloud_provider, service_name) (rate(http_server_request_duration_seconds_bucket[1m]) or rate(http_server_duration_milliseconds_bucket[1m])))',
     "client_latency_p95": 'histogram_quantile(0.95, sum by (le, cloud_provider, service_name) (rate(http_client_request_duration_seconds_bucket[1m]) or rate(http_client_duration_milliseconds_bucket[1m])))',
     "error_rate_5xx": 'sum by (cloud_provider, service_name) (rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[1m]) or rate(http_server_request_duration_seconds_count{http_status_code=~"5.."}[1m]))',
+    # Busiest pod's CPU as % of ONE core, from the cumulative CPU-time counter.
+    # The former gauge form (jvm_cpu_recent_utilization_ratio * jvm_cpu_count) read
+    # 100-300% for pods using ~0.05 core on a 16-core host, so it saturated at the
+    # clamp and carried no signal. TeaStore pods have no CPU limit; 100 == 1 busy core.
     "max_pod_cpu_pct": (
-        f'(clamp_max(max by (cloud_provider, service_name) (((jvm_cpu_recent_utilization_ratio * jvm_cpu_count) or process_runtime_jvm_cpu_utilization_ratio) and on (cloud_provider, service_name, host_name) ({ACTIVE_JVM_PODS})) * 100, 100))'
-        ' or (clamp_max(max by (cloud_provider, service_name) ((jvm_cpu_recent_utilization_ratio * jvm_cpu_count) or process_runtime_jvm_cpu_utilization_ratio) * 100, 100))'
+        f'(clamp_max(max by (cloud_provider, service_name) (sum by (cloud_provider, service_name, host_name) (rate(jvm_cpu_time_seconds_total[1m]) or rate(process_runtime_jvm_cpu_time_seconds_total[1m])) and on (cloud_provider, service_name, host_name) ({ACTIVE_JVM_PODS})) * 100, 100))'
+        ' or (clamp_max(max by (cloud_provider, service_name) (sum by (cloud_provider, service_name, host_name) (rate(jvm_cpu_time_seconds_total[1m]) or rate(process_runtime_jvm_cpu_time_seconds_total[1m]))) * 100, 100))'
     ),
     "max_pod_ram_pct": (
         f'(max by (cloud_provider, service_name) ((sum by (cloud_provider, service_name, host_name) (jvm_memory_used_bytes{{jvm_memory_type="heap"}} or process_runtime_jvm_memory_usage_bytes{{type="heap"}} or process_runtime_jvm_memory_usage_bytes) / sum by (cloud_provider, service_name, host_name) (jvm_memory_limit_bytes{{jvm_memory_type="heap"}} or process_runtime_jvm_memory_limit_bytes{{type="heap"}} or process_runtime_jvm_memory_limit_bytes)) and on (cloud_provider, service_name, host_name) ({ACTIVE_JVM_PODS})) * 100)'
