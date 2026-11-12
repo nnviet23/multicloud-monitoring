@@ -19,8 +19,14 @@ data:
       # Edge rate limiting & burst protection
       limit_req_zone $binary_remote_addr zone=edge_rate_limit:10m rate=120r/s;
 
+      # Resolve the upstream at runtime (nginx >= 1.27.3 `resolve`): a static name
+      # made nginx exit with "host not found" when it started before CoreDNS after
+      # a cluster restart. 10.43.0.10 is the k3s default cluster DNS service IP.
+      resolver 10.43.0.10 valid=10s ipv6=off;
+
       upstream teastore_webui_backend {
-        server teastore-webui.teastore.svc.cluster.local:8080 max_fails=3 fail_timeout=5s;
+        zone teastore_webui_backend 64k;
+        server teastore-webui.teastore.svc.cluster.local:8080 resolve max_fails=3 fail_timeout=5s;
         keepalive 32;
       }
 
