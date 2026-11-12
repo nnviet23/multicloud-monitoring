@@ -1,0 +1,41 @@
+{
+  "phases": [
+    {
+      "id": "baseline",
+      "start": "2026-11-12T23:02:23.541869+00:00",
+      "end": "2026-11-12T23:03:23.548170+00:00"
+    },
+    {
+      "id": "cpu",
+      "start": "2026-11-12T23:03:23.987434+00:00",
+      "end": "2026-11-12T23:04:53.997834+00:00"
+    },
+    {
+      "id": "recovery_after_cpu",
+      "start": "2026-11-12T23:04:54.306623+00:00",
+      "end": "2026-11-12T23:07:24.321323+00:00"
+    },
+    {
+      "id": "db_lock",
+      "start": "2026-11-12T23:07:26.809255+00:00",
+      "end": "2026-11-12T23:08:56.818680+00:00",
+      "sql_lock_verified": true,
+      "independent_reader_exit_code": 124
+    },
+    {
+      "id": "recovery_after_db_lock",
+      "start": "2026-11-12T23:08:56.986749+00:00",
+      "end": "2026-11-12T23:11:27.001864+00:00"
+    },
+    {
+      "id": "memory_leak",
+      "start": "2026-11-12T23:11:27.424279+00:00",
+      "end": "2026-11-12T23:12:57.433623+00:00",
+      "jvm_memory_agent_attached": true,
+      "target": "azure:teastore-persistence"
+    }
+  ],
+  "cleanup_errors": [
+    "Command '['kubectl', '--context', 'k3d-azure-k3d', '--request-timeout=10s', '-n', 'teastore', 'exec', 'deploy/teastore-persistence', '--', 'env', '-u', 'JAVA_TOOL_OPTIONS', 'java', '-Xmx32m', '--add-modules', 'jdk.attach', '-cp', '/tmp/ai-chaos', 'FaultAgent', '37', '/tmp/ai-chaos/fault.jar', 'stop']' returned non-zero exit status 1."
+  ]
+}

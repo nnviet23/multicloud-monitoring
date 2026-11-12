@@ -1,0 +1,100 @@
+{
+  "mode": "real_service_faults",
+  "results": [
+    {
+      "id": "baseline",
+      "start": "2026-11-12T23:02:23.541869+00:00",
+      "end": "2026-11-12T23:03:23.548170+00:00",
+      "samples": 3,
+      "alerts": 0,
+      "model_alerts": 0,
+      "rca_causes": [],
+      "passed": true
+    },
+    {
+      "id": "cpu",
+      "start": "2026-11-12T23:03:23.987434+00:00",
+      "end": "2026-11-12T23:04:53.997834+00:00",
+      "samples": 6,
+      "alerts": 1,
+      "model_alerts": 1,
+      "rca_causes": [
+        "[gcp:teastore-recommender] max_pod_cpu_pct (lệch x49.8)",
+        "[gcp:teastore-recommender] gc_pause_rate (lệch x2.2)"
+      ],
+      "passed": true
+    },
+    {
+      "id": "recovery_after_cpu",
+      "start": "2026-11-12T23:04:54.306623+00:00",
+      "end": "2026-11-12T23:07:24.321323+00:00",
+      "samples": 12,
+      "alerts": 0,
+      "model_alerts": 0,
+      "rca_causes": [],
+      "passed": true
+    },
+    {
+      "id": "db_lock",
+      "start": "2026-11-12T23:07:26.809255+00:00",
+      "end": "2026-11-12T23:08:56.818680+00:00",
+      "sql_lock_verified": true,
+      "independent_reader_exit_code": 124,
+      "samples": 6,
+      "alerts": 6,
+      "model_alerts": 6,
+      "rca_causes": [
+        "[DATABASE_BOTTLENECK] azure:teastore-persistence -> MariaDB (T_DB=348ms, trace_age=15s)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x96.9)",
+        "[azure:teastore-persistence] server_latency_p95 (lệch x93.4)",
+        "[azure:teastore-auth] server_latency_p95 (lệch x6.7)",
+        "[CROSS_CLOUD_WAN_DELAY] gcp->aws (aws:teastore-registry) (T_WAN=255ms)",
+        "[DATABASE_BOTTLENECK] azure:teastore-persistence -> MariaDB (T_DB=325ms, trace_age=18s)",
+        "[azure:teastore-persistence] server_latency_p95 (lệch x106.7)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x105.3)",
+        "[DATABASE_BOTTLENECK] azure:teastore-persistence -> MariaDB (T_DB=350ms, trace_age=17s)",
+        "[azure:teastore-persistence] server_latency_p95 (lệch x111.1)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x108.2)",
+        "[gcp:teastore-recommender] client_latency_p95 (lệch x1.6)",
+        "[DATABASE_BOTTLENECK] azure:teastore-persistence -> MariaDB (T_DB=348ms, trace_age=23s)",
+        "[azure:teastore-persistence] server_latency_p95 (lệch x117.6)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x114.4)",
+        "[azure:teastore-auth] server_latency_p95 (lệch x1.9)",
+        "[DATABASE_BOTTLENECK] azure:teastore-persistence -> MariaDB (T_DB=121ms, trace_age=21s)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x119.8)",
+        "[azure:teastore-persistence] server_latency_p95 (lệch x117.0)",
+        "[azure:teastore-auth] server_latency_p95 (lệch x1.3)",
+        "[DATABASE_BOTTLENECK] azure:teastore-persistence -> MariaDB (T_DB=350ms, trace_age=14s)",
+        "[azure:teastore-persistence] server_latency_p95 (lệch x125.2)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x122.4)"
+      ],
+      "passed": true
+    },
+    {
+      "id": "recovery_after_db_lock",
+      "start": "2026-11-12T23:08:56.986749+00:00",
+      "end": "2026-11-12T23:11:27.001864+00:00",
+      "samples": 12,
+      "alerts": 0,
+      "model_alerts": 0,
+      "rca_causes": [],
+      "passed": true
+    },
+    {
+      "id": "memory_leak",
+      "start": "2026-11-12T23:11:27.424279+00:00",
+      "end": "2026-11-12T23:12:57.433623+00:00",
+      "jvm_memory_agent_attached": true,
+      "target": "azure:teastore-persistence",
+      "samples": 6,
+      "alerts": 0,
+      "model_alerts": 0,
+      "rca_causes": [],
+      "passed": false
+    }
+  ],
+  "error": "Command '['kubectl', '--context', 'k3d-azure-k3d', '--request-timeout=10s', '-n', 'teastore', 'exec', 'deploy/teastore-persistence', '--', 'env', '-u', 'JAVA_TOOL_OPTIONS', 'java', '-Xmx32m', '--add-modules', 'jdk.attach', '-cp', '/tmp/ai-chaos', 'FaultAgent', '37', '/tmp/ai-chaos/fault.jar', 'stop']' returned non-zero exit status 1.",
+  "cleanup_errors": [
+    "Command '['kubectl', '--context', 'k3d-azure-k3d', '--request-timeout=10s', '-n', 'teastore', 'exec', 'deploy/teastore-persistence', '--', 'env', '-u', 'JAVA_TOOL_OPTIONS', 'java', '-Xmx32m', '--add-modules', 'jdk.attach', '-cp', '/tmp/ai-chaos', 'FaultAgent', '37', '/tmp/ai-chaos/fault.jar', 'stop']' returned non-zero exit status 1."
+  ]
+}
