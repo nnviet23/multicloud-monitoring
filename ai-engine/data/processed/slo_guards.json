@@ -1,0 +1,102 @@
+{
+  "method": "max(old_constant, p99.5 x 1.3); recovery max(old_constant, p99 x 1.1)",
+  "global": {
+    "probe_healthy_ms": 702.0,
+    "probe_slow_ms": 722.0,
+    "probe_recovered_ms": 603.4,
+    "entry_healthy_ms": 651.3,
+    "entry_slo_ms": 681.3,
+    "server_healthy_s": 0.5,
+    "server_recovered_s": 0.25,
+    "client_healthy_s": 0.05
+  },
+  "entities": {
+    "aws:teastore-image": {
+      "server_healthy_s": 0.5,
+      "server_recovered_s": 0.25,
+      "client_healthy_s": 0.05
+    },
+    "aws:teastore-registry": {
+      "server_healthy_s": 0.5,
+      "server_recovered_s": 0.25,
+      "client_healthy_s": 0.05
+    },
+    "aws:teastore-webui": {
+      "server_healthy_s": 0.6313,
+      "server_recovered_s": 0.5323,
+      "client_healthy_s": 0.05
+    },
+    "azure:teastore-auth": {
+      "server_healthy_s": 0.5,
+      "server_recovered_s": 0.25,
+      "client_healthy_s": 0.247
+    },
+    "azure:teastore-persistence": {
+      "server_healthy_s": 0.5,
+      "server_recovered_s": 0.25,
+      "client_healthy_s": 0.286
+    },
+    "gcp:teastore-recommender": {
+      "server_healthy_s": 0.5,
+      "server_recovered_s": 0.25,
+      "client_healthy_s": 0.455
+    }
+  },
+  "evidence": {
+    "aws:teastore-image": {
+      "rows": 1104,
+      "server_p99_s": 0.0049,
+      "server_p99_5_s": 0.0049,
+      "client_p99_s": 0.0047,
+      "client_p99_5_s": 0.008
+    },
+    "aws:teastore-registry": {
+      "rows": 1104,
+      "server_p99_s": 0.0047,
+      "server_p99_5_s": 0.0047,
+      "client_p99_s": 0.0,
+      "client_p99_5_s": 0.0
+    },
+    "aws:teastore-webui": {
+      "rows": 1104,
+      "server_p99_s": 0.4839,
+      "server_p99_5_s": 0.4856,
+      "client_p99_s": 0.0049,
+      "client_p99_5_s": 0.0049
+    },
+    "azure:teastore-auth": {
+      "rows": 1104,
+      "server_p99_s": 0.0049,
+      "server_p99_5_s": 0.0049,
+      "client_p99_s": 0.19,
+      "client_p99_5_s": 0.19
+    },
+    "azure:teastore-persistence": {
+      "rows": 1104,
+      "server_p99_s": 0.0048,
+      "server_p99_5_s": 0.0048,
+      "client_p99_s": 0.045,
+      "client_p99_5_s": 0.22
+    },
+    "gcp:teastore-recommender": {
+      "rows": 1104,
+      "server_p99_s": 0.0049,
+      "server_p99_5_s": 0.005,
+      "client_p99_s": 0.3203,
+      "client_p99_5_s": 0.35
+    },
+    "probe": {
+      "samples": 1088,
+      "p99_ms": 548.5,
+      "p99_5_ms": 555.4
+    }
+  },
+  "fit_scope": "train_only",
+  "probe_sources": [
+    {
+      "file": "experiments/raw/20261112_teastore_normal-baseline_run02/workload/probe.csv",
+      "probes_ok": 1424,
+      "probes_in_train": 1088
+    }
+  ]
+}

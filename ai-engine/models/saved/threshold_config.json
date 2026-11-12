@@ -1,7 +1,21 @@
 {
   "architecture": "Universal Per-Entity GRU + TCN Autoencoder Ensemble (V3)",
   "scoring_module": "models.scoring.compute_directional_errors",
-  "calibration_scope": "disjoint_chronological_validation_set",
+  "calibration_scope": "disjoint_validation_set (blocked_interleaved_with_embargo)",
+  "training_data": {
+    "source_runs": [
+      "20261112_teastore_normal-baseline_run02"
+    ],
+    "split_strategy": "blocked_interleaved_with_embargo",
+    "split_parameters": {
+      "split_block_rows": 60,
+      "val_every_n_blocks": 5,
+      "embargo_rows": 12,
+      "max_gap_seconds": 25,
+      "sampling_interval_seconds": 10,
+      "val_split": 0.2
+    }
+  },
   "num_features": 8,
   "features": [
     "qps",
@@ -14,14 +28,14 @@
     "gc_pause_rate"
   ],
   "error_distribution": {
-    "mean": 0.00481,
-    "std": 0.004614,
-    "p95": 0.012647,
-    "p99": 0.020693,
-    "p99_5": 0.021299,
-    "max": 0.021904
+    "mean": 0.019147,
+    "std": 0.132005,
+    "p95": 0.02092,
+    "p99": 0.505278,
+    "p99_5": 0.90803,
+    "max": 2.145322
   },
-  "recommended_threshold_p99": 0.35,
+  "recommended_threshold_p99": 2.4671,
   "dual_sliding_window": {
     "short_window": 3,
     "long_window": 18,
@@ -30,74 +44,170 @@
   "likelihood_calibration": {
     "calibration_method": "logistic_boundary_anchored",
     "score_input": "min(current_mse,short_mean_mse)",
-    "temperature": 0.075121,
+    "temperature": 0.532729,
     "threshold_anchor_prob_pct": 50.0,
-    "brier_score": 9e-05,
-    "expected_calibration_error": 0.009078,
-    "log_loss": 0.009123,
-    "normal_val_mean_prob_pct": 0.99,
-    "normal_val_p95_prob_pct": 1.08,
-    "normal_val_max_prob_pct": 1.19,
-    "fault_min_prob_pct": 100.0,
-    "fault_mean_prob_pct": 100.0,
-    "calibration_verified": true,
-    "scope": "normal_validation_and_synthetic_reference_faults",
-    "validation_sha256": "f8caa2f9c5d262ba7635e0230a0cff39aa725932fe2776de5dc53a6ecee5c6c9",
-    "model_sha256": {
-      "gru_autoencoder.pt": "c24beb13b45fa390338a72b029173b59982c8f1601b03c3e0a1d5fd364668461",
-      "tcn_autoencoder.pt": "690d648b4a9dd3514c7772e08cba01213bd5f5c80c5f3e15470832988c6125dd"
-    }
+    "brier_score": 0.000356,
+    "expected_calibration_error": 0.010624,
+    "log_loss": 0.01087,
+    "normal_val_mean_prob_pct": 1.01,
+    "normal_val_p95_prob_pct": 1.0,
+    "normal_val_max_prob_pct": 9.58,
+    "fault_min_prob_pct": 47.9,
+    "fault_mean_prob_pct": 89.46,
+    "calibration_verified": false
   },
   "feature_rca_baselines": {
     "qps": {
-      "mean_sq_err": 0.003071,
-      "p95_sq_err": 0.009211,
-      "p99_sq_err": 0.012682,
+      "mean_sq_err": 0.000711,
+      "p95_sq_err": 0.002247,
+      "p99_sq_err": 0.004049,
       "rca_trigger_threshold": 0.4
     },
     "server_latency_p95": {
-      "mean_sq_err": 0.005487,
-      "p95_sq_err": 0.033426,
-      "p99_sq_err": 0.059688,
+      "mean_sq_err": 0.005775,
+      "p95_sq_err": 0.035698,
+      "p99_sq_err": 0.089361,
       "rca_trigger_threshold": 0.4
     },
     "client_latency_p95": {
-      "mean_sq_err": 0.000108,
-      "p95_sq_err": 0.00033,
-      "p99_sq_err": 0.001001,
-      "rca_trigger_threshold": 0.4
+      "mean_sq_err": 0.139174,
+      "p95_sq_err": 0.108831,
+      "p99_sq_err": 4.038308,
+      "rca_trigger_threshold": 6.0575
     },
     "error_rate_5xx": {
-      "mean_sq_err": 2.6e-05,
-      "p95_sq_err": 6.5e-05,
-      "p99_sq_err": 9.3e-05,
+      "mean_sq_err": 4e-06,
+      "p95_sq_err": 1.3e-05,
+      "p99_sq_err": 3.2e-05,
       "rca_trigger_threshold": 0.4
     },
     "max_pod_cpu_pct": {
-      "mean_sq_err": 0.000814,
-      "p95_sq_err": 0.002461,
-      "p99_sq_err": 0.00582,
+      "mean_sq_err": 0.000115,
+      "p95_sq_err": 0.000399,
+      "p99_sq_err": 0.002312,
       "rca_trigger_threshold": 0.4
     },
     "max_pod_ram_pct": {
-      "mean_sq_err": 0.01398,
-      "p95_sq_err": 0.042689,
-      "p99_sq_err": 0.09087,
+      "mean_sq_err": 0.003305,
+      "p95_sq_err": 0.015192,
+      "p99_sq_err": 0.032467,
       "rca_trigger_threshold": 0.4
     },
     "ram_floor_2m_pct": {
-      "mean_sq_err": 0.012294,
-      "p95_sq_err": 0.050259,
-      "p99_sq_err": 0.054462,
+      "mean_sq_err": 0.003482,
+      "p95_sq_err": 0.014953,
+      "p99_sq_err": 0.046299,
       "rca_trigger_threshold": 0.4
     },
     "gc_pause_rate": {
-      "mean_sq_err": 0.002702,
-      "p95_sq_err": 0.009136,
-      "p99_sq_err": 0.011366,
+      "mean_sq_err": 0.000607,
+      "p95_sq_err": 0.003159,
+      "p99_sq_err": 0.009922,
       "rca_trigger_threshold": 0.4
     }
   },
   "isolation_forest_val_normal_pct": 100.0,
-  "training_duration_sec": 90.22
+  "slo_guards": {
+    "method": "max(old_constant, p99.5 x 1.3); recovery max(old_constant, p99 x 1.1)",
+    "global": {
+      "probe_healthy_ms": 702.0,
+      "probe_slow_ms": 722.0,
+      "probe_recovered_ms": 603.4,
+      "entry_healthy_ms": 651.3,
+      "entry_slo_ms": 681.3,
+      "server_healthy_s": 0.5,
+      "server_recovered_s": 0.25,
+      "client_healthy_s": 0.05
+    },
+    "entities": {
+      "aws:teastore-image": {
+        "server_healthy_s": 0.5,
+        "server_recovered_s": 0.25,
+        "client_healthy_s": 0.05
+      },
+      "aws:teastore-registry": {
+        "server_healthy_s": 0.5,
+        "server_recovered_s": 0.25,
+        "client_healthy_s": 0.05
+      },
+      "aws:teastore-webui": {
+        "server_healthy_s": 0.6313,
+        "server_recovered_s": 0.5323,
+        "client_healthy_s": 0.05
+      },
+      "azure:teastore-auth": {
+        "server_healthy_s": 0.5,
+        "server_recovered_s": 0.25,
+        "client_healthy_s": 0.247
+      },
+      "azure:teastore-persistence": {
+        "server_healthy_s": 0.5,
+        "server_recovered_s": 0.25,
+        "client_healthy_s": 0.286
+      },
+      "gcp:teastore-recommender": {
+        "server_healthy_s": 0.5,
+        "server_recovered_s": 0.25,
+        "client_healthy_s": 0.455
+      }
+    },
+    "evidence": {
+      "aws:teastore-image": {
+        "rows": 1104,
+        "server_p99_s": 0.0049,
+        "server_p99_5_s": 0.0049,
+        "client_p99_s": 0.0047,
+        "client_p99_5_s": 0.008
+      },
+      "aws:teastore-registry": {
+        "rows": 1104,
+        "server_p99_s": 0.0047,
+        "server_p99_5_s": 0.0047,
+        "client_p99_s": 0.0,
+        "client_p99_5_s": 0.0
+      },
+      "aws:teastore-webui": {
+        "rows": 1104,
+        "server_p99_s": 0.4839,
+        "server_p99_5_s": 0.4856,
+        "client_p99_s": 0.0049,
+        "client_p99_5_s": 0.0049
+      },
+      "azure:teastore-auth": {
+        "rows": 1104,
+        "server_p99_s": 0.0049,
+        "server_p99_5_s": 0.0049,
+        "client_p99_s": 0.19,
+        "client_p99_5_s": 0.19
+      },
+      "azure:teastore-persistence": {
+        "rows": 1104,
+        "server_p99_s": 0.0048,
+        "server_p99_5_s": 0.0048,
+        "client_p99_s": 0.045,
+        "client_p99_5_s": 0.22
+      },
+      "gcp:teastore-recommender": {
+        "rows": 1104,
+        "server_p99_s": 0.0049,
+        "server_p99_5_s": 0.005,
+        "client_p99_s": 0.3203,
+        "client_p99_5_s": 0.35
+      },
+      "probe": {
+        "samples": 1088,
+        "p99_ms": 548.5,
+        "p99_5_ms": 555.4
+      }
+    },
+    "fit_scope": "train_only",
+    "probe_sources": [
+      {
+        "file": "experiments/raw/20261112_teastore_normal-baseline_run02/workload/probe.csv",
+        "probes_ok": 1424,
+        "probes_in_train": 1088
+      }
+    ]
+  },
+  "training_duration_sec": 863.27
 }

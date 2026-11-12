@@ -201,7 +201,7 @@ def load_training_probes(df, raw_paths, tolerance_seconds=6.0):
         nearest = np.where(np.abs(t - left) <= np.abs(right - t), pos - 1, pos)
         ok = (np.abs(stamps[nearest] - t) <= tolerance_seconds) & (cycles.to_numpy()[nearest] == "train")
         kept.extend(probes["probe_ms"].to_numpy(dtype=np.float64)[ok].tolist())
-        sources.append({"file": probe_path, "probes_ok": int(len(probes)), "probes_in_train": int(ok.sum())})
+        sources.append({"file": os.path.relpath(probe_path, os.getcwd()), "probes_ok": int(len(probes)), "probes_in_train": int(ok.sum())})
     return kept, sources
 
 

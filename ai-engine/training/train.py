@@ -282,6 +282,14 @@ def main():
             "rca_trigger_threshold": round(max(0.40, f_p99 * 1.5), 4),
         }
 
+    summary_path = os.path.join(processed_dir, "preprocess_summary.json")
+    data_summary = {}
+    if os.path.isfile(summary_path):
+        with open(summary_path, "r", encoding="utf-8") as f:
+            data_summary = json.load(f)
+    split_strategy = data_summary.get("split_strategy", "strict_chronological_per_entity_pre_windowing")
+    source_runs = data_summary.get("source_runs", [])
+
     guards_path = os.path.join(processed_dir, "slo_guards.json")
     slo_guards = None
     if os.path.isfile(guards_path):
@@ -302,7 +310,9 @@ def main():
     threshold_meta = {
         "architecture": "Universal Per-Entity GRU + TCN Autoencoder Ensemble (V3)",
         "scoring_module": "models.scoring.compute_directional_errors",
-        "calibration_scope": "disjoint_chronological_validation_set",
+        "calibration_scope": f"disjoint_validation_set ({split_strategy})",
+        "training_data": {"source_runs": source_runs, "split_strategy": split_strategy,
+                          "split_parameters": data_summary.get("split_parameters", {})},
         "num_features": input_dim,
         "features": features,
         "error_distribution": {
@@ -354,7 +364,8 @@ def main():
         "# Báo cáo Huấn luyện Hệ thống AI Đa Đám Mây V3 (Zero-Leakage & Unified Scoring)",
         "",
         "## 1. Kiến trúc, Phân tách Dữ liệu & Chống Rò rỉ (Zero Data Leakage)",
-        "- **Chiến lược chia tập dữ liệu**: Chia theo thứ tự thời gian (`strict_chronological_per_entity_pre_windowing`) cho từng thực thể trước khi tính baseline và trước khi cắt cửa sổ trượt.",
+        f"- **Dữ liệu nguồn (`source_runs`)**: {', '.join(f'`{r}`' for r in source_runs) or '`n/a`'}",
+        f"- **Chiến lược chia tập dữ liệu**: `{split_strategy}` (tham số: `{json.dumps(data_summary.get('split_parameters', {}))}`), chia cho từng thực thể trước khi tính baseline và trước khi cắt cửa sổ trượt.",
         "- **Phạm vi tính `entity_baselines.json`**: Chỉ tính trên tập `Train` (`fit_scope = train_only`), tuyệt đối không dùng mẫu của tập `Validation`.",
         "- **Chồng lấn cửa sổ (`Window Overlap`)**: `0` mẫu thời gian dùng chung giữa `train_windows` và `val_windows`.",
         f"- **Số cửa sổ Train (đã tăng cường)**: `{len(train_windows)}`",
