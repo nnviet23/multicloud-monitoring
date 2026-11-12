@@ -1,0 +1,1349 @@
+{
+  "generated_by": "scripts/threshold_sweep.py",
+  "git_commit": "36dfbdbb857aa81212da7c91eb9bde142acc4dc4",
+  "inputs": {
+    "normal": [
+      "experiments/raw/20261112_teastore_normal-baseline_run02/metrics/entity_features.csv"
+    ],
+    "chaos": [
+      "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+      "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+      "experiments/raw/20261112_teastore_fault-campaign_run03/service"
+    ],
+    "excluded": [
+      [
+        "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+        "memory_leak"
+      ]
+    ]
+  },
+  "parameters": {
+    "settle_seconds": 30,
+    "metrics": "model-only replay (no SLO guards / recovery logic)"
+  },
+  "model_sha256": {
+    "entity_baselines.json": "dbd9bcf498b1eb30d1ee6e16339e9625456abe3e8a76dda70c401407dc7f5124",
+    "gru_autoencoder.pt": "1bba441e4004ee1d86cf018eee76fa66cca2e816f4b219543fd55a4720b13e74",
+    "isolation_forest.joblib": "4f2624c84d6707953be694021ec2be5ef7fd0386190c6cd6d40549ef9b4d0244",
+    "tcn_autoencoder.pt": "ec01c29344b67000aeb0083fb62efd6e932a4958a85b12a6f619ccb932e5515c",
+    "threshold_config.json": "6ce3f335d6a27c1a91edce3995503e59476b89ee977dc723b41966d1d204dfac"
+  },
+  "sweep": [
+    {
+      "threshold": 2.4671,
+      "normal": [
+        {
+          "source": "20261112_teastore_normal-baseline_run02",
+          "samples": 1440,
+          "alert_samples": 0,
+          "false_positive_rate": 0.0,
+          "alert_episodes": 0,
+          "episodes_per_hour": 0.0,
+          "max_mse_p99": 1.9436
+        }
+      ],
+      "faults": [
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "gcp_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 27.3,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "azure_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 36.1,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "aws_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 34.8,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "fault": "cpu",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 88.0,
+          "recall_samples": 0.167
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "fault": "db_lock",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 35.2,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "memory_leak",
+          "samples": 15,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 68.2,
+          "recall_samples": 0.8
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "http_5xx",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 25.7,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "webui_outage",
+          "samples": 6,
+          "detected": false,
+          "localized": false,
+          "detection_seconds": null,
+          "recall_samples": 0.0
+        }
+      ],
+      "recovery_tail_alerts": [
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_aws_wan_delay",
+          "seconds_into_phase": 34,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 35,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 45,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        }
+      ]
+    },
+    {
+      "threshold": 2.2,
+      "normal": [
+        {
+          "source": "20261112_teastore_normal-baseline_run02",
+          "samples": 1440,
+          "alert_samples": 0,
+          "false_positive_rate": 0.0,
+          "alert_episodes": 0,
+          "episodes_per_hour": 0.0,
+          "max_mse_p99": 1.9436
+        }
+      ],
+      "faults": [
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "gcp_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 27.3,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "azure_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 36.1,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "aws_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 34.8,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "fault": "cpu",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 88.0,
+          "recall_samples": 0.167
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "fault": "db_lock",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 35.2,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "memory_leak",
+          "samples": 15,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 68.2,
+          "recall_samples": 0.8
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "http_5xx",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 25.7,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "webui_outage",
+          "samples": 6,
+          "detected": false,
+          "localized": false,
+          "detection_seconds": null,
+          "recall_samples": 0.0
+        }
+      ],
+      "recovery_tail_alerts": [
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_azure_wan_delay",
+          "seconds_into_phase": 35,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_aws_wan_delay",
+          "seconds_into_phase": 34,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "phase": "recovery_after_db_lock",
+          "seconds_into_phase": 35,
+          "entities": [
+            "aws:teastore-webui",
+            "azure:teastore-persistence"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 35,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 45,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        }
+      ]
+    },
+    {
+      "threshold": 2.0,
+      "normal": [
+        {
+          "source": "20261112_teastore_normal-baseline_run02",
+          "samples": 1440,
+          "alert_samples": 0,
+          "false_positive_rate": 0.0,
+          "alert_episodes": 0,
+          "episodes_per_hour": 0.0,
+          "max_mse_p99": 1.9436
+        }
+      ],
+      "faults": [
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "gcp_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 27.3,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "azure_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 26.1,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "aws_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 34.8,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "fault": "cpu",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 78.0,
+          "recall_samples": 0.333
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "fault": "db_lock",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 25.2,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "memory_leak",
+          "samples": 15,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 68.2,
+          "recall_samples": 0.8
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "http_5xx",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 25.7,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "webui_outage",
+          "samples": 6,
+          "detected": false,
+          "localized": false,
+          "detection_seconds": null,
+          "recall_samples": 0.0
+        }
+      ],
+      "recovery_tail_alerts": [
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_azure_wan_delay",
+          "seconds_into_phase": 35,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_aws_wan_delay",
+          "seconds_into_phase": 34,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "phase": "recovery_after_db_lock",
+          "seconds_into_phase": 35,
+          "entities": [
+            "aws:teastore-webui",
+            "azure:teastore-persistence"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 35,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 45,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 55,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        }
+      ]
+    },
+    {
+      "threshold": 1.8,
+      "normal": [
+        {
+          "source": "20261112_teastore_normal-baseline_run02",
+          "samples": 1440,
+          "alert_samples": 0,
+          "false_positive_rate": 0.0,
+          "alert_episodes": 0,
+          "episodes_per_hour": 0.0,
+          "max_mse_p99": 1.9436
+        }
+      ],
+      "faults": [
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "gcp_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 17.3,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "azure_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 26.1,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "aws_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 24.8,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "fault": "cpu",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 78.0,
+          "recall_samples": 0.333
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "fault": "db_lock",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 25.2,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "memory_leak",
+          "samples": 15,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 68.2,
+          "recall_samples": 0.8
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "http_5xx",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 25.7,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "webui_outage",
+          "samples": 6,
+          "detected": false,
+          "localized": false,
+          "detection_seconds": null,
+          "recall_samples": 0.0
+        }
+      ],
+      "recovery_tail_alerts": [
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_azure_wan_delay",
+          "seconds_into_phase": 35,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_aws_wan_delay",
+          "seconds_into_phase": 34,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "phase": "recovery_after_cpu",
+          "seconds_into_phase": 37,
+          "entities": [
+            "gcp:teastore-recommender"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "phase": "recovery_after_db_lock",
+          "seconds_into_phase": 35,
+          "entities": [
+            "aws:teastore-webui",
+            "azure:teastore-persistence"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 35,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 45,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 55,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        }
+      ]
+    },
+    {
+      "threshold": 1.6,
+      "normal": [
+        {
+          "source": "20261112_teastore_normal-baseline_run02",
+          "samples": 1440,
+          "alert_samples": 0,
+          "false_positive_rate": 0.0,
+          "alert_episodes": 0,
+          "episodes_per_hour": 0.0,
+          "max_mse_p99": 1.9436
+        }
+      ],
+      "faults": [
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "gcp_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 17.3,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "azure_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 26.1,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "aws_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 24.8,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "fault": "cpu",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 78.0,
+          "recall_samples": 0.333
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "fault": "db_lock",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 25.2,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "memory_leak",
+          "samples": 15,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 58.2,
+          "recall_samples": 0.867
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "http_5xx",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 25.7,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "webui_outage",
+          "samples": 6,
+          "detected": false,
+          "localized": false,
+          "detection_seconds": null,
+          "recall_samples": 0.0
+        }
+      ],
+      "recovery_tail_alerts": [
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_azure_wan_delay",
+          "seconds_into_phase": 35,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_azure_wan_delay",
+          "seconds_into_phase": 45,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_aws_wan_delay",
+          "seconds_into_phase": 34,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_aws_wan_delay",
+          "seconds_into_phase": 44,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "phase": "recovery_after_cpu",
+          "seconds_into_phase": 37,
+          "entities": [
+            "gcp:teastore-recommender"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "phase": "recovery_after_db_lock",
+          "seconds_into_phase": 35,
+          "entities": [
+            "aws:teastore-webui",
+            "azure:teastore-persistence"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "phase": "recovery_after_db_lock",
+          "seconds_into_phase": 45,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 35,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 45,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 55,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        }
+      ]
+    },
+    {
+      "threshold": 1.4,
+      "normal": [
+        {
+          "source": "20261112_teastore_normal-baseline_run02",
+          "samples": 1440,
+          "alert_samples": 0,
+          "false_positive_rate": 0.0,
+          "alert_episodes": 0,
+          "episodes_per_hour": 0.0,
+          "max_mse_p99": 1.9436
+        }
+      ],
+      "faults": [
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "gcp_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 17.3,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "azure_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 26.1,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "aws_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 24.8,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "fault": "cpu",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 78.0,
+          "recall_samples": 0.333
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "fault": "db_lock",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 25.2,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "memory_leak",
+          "samples": 15,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 58.2,
+          "recall_samples": 0.867
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "http_5xx",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 25.7,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "webui_outage",
+          "samples": 6,
+          "detected": false,
+          "localized": false,
+          "detection_seconds": null,
+          "recall_samples": 0.0
+        }
+      ],
+      "recovery_tail_alerts": [
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_gcp_wan_delay",
+          "seconds_into_phase": 36,
+          "entities": [
+            "gcp:teastore-recommender"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_azure_wan_delay",
+          "seconds_into_phase": 35,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_azure_wan_delay",
+          "seconds_into_phase": 45,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_aws_wan_delay",
+          "seconds_into_phase": 34,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_aws_wan_delay",
+          "seconds_into_phase": 44,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "phase": "recovery_after_cpu",
+          "seconds_into_phase": 37,
+          "entities": [
+            "gcp:teastore-recommender"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "phase": "recovery_after_db_lock",
+          "seconds_into_phase": 35,
+          "entities": [
+            "aws:teastore-webui",
+            "azure:teastore-persistence"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "phase": "recovery_after_db_lock",
+          "seconds_into_phase": 45,
+          "entities": [
+            "aws:teastore-webui",
+            "azure:teastore-persistence"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 35,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 45,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 55,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 65,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        }
+      ]
+    },
+    {
+      "threshold": 1.2,
+      "normal": [
+        {
+          "source": "20261112_teastore_normal-baseline_run02",
+          "samples": 1440,
+          "alert_samples": 5,
+          "false_positive_rate": 0.00347,
+          "alert_episodes": 5,
+          "episodes_per_hour": 1.25,
+          "max_mse_p99": 1.9436
+        }
+      ],
+      "faults": [
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "gcp_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 17.3,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "azure_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 26.1,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "aws_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 24.8,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "fault": "cpu",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 68.0,
+          "recall_samples": 0.5
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "fault": "db_lock",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 25.2,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "memory_leak",
+          "samples": 15,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 58.2,
+          "recall_samples": 0.867
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "http_5xx",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 25.7,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "webui_outage",
+          "samples": 6,
+          "detected": false,
+          "localized": false,
+          "detection_seconds": null,
+          "recall_samples": 0.0
+        }
+      ],
+      "recovery_tail_alerts": [
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_gcp_wan_delay",
+          "seconds_into_phase": 36,
+          "entities": [
+            "gcp:teastore-recommender"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_azure_wan_delay",
+          "seconds_into_phase": 35,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_azure_wan_delay",
+          "seconds_into_phase": 45,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_aws_wan_delay",
+          "seconds_into_phase": 34,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_aws_wan_delay",
+          "seconds_into_phase": 44,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "phase": "recovery_after_cpu",
+          "seconds_into_phase": 37,
+          "entities": [
+            "gcp:teastore-recommender"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "phase": "recovery_after_cpu",
+          "seconds_into_phase": 47,
+          "entities": [
+            "gcp:teastore-recommender"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "phase": "recovery_after_cpu",
+          "seconds_into_phase": 97,
+          "entities": [
+            "gcp:teastore-recommender"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "phase": "recovery_after_db_lock",
+          "seconds_into_phase": 35,
+          "entities": [
+            "aws:teastore-webui",
+            "azure:teastore-persistence"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "phase": "recovery_after_db_lock",
+          "seconds_into_phase": 45,
+          "entities": [
+            "aws:teastore-webui",
+            "azure:teastore-persistence"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 35,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 45,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 55,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 65,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        }
+      ]
+    },
+    {
+      "threshold": 1.0,
+      "normal": [
+        {
+          "source": "20261112_teastore_normal-baseline_run02",
+          "samples": 1440,
+          "alert_samples": 19,
+          "false_positive_rate": 0.01319,
+          "alert_episodes": 18,
+          "episodes_per_hour": 4.5,
+          "max_mse_p99": 1.9436
+        }
+      ],
+      "faults": [
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "gcp_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 17.3,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "azure_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 26.1,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "fault": "aws_wan_delay",
+          "samples": 9,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 24.8,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "fault": "cpu",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 68.0,
+          "recall_samples": 0.5
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "fault": "db_lock",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 25.2,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "memory_leak",
+          "samples": 15,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 58.2,
+          "recall_samples": 0.867
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "http_5xx",
+          "samples": 6,
+          "detected": true,
+          "localized": true,
+          "detection_seconds": 25.7,
+          "recall_samples": 1.0
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "fault": "webui_outage",
+          "samples": 6,
+          "detected": true,
+          "localized": false,
+          "detection_seconds": 15.5,
+          "recall_samples": 0.0
+        }
+      ],
+      "recovery_tail_alerts": [
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_gcp_wan_delay",
+          "seconds_into_phase": 36,
+          "entities": [
+            "gcp:teastore-recommender"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_azure_wan_delay",
+          "seconds_into_phase": 35,
+          "entities": [
+            "aws:teastore-webui",
+            "azure:teastore-auth"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_azure_wan_delay",
+          "seconds_into_phase": 45,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_azure_wan_delay",
+          "seconds_into_phase": 115,
+          "entities": [
+            "gcp:teastore-recommender"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_aws_wan_delay",
+          "seconds_into_phase": 34,
+          "entities": [
+            "aws:teastore-webui",
+            "azure:teastore-auth"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_aws_wan_delay",
+          "seconds_into_phase": 44,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/wan",
+          "phase": "recovery_after_aws_wan_delay",
+          "seconds_into_phase": 54,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "phase": "recovery_after_cpu",
+          "seconds_into_phase": 37,
+          "entities": [
+            "gcp:teastore-recommender"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "phase": "recovery_after_cpu",
+          "seconds_into_phase": 47,
+          "entities": [
+            "gcp:teastore-recommender"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "phase": "recovery_after_cpu",
+          "seconds_into_phase": 97,
+          "entities": [
+            "gcp:teastore-recommender"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "phase": "recovery_after_db_lock",
+          "seconds_into_phase": 35,
+          "entities": [
+            "aws:teastore-webui",
+            "azure:teastore-persistence"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run02/service",
+          "phase": "recovery_after_db_lock",
+          "seconds_into_phase": 45,
+          "entities": [
+            "aws:teastore-webui",
+            "azure:teastore-persistence"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 35,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 45,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 55,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        },
+        {
+          "source": "experiments/raw/20261112_teastore_fault-campaign_run03/service",
+          "phase": "recovery_after_http_5xx",
+          "seconds_into_phase": 65,
+          "entities": [
+            "aws:teastore-webui"
+          ]
+        }
+      ]
+    }
+  ]
+}

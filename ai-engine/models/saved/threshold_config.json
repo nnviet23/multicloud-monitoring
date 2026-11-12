@@ -35,7 +35,7 @@
     "p99_5": 0.90803,
     "max": 2.145322
   },
-  "recommended_threshold_p99": 2.4671,
+  "recommended_threshold_p99": 1.6,
   "dual_sliding_window": {
     "short_window": 3,
     "long_window": 18,
@@ -44,17 +44,23 @@
   "likelihood_calibration": {
     "calibration_method": "logistic_boundary_anchored",
     "score_input": "min(current_mse,short_mean_mse)",
-    "temperature": 0.532729,
+    "temperature": 0.344029,
     "threshold_anchor_prob_pct": 50.0,
-    "brier_score": 0.000356,
-    "expected_calibration_error": 0.010624,
-    "log_loss": 0.01087,
-    "normal_val_mean_prob_pct": 1.01,
-    "normal_val_p95_prob_pct": 1.0,
-    "normal_val_max_prob_pct": 9.58,
-    "fault_min_prob_pct": 47.9,
-    "fault_mean_prob_pct": 89.46,
-    "calibration_verified": false
+    "brier_score": 0.000255,
+    "expected_calibration_error": 0.010654,
+    "log_loss": 0.010794,
+    "normal_val_mean_prob_pct": 1.06,
+    "normal_val_p95_prob_pct": 0.99,
+    "normal_val_max_prob_pct": 27.76,
+    "fault_min_prob_pct": 91.61,
+    "fault_mean_prob_pct": 98.56,
+    "calibration_verified": true,
+    "scope": "normal_validation_and_synthetic_reference_faults",
+    "validation_sha256": "c7bc255179346cda57cedd047660d95cc46fb15c0e7592d7ddae32fffe357ced",
+    "model_sha256": {
+      "gru_autoencoder.pt": "1bba441e4004ee1d86cf018eee76fa66cca2e816f4b219543fd55a4720b13e74",
+      "tcn_autoencoder.pt": "ec01c29344b67000aeb0083fb62efd6e932a4958a85b12a6f619ccb932e5515c"
+    }
   },
   "feature_rca_baselines": {
     "qps": {
@@ -209,5 +215,12 @@
       }
     ]
   },
-  "training_duration_sec": 863.27
+  "training_duration_sec": 863.27,
+  "threshold_selection": {
+    "method": "operating point chosen by replay sweep (ai-engine/inference/replay_eval.py)",
+    "statistical_threshold": 2.4671,
+    "selected_threshold": 1.6,
+    "evidence": "experiments/processed/20261113_threshold-sweep_model-v1.json",
+    "reason": "lowest sweep step with one-step margin above the run02 false-positive knee (FP 0 down to 1.4, 0.35% at 1.2); detection 10s faster for gcp/aws WAN, db_lock, memory_leak and cpu recall 0.17->0.33 on campaign A; all extra normal-phase alerts are recovery-window tails <=55s after a fault"
+  }
 }
