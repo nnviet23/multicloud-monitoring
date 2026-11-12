@@ -1,0 +1,58 @@
+schema_version: "1.0"
+experiment_id: "20261112_teastore_fault-campaign_run03"
+status: "valid" # planned | running | valid | invalid | incomplete
+purpose: "Campaign A (part 2, service faults memory_leak/http_5xx/webui_outage only): real fault injection on the 4-cluster lab with the deployed model v1 (online detector, Telegram disabled). Results are used for offline tuning of v2, so they are NOT the final held-out evaluation (that is campaign B)."
+started_at_utc: "2026-11-12T23:37:01Z"
+ended_at_utc: "2026-11-12T23:52:12Z"
+
+repository:
+  commit: "3d982e4"
+  branch: "AI"
+  dirty: false
+  model: "v1 (ai-engine/models/saved/model_v1_sha256.txt; exact hashes in raw/20261112_teastore_fault-campaign_run03/system/model_sha256.txt)"
+
+workload:
+  application: "TeaStore"
+  scenario: "fault-campaign"
+  entrypoint: "http://localhost:8080/tools.descartes.teastore.webui (AWS nginx-api-gateway)"
+  load_tool: "runner-internal stdlib load (12 users) started by each chaos runner"
+  concurrency: {users: 12}
+  fault_injection:
+    wan_runner: "skipped (WAN_SCENARIOS empty)"
+    service_runner: "tests/chaos/run_service_faults.py --fault 90 --recovery 150 --interval 10"
+    service_faults:
+      memory_leak: "JVM attach gradual heap leak (<=6 MiB/0.9s, stops at 86% heap or 88% container working set) in azure:teastore-persistence, 180s"
+      http_5xx: "POST cartAction with invalid productid every 0.35s (HTTP 500 verified) on aws:teastore-webui"
+      webui_outage: "scale aws deploy/teastore-webui to 0, then restore replicas"
+  anomaly_label: "per phase in events.json"
+
+environment:
+  clusters: ["hub-k3d", "aws-k3d", "azure-k3d", "gcp-k3d"]
+  node_profile: "k3s v1.31.2+k3s1, 1 server per cluster, single host 16 vCPU / 12.8 GiB RAM"
+  network_profile: "baseline netem delay 10ms 2ms loss 0.1% on each spoke (verified before start)"
+
+telemetry:
+  detector: "ai-engine/inference/detector.py --interval 10 --disable-telegram (spawned by each runner; one detector per runner)"
+  outputs: "detector.json (per-cycle records incl. entity_features), events.json (phase timeline), report.json"
+
+artifacts:
+  raw:
+    - "experiments/raw/20261112_teastore_fault-campaign_run03/wan/"
+    - "experiments/raw/20261112_teastore_fault-campaign_run03/service/"
+    - "experiments/raw/20261112_teastore_fault-campaign_run03/system/model_sha256.txt"
+  processed: []
+  logs:
+    - "experiments/raw/20261112_teastore_fault-campaign_run03/system/run.log"
+    - "experiments/raw/20261112_teastore_fault-campaign_run03/system/wan_runner.log"
+    - "experiments/raw/20261112_teastore_fault-campaign_run03/system/service_runner.log"
+
+quality:
+  validity_reason: >-
+    All scenarios PASS, runner rc=0, no cleanup errors. memory_leak 12/15 fault samples alerted by the model with
+    MEMORY_LEAK_GC_STALL on azure:teastore-persistence and no container restart; http_5xx 6/6 model alerts with
+    error_rate_5xx RCA on aws:teastore-webui; webui_outage 5/6 alerts from the HTTP probe guard (expected: the
+    stopped service has no JVM telemetry); baseline and all recoveries 0 alerts.
+  missing_data_notes: ["webui JVM telemetry absent during webui_outage by design"]
+  deviations:
+    - "completes campaign A: run02 provided the WAN, cpu and db_lock results; this run executes only the service faults that did not run validly there (SERVICE_SCENARIOS subset, WAN stage skipped)"
+    - "environment differs from run02 by the persistence memory limit 768Mi (3d982e4); memory_leak runs 180s, gradual and cgroup-bounded"

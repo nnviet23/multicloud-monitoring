@@ -1,0 +1,130 @@
+{
+  "mode": "real_service_faults",
+  "results": [
+    {
+      "id": "baseline",
+      "start": "2026-11-12T23:37:09.449213+00:00",
+      "end": "2026-11-12T23:38:09.455136+00:00",
+      "samples": 3,
+      "alerts": 0,
+      "model_alerts": 0,
+      "rca_causes": [],
+      "passed": true
+    },
+    {
+      "id": "memory_leak",
+      "start": "2026-11-12T23:38:09.750206+00:00",
+      "end": "2026-11-12T23:41:09.770236+00:00",
+      "jvm_memory_agent_attached": true,
+      "target": "azure:teastore-persistence",
+      "samples": 15,
+      "alerts": 12,
+      "model_alerts": 12,
+      "rca_causes": [
+        "[azure:teastore-persistence] gc_pause_rate (lệch x65.4)",
+        "[azure:teastore-persistence] max_pod_ram_pct (lệch x1.6)",
+        "[azure:teastore-persistence] gc_pause_rate (lệch x74.0)",
+        "[azure:teastore-persistence] max_pod_ram_pct (lệch x2.0)",
+        "[azure:teastore-persistence] gc_pause_rate (lệch x79.0)",
+        "[azure:teastore-persistence] max_pod_ram_pct (lệch x1.9)",
+        "[azure:teastore-persistence] gc_pause_rate (lệch x82.3)",
+        "[azure:teastore-persistence] max_pod_ram_pct (lệch x2.1)",
+        "[azure:teastore-persistence] gc_pause_rate (lệch x84.9)",
+        "[azure:teastore-persistence] max_pod_ram_pct (lệch x1.7)",
+        "[azure:teastore-persistence] gc_pause_rate (lệch x91.7)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x8.0)",
+        "[azure:teastore-persistence] gc_pause_rate (lệch x107.4)",
+        "[azure:teastore-persistence] max_pod_ram_pct (lệch x2.2)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x20.5)",
+        "[azure:teastore-persistence] gc_pause_rate (lệch x117.7)",
+        "[MEMORY_LEAK_GC_STALL] azure:teastore-persistence (RAM_Floor=72.2%, GC=0.155s/s)",
+        "[azure:teastore-persistence] gc_pause_rate (lệch x125.1)",
+        "[azure:teastore-persistence] ram_floor_2m_pct (lệch x3.7)",
+        "[MEMORY_LEAK_GC_STALL] azure:teastore-persistence (RAM_Floor=85.6%, GC=0.045s/s)",
+        "[azure:teastore-persistence] gc_pause_rate (lệch x84.6)",
+        "[azure:teastore-persistence] ram_floor_2m_pct (lệch x8.1)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x4.3)",
+        "[azure:teastore-persistence] gc_pause_rate (lệch x58.2)",
+        "[azure:teastore-persistence] ram_floor_2m_pct (lệch x8.4)",
+        "[MEMORY_LEAK_GC_STALL] azure:teastore-persistence (RAM_Floor=86.4%, GC=0.045s/s)",
+        "[azure:teastore-persistence] gc_pause_rate (lệch x42.3)",
+        "[azure:teastore-persistence] ram_floor_2m_pct (lệch x9.2)"
+      ],
+      "passed": true
+    },
+    {
+      "id": "recovery_after_memory_leak",
+      "start": "2026-11-12T23:41:12.233888+00:00",
+      "end": "2026-11-12T23:43:42.248845+00:00",
+      "samples": 12,
+      "alerts": 0,
+      "model_alerts": 0,
+      "rca_causes": [],
+      "passed": true
+    },
+    {
+      "id": "http_5xx",
+      "start": "2026-11-12T23:43:42.281696+00:00",
+      "end": "2026-11-12T23:45:12.290887+00:00",
+      "http_500_verified": true,
+      "status_code": 500,
+      "samples": 6,
+      "alerts": 6,
+      "model_alerts": 6,
+      "rca_causes": [
+        "[aws:teastore-webui] error_rate_5xx (lệch x131.4)",
+        "[aws:teastore-webui] max_pod_ram_pct (lệch x25.2)",
+        "[aws:teastore-webui] error_rate_5xx (lệch x146.9)",
+        "[aws:teastore-webui] max_pod_ram_pct (lệch x30.3)",
+        "[aws:teastore-webui] error_rate_5xx (lệch x157.1)",
+        "[aws:teastore-webui] max_pod_ram_pct (lệch x37.6)",
+        "[aws:teastore-webui] error_rate_5xx (lệch x163.7)",
+        "[aws:teastore-webui] max_pod_ram_pct (lệch x40.7)",
+        "[aws:teastore-webui] error_rate_5xx (lệch x168.8)",
+        "[aws:teastore-webui] max_pod_ram_pct (lệch x40.8)",
+        "[aws:teastore-webui] error_rate_5xx (lệch x172.0)",
+        "[aws:teastore-webui] max_pod_ram_pct (lệch x42.1)"
+      ],
+      "passed": true
+    },
+    {
+      "id": "recovery_after_http_5xx",
+      "start": "2026-11-12T23:45:12.294481+00:00",
+      "end": "2026-11-12T23:47:42.309700+00:00",
+      "samples": 12,
+      "alerts": 0,
+      "model_alerts": 0,
+      "rca_causes": [],
+      "passed": true
+    },
+    {
+      "id": "webui_outage",
+      "start": "2026-11-12T23:47:42.532679+00:00",
+      "end": "2026-11-12T23:49:12.541946+00:00",
+      "samples": 6,
+      "alerts": 5,
+      "model_alerts": 0,
+      "rca_causes": [
+        "End-to-End Multi-Cloud Probe Failure (HTTP 0, 2x)",
+        "Sustained Cross-Cloud Latency SLO Breach (Probe=4505ms, WebUI_P95=431ms)",
+        "End-to-End Multi-Cloud Probe Failure (HTTP 502, 3x)",
+        "End-to-End Multi-Cloud Probe Failure (HTTP 502, 4x)",
+        "End-to-End Multi-Cloud Probe Failure (HTTP 502, 5x)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x7.6)"
+      ],
+      "passed": true
+    },
+    {
+      "id": "recovery_after_webui_outage",
+      "start": "2026-11-12T23:49:29.699610+00:00",
+      "end": "2026-11-12T23:51:59.714559+00:00",
+      "samples": 12,
+      "alerts": 0,
+      "model_alerts": 0,
+      "rca_causes": [],
+      "passed": true
+    }
+  ],
+  "error": null,
+  "cleanup_errors": []
+}
