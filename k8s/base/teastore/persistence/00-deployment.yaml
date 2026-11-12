@@ -69,7 +69,9 @@ spec:
               cpu: 100m
               memory: 192Mi
             limits:
-              memory: 512Mi
+              # -Xmx256m heap + ~250Mi non-heap (otel + kieker agents, metaspace, threads):
+              # at 512Mi the kernel OOM-killed the container before the heap could fill.
+              memory: 768Mi
           volumeMounts:
             - name: otel-auto-instrumentation
               mountPath: /otel-auto-instrumentation

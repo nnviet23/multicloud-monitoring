@@ -26,6 +26,16 @@ def sql_command(sql, timeout=150):
                    "sh", sql, str(timeout))
 
 
+# A memory leak is only distinguishable from GC sawtooth through the 120s RAM floor
+# (ram_floor_2m_pct = min heap% over 120s). It must persist past that window plus a few
+# detector cycles, so it runs at least this long regardless of --fault.
+MIN_FAULT_SECONDS = {"memory_leak": 180}
+
+
+def fault_seconds(name, requested):
+    return max(requested, MIN_FAULT_SECONDS.get(name, 0))
+
+
 class Fault:
     JVM_TARGETS = {
         # Recommender runs on the GCP spoke in the 4-cluster topology.
@@ -210,10 +220,10 @@ def main():
     failure = None
     try:
         # Compile the agent before the baseline so compilation is excluded from measurement.
-        prepared = {name: Fault(name, args.fault) for name in args.scenarios}
+        prepared = {name: Fault(name, fault_seconds(name, args.fault)) for name in args.scenarios}
         for fault in prepared.values():
             fault.prepare()
-        total = 60 + len(args.scenarios) * (args.fault + args.recovery)
+        total = 60 + sum(fault_seconds(name, args.fault) + args.recovery for name in args.scenarios)
         env = {**os.environ, "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1", "PYTHONUNBUFFERED": "1"}
         with (output / "detector.log").open("w") as dl, (output / "traffic.log").open("w") as tl:
             children.append(subprocess.Popen([sys.executable, "tests/locust/traffic_generator.py", "--duration", str(total + 180),
@@ -230,7 +240,7 @@ def main():
                 active = prepared[name]
                 active.start()
                 try:
-                    phase(name, args.fault, active.evidence)
+                    phase(name, active.duration, active.evidence)
                 finally:
                     active.close()
                     active = None

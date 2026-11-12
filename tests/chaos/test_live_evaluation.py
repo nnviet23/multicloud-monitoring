@@ -1,6 +1,7 @@
 """Ensure a live test cannot pass on SLO guards or missing telemetry alone."""
 import importlib.util
 from pathlib import Path
+import sys
 import unittest
 
 spec = importlib.util.spec_from_file_location("run_live", Path(__file__).with_name("run_live.py"))
@@ -53,6 +54,21 @@ class LiveEvaluationTests(unittest.TestCase):
         result = live.evaluate([old, *records], [self.phase("baseline")], 30)
         self.assertEqual(result["passed"], 1)
         self.assertEqual(result["results"][0]["samples"], 3)
+
+
+
+sys.modules.setdefault("run_live", live)  # run_service_faults imports run_live by name
+service_spec = importlib.util.spec_from_file_location("run_service_faults", Path(__file__).with_name("run_service_faults.py"))
+service = importlib.util.module_from_spec(service_spec)
+service_spec.loader.exec_module(service)
+
+
+class ServiceFaultDurationTest(unittest.TestCase):
+    def test_memory_leak_outlasts_the_ram_floor_window(self):
+        # ram_floor_2m_pct is a 120s minimum: a shorter leak can never raise it.
+        self.assertGreaterEqual(service.fault_seconds("memory_leak", 90), 120 + 3 * 10)
+        self.assertEqual(service.fault_seconds("cpu", 90), 90)
+        self.assertEqual(service.fault_seconds("memory_leak", 200), 200)
 
 
 if __name__ == "__main__":
