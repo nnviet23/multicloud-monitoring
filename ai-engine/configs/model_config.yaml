@@ -3,7 +3,11 @@
 #               + Exact Tempo Distributed Trace Span Decomposition RCA
 
 data:
+  # Legacy single-file input (3-cluster lab); used only when raw_csv_paths is empty.
   raw_csv_path: "ai-engine/data/raw/multicloud_entity_baseline.csv"
+  # Fault-free experiment runs used for training (run IDs are recorded in preprocess_summary.json).
+  raw_csv_paths:
+    - "experiments/raw/20261112_teastore_normal-baseline_run02/metrics/entity_features.csv"
   processed_dir: "ai-engine/data/processed"
   entity_baselines_path: "ai-engine/models/saved/entity_baselines.json"
 
@@ -38,8 +42,17 @@ data:
   # Sliding Window Parameters (12 samples * 10s = 120s context window)
   window_size: 12
   stride: 1
-  val_split: 0.2
+  val_split: 0.2            # chronological strategy only
   random_seed: 42
+  # Blocked split: every 5th 10-minute block of each (run, entity) timeline is
+  # validation (20%), with a 12-sample embargo on both sides; windows never
+  # cross gaps longer than max_gap_seconds.
+  split_strategy: "blocked"
+  sampling_interval_seconds: 10
+  split_block_rows: 60
+  val_every_n_blocks: 5
+  embargo_rows: 12
+  max_gap_seconds: 25
 
   # Online Zero-Shot Auto-Calibration for newly added Cloud Providers or Services
   auto_calibration_samples: 30
