@@ -114,7 +114,7 @@ def drop_incomplete_rows(df):
     """
     if "missing_metrics" not in df.columns:
         return df, 0
-    missing = df["missing_metrics"].fillna("").astype(str)
+    missing = df["missing_metrics"].astype(object).where(df["missing_metrics"].notna(), "").astype(str)
     bad = missing.apply(lambda text: any(m in text.split(";") for m in REQUIRED_RESOURCE_METRICS))
     return df[~bad].reset_index(drop=True), int(bad.sum())
 
@@ -472,6 +472,10 @@ def main():
         val_windows, val_counts, val_stamps = build_chunk_windows(df, baselines, features, window_size, stride, "val")
         if train_stamps & val_stamps:
             raise AssertionError("Train/validation windows share timestamps")
+        if not len(val_windows) or not len(base_train_windows):
+            raise ValueError(
+                f"Blocked split produced {len(base_train_windows)} train and {len(val_windows)} validation windows; "
+                "collect more data or lower split_block_rows / val_every_n_blocks")
         entity_window_counts = {
             key: {"train_windows": int(train_counts.get(key, 0)), "val_windows": int(val_counts.get(key, 0)),
                   "total_windows": int(train_counts.get(key, 0) + val_counts.get(key, 0))}
