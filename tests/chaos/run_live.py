@@ -135,7 +135,9 @@ def evaluate(records, phases, settle, slow_ms=None):
         model_alerts = [r for r in selected if r.get("model_alert")]
         causes = [cause for r in alerts for cause in r.get("rca_causes", [])]
         fault = phase["id"] in FAULTS
-        expected = f"[CROSS_CLOUD_WAN_DELAY] aws->{FAULTS[phase['id']][0]}" if fault else ""
+        # Exact-cloud RCA: the detector must name the faulted cloud as the one WAN path that
+        # explains every delayed link (an aws egress fault has no "aws->aws" link to report).
+        expected = f"[CROSS_CLOUD_WAN_DELAY] localized_cloud={FAULTS[phase['id']][0]} " if fault else ""
         rca_ok = any(expected in cause for cause in causes) if fault else True
         coverage = len(selected) >= 3 and all(r.get("entity_count", 0) >= 6
             and r.get("telemetry_complete", True) and r.get("verdict") != "UNKNOWN" for r in selected)

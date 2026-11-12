@@ -162,6 +162,71 @@ class TraceEvidenceTests(unittest.TestCase):
         self.assertIsNone(cache.active_db(entities, 140))
 
 
+class WanLocalizationTests(unittest.TestCase):
+    """Cloud-level WAN fault localisation from the run02 campaign trace values."""
+    ENTITIES = ["aws:teastore-webui", "aws:teastore-registry", "azure:teastore-persistence",
+                "azure:teastore-auth", "gcp:teastore-recommender"]
+
+    def results(self, slow_clients=()):
+        return {e: {"raw": {"client_latency_p95": 0.6 if e in slow_clients else 0.02,
+                            "server_latency_p95": 0.005, "max_pod_cpu_pct": 5.0}} for e in self.ENTITIES}
+
+    def observe(self, cache, at, gap=None, rtt=None):
+        gap, rtt = gap or {}, rtt or {}
+        cache.observe({"wan_links": {**gap, **rtt}, "rtt_links": rtt}, f"t{at}", at, at)
+
+    def test_gcp_egress_fault_is_localized_although_the_gap_link_looks_healthy(self):
+        cache = TraceEvidence()
+        self.observe(cache, 100, gap={"aws->gcp (gcp:teastore-recommender)": 20.0,
+                                      "aws->azure (azure:teastore-persistence)": 22.0},
+                     rtt={"gcp->aws (aws:teastore-registry)": 259.0})
+        self.observe(cache, 104, rtt={"azure->aws (aws:teastore-registry)": 21.0})
+        loc = cache.localize(self.results(["gcp:teastore-recommender"]), 105)
+        self.assertEqual(loc["cloud"], "gcp")
+        self.assertIn("azure->aws (aws:teastore-registry)", loc["healthy_rtt"])
+
+    def test_azure_egress_fault(self):
+        cache = TraceEvidence()
+        self.observe(cache, 100, gap={"aws->azure (azure:teastore-persistence)": 190.0},
+                     rtt={"azure->aws (aws:teastore-registry)": 193.0})
+        self.observe(cache, 101, rtt={"gcp->aws (aws:teastore-registry)": 22.0})
+        self.assertEqual(cache.localize(self.results(["azure:teastore-persistence"]), 102)["cloud"], "azure")
+
+    def test_aws_egress_fault_has_aws_as_the_common_endpoint(self):
+        cache = TraceEvidence()
+        self.observe(cache, 90, rtt={"azure->aws (aws:teastore-registry)": 21.0})   # before the fault
+        self.observe(cache, 100, gap={"aws->azure (azure:teastore-persistence)": 212.0,
+                                      "aws->gcp (gcp:teastore-recommender)": 211.0},
+                     rtt={"gcp->aws (aws:teastore-registry)": 211.0})
+        # A healthy round trip observed before the delayed evidence must not exonerate aws.
+        self.assertEqual(cache.localize(self.results(), 101)["cloud"], "aws")
+
+    def test_ambiguous_or_absent_evidence_is_not_localized(self):
+        cache = TraceEvidence()
+        self.observe(cache, 100, gap={"aws->azure (azure:teastore-persistence)": 190.0})
+        self.assertIsNone(cache.localize(self.results(), 101))   # aws or azure: unknown
+        cache = TraceEvidence()
+        self.observe(cache, 100, gap={"aws->azure (azure:teastore-persistence)": 22.0},
+                     rtt={"gcp->aws (aws:teastore-registry)": 20.0})
+        self.assertIsNone(cache.localize(self.results(), 101))
+
+    def test_expired_and_forgotten_evidence_is_dropped(self):
+        cache = TraceEvidence(ttl=30)
+        self.observe(cache, 100, rtt={"gcp->aws (aws:teastore-registry)": 259.0})
+        self.assertIsNone(cache.localize(self.results(), 140))
+        cache = TraceEvidence()
+        self.observe(cache, 100, rtt={"gcp->aws (aws:teastore-registry)": 259.0})
+        cache.forget("aws:teastore-registry", now=101)
+        self.assertIsNone(cache.localize(self.results(), 102))
+
+    def test_caller_side_symptom_keeps_link_evidence(self):
+        cache = TraceEvidence()
+        self.observe(cache, 100, rtt={"gcp->aws (aws:teastore-registry)": 259.0})
+        self.assertIn("gcp->aws (aws:teastore-registry)",
+                      cache.active(self.results(["gcp:teastore-recommender"]), 101))
+        self.assertNotIn("gcp->aws (aws:teastore-registry)", cache.active(self.results(), 101))
+
+
 class LikelihoodRecoveryTests(unittest.TestCase):
     def test_duplicate_export_cannot_confirm_a_new_anomaly(self):
         scorer = DualSlidingWindowScorer(0.005, 0.005, 0.35, short_w=3)

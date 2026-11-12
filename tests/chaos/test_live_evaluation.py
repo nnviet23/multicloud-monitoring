@@ -13,7 +13,10 @@ class LiveEvaluationTests(unittest.TestCase):
     def phase(self, name):
         return {"id": name, "start": "2026-10-30T00:00:00+00:00", "end": "2026-10-30T00:01:00+00:00"}
 
-    def records(self, model=True, cause="[CROSS_CLOUD_WAN_DELAY] aws->gcp", **overrides):
+    LOCALIZED = "[CROSS_CLOUD_WAN_DELAY] localized_cloud={} (delayed: gcp->aws=259ms; healthy round-trips: azure->aws)"
+
+    def records(self, model=True, cause=None, **overrides):
+        cause = cause or self.LOCALIZED.format("gcp")
         return [dict(timestamp=f"2026-10-30T00:00:{second:02d}Z", verdict="ALERT",
                      model_alert=model, rca_causes=[cause], entity_count=6,
                      probe_ok=True, probe_ms=50, **overrides) for second in [36, 42, 48]]
@@ -22,7 +25,14 @@ class LiveEvaluationTests(unittest.TestCase):
         phases = [self.phase("gcp_wan_delay")]
         self.assertEqual(live.evaluate(self.records(), phases, 30)["passed"], 1)
         self.assertEqual(live.evaluate(self.records(model=False), phases, 30)["passed"], 0)
-        self.assertEqual(live.evaluate(self.records(cause="[CROSS_CLOUD_WAN_DELAY] aws->azure"), phases, 30)["passed"], 0)
+        self.assertEqual(live.evaluate(self.records(cause=self.LOCALIZED.format("azure")), phases, 30)["passed"], 0)
+        # A delayed link alone does not name the faulted cloud.
+        self.assertEqual(live.evaluate(self.records(cause="[CROSS_CLOUD_WAN_DELAY] aws->gcp (gcp:teastore-recommender) (T_WAN=250ms)"),
+                                       phases, 30)["passed"], 0)
+
+    def test_aws_egress_fault_is_scorable(self):
+        phases = [self.phase("aws_wan_delay")]
+        self.assertEqual(live.evaluate(self.records(cause=self.LOCALIZED.format("aws")), phases, 30)["passed"], 1)
 
     def test_no_samples_or_incomplete_telemetry_never_pass(self):
         phases = [self.phase("gcp_wan_delay")]

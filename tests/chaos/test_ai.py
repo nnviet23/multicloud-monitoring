@@ -116,6 +116,14 @@ class RootCauseTests(unittest.TestCase):
         self.assertIn("[CROSS_CLOUD_WAN_DELAY] aws->gcp", causes[0])
         self.assertNotIn("azure", causes[0])
 
+    def test_localized_wan_cloud_is_reported_first(self):
+        trace = {"wan_links": {"gcp->aws (aws:teastore-registry)": 259},
+                 "wan_localization": {"cloud": "gcp", "delayed": {"gcp->aws (aws:teastore-registry)": 259.0},
+                                      "healthy_rtt": {"azure->aws (aws:teastore-registry)": 21.0}}}
+        causes = self.rca({}, trace)
+        self.assertTrue(causes[0].startswith("[CROSS_CLOUD_WAN_DELAY] localized_cloud=gcp "), causes)
+        self.assertIn("healthy round-trips: azure->aws", causes[0])
+
     def test_slow_webui_and_downstream_cpu_are_not_proof_of_wan_fault(self):
         entities = {"aws:teastore-webui": self.entity(server_latency_p95=0.7, client_latency_p95=0.2),
                     "gcp:teastore-recommender": self.entity(server_latency_p95=0.5, max_pod_cpu_pct=98)}

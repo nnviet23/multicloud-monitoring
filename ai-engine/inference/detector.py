@@ -371,6 +371,7 @@ class TempoTraceAnalyzer:
         summary = {
             "traces_inspected": 0,
             "wan_links": {},
+            "rtt_links": {},
             "entity_wan_ms": {},
             "self_times": {},
             "server_times": {},
@@ -425,7 +426,7 @@ class TempoTraceAnalyzer:
                     # One unreadable trace must not discard evidence from the others.
                     summary["tempo_errors"].append(f"trace {tid}: {type(err).__name__}")
                     continue
-                local = {"wan_links": {}, "entity_wan_ms": {}, "self_times": {},
+                local = {"wan_links": {}, "rtt_links": {}, "entity_wan_ms": {}, "self_times": {},
                          "server_times": {}, "db_time_ms": 0.0, "db_entity": "", "db_target": "MariaDB"}
                 self._decompose_single_trace(t_data, local)
                 start = int(tr_meta.get("startTimeUnixNano", 0) or 0) / 1e9
@@ -433,7 +434,7 @@ class TempoTraceAnalyzer:
                 self.evidence.observe(local, tid, observed_at, now_sec)
                 # Old traces remain RCA evidence, never a current guard or model feature.
                 if now_sec - observed_at <= 20:
-                    for name in ("wan_links", "entity_wan_ms", "self_times", "server_times"):
+                    for name in ("wan_links", "rtt_links", "entity_wan_ms", "self_times", "server_times"):
                         for key, value in local[name].items():
                             summary[name][key] = max(summary[name].get(key, 0.0), value)
                     db_ent = local.get("db_entity") or "azure:teastore-persistence"
@@ -524,6 +525,9 @@ class TempoTraceAnalyzer:
                     summary["wan_links"][link_key] = max(
                         summary["wan_links"].get(link_key, 0.0), wan_lag
                     )
+                    # Client span minus its server span is a full round trip (both legs).
+                    rtt = summary.setdefault("rtt_links", {})
+                    rtt[link_key] = max(rtt.get(link_key, 0.0), wan_lag)
 
             # Exclusive self-execution time
             child_client_sum = 0.0
@@ -731,6 +735,14 @@ def synthesize_multicloud_rca(
     candidates = []
 
     # 1. Check Tempo Span Decomposition for explicit Cross-Cloud WAN delay or Database bottleneck
+    localization = trace_summary.get("wan_localization")
+    if localization:
+        delayed = ", ".join(f"{link.split(' (', 1)[0]}={ms:.0f}ms" for link, ms in localization["delayed"].items())
+        healthy = ", ".join(link.split(" (", 1)[0] for link in localization.get("healthy_rtt", {}))
+        candidates.append(
+            f"[CROSS_CLOUD_WAN_DELAY] localized_cloud={localization['cloud']} "
+            f"(delayed: {delayed}; healthy round-trips: {healthy or 'none'})"
+        )
     for link_name, wan_ms in sorted(trace_summary.get("wan_links", {}).items(), key=lambda x: x[1], reverse=True):
         path = link_name.split(" (", 1)[0].split("->")
         if (wan_ms >= 65.0 and len(path) == 2 and path[0] != path[1]
@@ -1348,6 +1360,7 @@ def main():
             evidence = tempo_analyzer.evidence.active(entity_results, time.time())
             db_evidence = tempo_analyzer.evidence.active_db(entity_results, time.time())
             rca_trace_summary["wan_evidence"] = evidence
+            rca_trace_summary["wan_localization"] = tempo_analyzer.evidence.localize(entity_results, time.time())
             rca_trace_summary["db_evidence"] = db_evidence
             rca_trace_summary["wan_links"] = {**trace_summary["wan_links"],
                                              **{key: value["delay_ms"] for key, value in evidence.items()}}
@@ -1491,6 +1504,7 @@ def main():
                 "tempo_errors": trace_summary.get("tempo_errors", []),
                 "rca_causes": top_causes,
                 "tempo_wan_links": {k: round(v, 2) for k, v in trace_summary.get("wan_links", {}).items()},
+                "wan_localization": rca_trace_summary.get("wan_localization"),
                 "tempo_self_times": {k: round(v, 2) for k, v in trace_summary.get("self_times", {}).items()},
                 "entity_mse_map": {k: round(v["mse"], 5) for k, v in entity_results.items()},
                 # Model inputs as scored (after Tempo fusion), so runs can be replayed

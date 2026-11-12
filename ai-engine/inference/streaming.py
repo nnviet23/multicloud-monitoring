@@ -127,6 +127,7 @@ class TraceEvidence:
         self.ttl = ttl
         self.limits = limits or GuardLimits()
         self.links = {}
+        self.paths = {}      # every observed cross-cloud link (healthy or delayed), latest value
         self.db = None
         self.cleared_at = {}
 
@@ -158,6 +159,56 @@ class TraceEvidence:
             if previous is None or observed_at > previous["observed_at"]:
                 self.links[link] = {"delay_ms": delay, "trace_id": trace_id,
                                     "observed_at": observed_at, "entity": entity}
+        rtt_links = summary.get("rtt_links", {})
+        for link, delay in summary.get("wan_links", {}).items():
+            parsed = self._parse(link)
+            if parsed is None or not math.isfinite(delay):
+                continue
+            source, destination, entity = parsed
+            if source == destination or observed_at <= self.cleared_at.get(entity, -math.inf):
+                continue
+            rtt = link in rtt_links and math.isfinite(rtt_links[link])
+            previous = self.paths.get(link)
+            if previous is None or observed_at > previous["observed_at"]:
+                self.paths[link] = {"delay_ms": rtt_links[link] if rtt else delay, "rtt": rtt,
+                                    "observed_at": observed_at, "entity": entity, "trace_id": trace_id}
+
+    @staticmethod
+    def _parse(link):
+        if " (" not in link:
+            return None
+        path, entity = link.split(" (", 1)
+        if "->" not in path:
+            return None
+        source, destination = path.split("->", 1)
+        return source, destination, entity.rstrip(")")
+
+    def localize(self, entity_results, now, delayed_ms=65.0):
+        """Name the one cloud whose WAN path explains every delayed cross-cloud link.
+
+        A netem/egress fault on cloud X delays every link that touches X, so X is in the
+        intersection of the endpoints of all delayed links. Clouds on a concurrently
+        healthy *round-trip* link (client span minus its child server span, Method A)
+        are exonerated. Gap-decomposed links (Method B) cannot see a one-way delay, so
+        they may accuse but never exonerate. Returns None when evidence is ambiguous.
+        """
+        recent = {link: v for link, v in self.paths.items() if 0 <= now - v["observed_at"] <= self.ttl}
+        delayed = {link: v for link, v in recent.items()
+                   if v["delay_ms"] >= delayed_ms and self.supported(link, entity_results)}
+        if not delayed:
+            return None
+        since = min(v["observed_at"] for v in delayed.values())
+        healthy = {link: v for link, v in recent.items()
+                   if v["rtt"] and v["delay_ms"] < delayed_ms and v["observed_at"] >= since}
+        endpoints = [set(self._parse(link)[:2]) for link in delayed]
+        candidates = set.intersection(*endpoints)
+        exonerated = set().union(*(set(self._parse(link)[:2]) for link in healthy)) if healthy else set()
+        remaining = candidates - exonerated
+        if len(remaining) != 1:
+            return None
+        return {"cloud": remaining.pop(),
+                "delayed": {link: round(v["delay_ms"], 1) for link, v in sorted(delayed.items())},
+                "healthy_rtt": {link: round(v["delay_ms"], 1) for link, v in sorted(healthy.items())}}
 
     @staticmethod
     def supported(link, entity_results):
@@ -170,6 +221,7 @@ class TraceEvidence:
 
     def forget(self, entity, now=None):
         self.links = {link: value for link, value in self.links.items() if value["entity"] != entity}
+        self.paths = {link: value for link, value in self.paths.items() if value["entity"] != entity}
         if self.db is not None and self.db.get("entity") == entity:
             self.db = None
         if now is not None:
@@ -201,8 +253,15 @@ class TraceEvidence:
                 continue
             raw = entity["raw"]
             eid = value["entity"]
+            # An egress delay on the *calling* cloud (e.g. gcp->aws registry calls) leaves the
+            # destination healthy; the callers' client latency carries the symptom instead.
+            source = link.split("->", 1)[0]
+            source_slow = any(
+                r["raw"].get("client_latency_p95", 0.0) > self.limits.entity(other, "client_healthy_s")
+                for other, r in entity_results.items() if other.startswith(source + ":"))
             if (raw["client_latency_p95"] <= self.limits.entity(eid, "client_healthy_s")
-                    and raw["server_latency_p95"] <= self.limits.entity(eid, "server_recovered_s")):
+                    and raw["server_latency_p95"] <= self.limits.entity(eid, "server_recovered_s")
+                    and not source_slow):
                 continue
             result[link] = {**value, "age_seconds": round(now - value["observed_at"], 1)}
         return result
