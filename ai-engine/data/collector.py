@@ -60,6 +60,8 @@ ENTITY_VECTOR_QUERIES = {
     "gc_pause_rate": 'sum by (cloud_provider, service_name) (rate(jvm_gc_duration_seconds_sum[1m]) or rate(process_runtime_jvm_gc_duration_seconds_sum[1m]))',
 }
 
+RAM_FLOOR_WINDOW_SECONDS = 120.0
+
 CLOUD_VECTOR_QUERIES = {
     "wan_network_io_kbs": 'sum by (cloud_provider) (rate(system_network_io_bytes_total[1m])) / 1024',
     "wan_network_errors": 'sum by (cloud_provider) (rate(system_network_errors_total[1m]))',
@@ -212,7 +214,9 @@ def main():
     print("========================================================================\n", flush=True)
 
     client = PrometheusVectorClient(args.prometheus_url)
-    ram_history = collections.defaultdict(lambda: collections.deque(maxlen=12))
+    # RAM floor over a fixed 120s wall-clock horizon (independent of --interval);
+    # the detector imports RAM_FLOOR_WINDOW_SECONDS from here so both stay identical.
+    ram_history = collections.defaultdict(collections.deque)
 
     csv_file = open(args.output, "w", newline="", encoding="utf-8")
     writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
@@ -235,8 +239,11 @@ def main():
             summary_parts = []
 
             for (cp, sn), m in snapshot.items():
-                ram_history[(cp, sn)].append(m["max_pod_ram_pct"])
-                ram_floor = min(ram_history[(cp, sn)])
+                hist = ram_history[(cp, sn)]
+                hist.append((loop_start, m["max_pod_ram_pct"]))
+                while hist and loop_start - hist[0][0] > RAM_FLOOR_WINDOW_SECONDS:
+                    hist.popleft()
+                ram_floor = min(value for _, value in hist)
 
                 row = {
                     "timestamp": now_ts,

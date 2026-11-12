@@ -11,7 +11,7 @@ Key Architectural Capabilities (V3):
   2. Per-Entity Z-Score Standardization & Online Auto-Calibration:
      Applies entity-specific baseline standardization (and 30-sample online calibration
      for newly added clouds/microservices) before feeding 8-feature entity windows
-     into Universal GRU + TCN Autoencoders + Isolation Forest.
+     into Universal GRU + TCN Autoencoders, each entity scored by its own dual-window scorer.
   3. Pod Scale-Out Invariance:
      Uses `max_pod_cpu_pct`, `max_pod_ram_pct`, `ram_floor_2m_pct`, and response-aware
      damping so scaling pods (1 -> N replicas) never causes false alarms.
@@ -24,6 +24,7 @@ Key Architectural Capabilities (V3):
 
 import os
 import sys
+import html
 import math
 import time
 import json
@@ -36,7 +37,6 @@ import urllib.error
 import urllib.parse
 import subprocess
 import argparse
-import joblib
 import numpy as np
 import torch
 
@@ -53,6 +53,7 @@ from models.scoring import (
     ACTIVE_RESOURCE_METRICS,
     EXOGENOUS_WORKLOAD_METRICS,
     DualSlidingWindowScorer,
+    MultiEntityScorer,
     compute_directional_errors,
     compute_batch_directional_errors,
     validate_likelihood_calibration,
@@ -61,6 +62,7 @@ from data.collector import (
     ENTITY_VECTOR_QUERIES,
     CLOUD_VECTOR_QUERIES,
     ACTIVE_JVM_PODS,
+    RAM_FLOOR_WINDOW_SECONDS,  # shared with training data collection
 )
 
 ENTITY_FEATURE_COLS = [
@@ -91,6 +93,9 @@ EXCLUDED_INFRA_SERVICES = {
 }
 
 STOP_REQUESTED = False
+
+# Wall-clock budget for per-trace fetches so one detector cycle cannot stall on Tempo.
+TEMPO_TRACE_FETCH_BUDGET_SECONDS = 4.0
 
 
 def handle_signal(sig, frame):
@@ -223,13 +228,16 @@ class PrometheusVectorClient:
                     except (ValueError, KeyError, IndexError):
                         pass
 
-        # Compute rolling RAM floor per entity across recent exports
+        # Rolling RAM floor over a fixed wall-clock horizon, matching the collector
+        # (12 samples x 10s = 120s). A sample-count window would change meaning
+        # whenever the detector polling interval differs from the training interval.
+        now = time.time()
         for key, mdict in entity_metrics.items():
             hist = self.ram_history.setdefault(key, [])
-            hist.append(mdict["max_pod_ram_pct"])
-            if len(hist) > 4:
+            hist.append((now, mdict["max_pod_ram_pct"]))
+            while hist and now - hist[0][0] > RAM_FLOOR_WINDOW_SECONDS:
                 hist.pop(0)
-            mdict["ram_floor_2m_pct"] = float(min(hist))
+            mdict["ram_floor_2m_pct"] = float(min(value for _, value in hist))
             if mdict["ram_floor_2m_pct"] < 68.0 and mdict["max_pod_ram_pct"] < 68.0:
                 mdict["gc_pause_rate"] = min(mdict["gc_pause_rate"], 0.005)
             elif mdict["ram_floor_2m_pct"] >= 73.0:
@@ -368,6 +376,8 @@ class TempoTraceAnalyzer:
             "db_time_ms": 0.0,
             "db_entity": "",
             "db_target": "MariaDB",
+            "tempo_ok": True,
+            "tempo_errors": [],
         }
         try:
             now_sec = int(time.time())
@@ -397,13 +407,23 @@ class TempoTraceAnalyzer:
 
             traces.sort(key=trace_sort_key, reverse=True)
 
+            fetch_deadline = time.time() + TEMPO_TRACE_FETCH_BUDGET_SECONDS
             for tr_meta in traces[:12]:
                 tid = tr_meta.get("traceID")
                 if not tid:
                     continue
+                remaining = fetch_deadline - time.time()
+                if remaining <= 0:
+                    summary["tempo_errors"].append("trace fetch budget exhausted")
+                    break
                 t_url = f"{self.base_url}/api/traces/{tid}"
-                with urllib.request.urlopen(t_url, timeout=3.0) as resp:
-                    t_data = json.loads(resp.read().decode("utf-8"))
+                try:
+                    with urllib.request.urlopen(t_url, timeout=min(3.0, remaining)) as resp:
+                        t_data = json.loads(resp.read().decode("utf-8"))
+                except Exception as err:
+                    # One unreadable trace must not discard evidence from the others.
+                    summary["tempo_errors"].append(f"trace {tid}: {type(err).__name__}")
+                    continue
                 local = {"wan_links": {}, "entity_wan_ms": {}, "self_times": {},
                          "server_times": {}, "db_time_ms": 0.0, "db_entity": "", "db_target": "MariaDB"}
                 self._decompose_single_trace(t_data, local)
@@ -422,8 +442,10 @@ class TempoTraceAnalyzer:
                             summary["db_entity"] = db_ent
                             summary["db_target"] = local.get("db_target") or "MariaDB"
                 summary["traces_inspected"] += 1
-        except Exception:
-            pass
+        except Exception as err:
+            # Search failure: record it so RCA without trace evidence is visible, not silent.
+            summary["tempo_ok"] = False
+            summary["tempo_errors"].append(f"search: {type(err).__name__}: {err}")
         return summary
 
     def _decompose_single_trace(self, t_data, summary):
@@ -561,17 +583,46 @@ class EntityCalibrator:
     Manages per-entity z-score standardization using `entity_baselines.json`,
     and performs automatic 30-sample online calibration whenever a brand-new
     `(cloud_provider, service_name)` entity joins the topology.
+
+    The trained baseline file is never modified. Online calibrations are written to
+    a separate runtime overlay (`<name>.runtime.json`) that is merged on start-up,
+    so model artifacts stay identical to what training produced.
     """
-    def __init__(self, baselines_path, scale_floors, warmup_samples=30, clip_z=10.0):
+    def __init__(self, baselines_path, scale_floors, warmup_samples=30, clip_z=10.0, runtime_path=None):
         self.baselines_path = baselines_path
+        root, ext = os.path.splitext(baselines_path)
+        self.runtime_path = runtime_path or f"{root}.runtime{ext or '.json'}"
         self.scale_floors = scale_floors
         self.warmup_samples = warmup_samples
         self.clip_z = clip_z
         self.calibration_buffers = {}
+        self.rejected_samples = {}
         with open(baselines_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        self.entities = data.get("entities", data)
-        self.raw_data = data
+        self.entities = dict(data.get("entities", data))
+        self.runtime_entities = {}
+        if os.path.isfile(self.runtime_path):
+            try:
+                with open(self.runtime_path, "r", encoding="utf-8") as f:
+                    overlay = json.load(f).get("entities", {})
+                for eid, meta in overlay.items():
+                    if eid not in self.entities:
+                        self.entities[eid] = meta
+                        self.runtime_entities[eid] = meta
+            except (OSError, ValueError) as err:
+                print(f"[Auto-Calibrator] Ignoring unreadable runtime overlay {self.runtime_path}: {err}", flush=True)
+
+    def _persist_runtime_overlay(self):
+        payload = {
+            "source": "online_auto_calibration",
+            "base_baselines": os.path.basename(self.baselines_path),
+            "entities": self.runtime_entities,
+        }
+        try:
+            with open(self.runtime_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2)
+        except OSError as err:
+            print(f"[Auto-Calibrator] Failed to write runtime overlay {self.runtime_path}: {err}", flush=True)
 
     def is_calibrated(self, entity_id):
         return entity_id in self.entities
@@ -583,15 +634,27 @@ class EntityCalibrator:
                 return v["features"]
         return None
 
-    def update_or_standardize(self, entity_id, raw_feature_dict):
+    def update_or_standardize(self, entity_id, raw_feature_dict, response_healthy=None):
+        """
+        `response_healthy` is the caller's independent health signal (end-to-end probe,
+        5xx). When it is False the sample is not used for calibration, so an entity that
+        appears during an incident cannot learn the fault as its baseline.
+        """
         if entity_id not in self.entities:
             fallback_meta = self._find_service_fallback(entity_id)
             buf = self.calibration_buffers.setdefault(entity_id, [])
-            if (fallback_meta is None
-                    or (raw_feature_dict.get("max_pod_cpu_pct", 0.0) < 80.0
-                        and raw_feature_dict.get("server_latency_p95", 0.0) < 0.25
-                        and raw_feature_dict.get("error_rate_5xx", 0.0) <= 0.05)):
+            physically_plausible = (
+                raw_feature_dict.get("max_pod_cpu_pct", 0.0) < 80.0
+                and raw_feature_dict.get("server_latency_p95", 0.0) < 0.25
+                and raw_feature_dict.get("error_rate_5xx", 0.0) <= 0.05
+            )
+            accept = fallback_meta is None or physically_plausible
+            if response_healthy is not None:
+                accept = accept and bool(response_healthy)
+            if accept:
                 buf.append(dict(raw_feature_dict))
+            else:
+                self.rejected_samples[entity_id] = self.rejected_samples.get(entity_id, 0) + 1
             if len(buf) >= self.warmup_samples:
                 # Finalize online calibration for new entity
                 cp, sn = entity_id.split(":", 1)
@@ -609,22 +672,20 @@ class EntityCalibrator:
                         "iqr": round(iqr, 6),
                         "scale": round(iqr, 6),
                     }
-                self.entities[entity_id] = {
+                meta = {
                     "cloud_provider": cp,
                     "service_name": sn,
                     "sample_count": len(buf),
+                    "rejected_unhealthy_samples": self.rejected_samples.get(entity_id, 0),
+                    "fallback_service_baseline": fallback_meta is not None,
+                    "calibrated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                     "features": feat_stats,
                 }
-                if "entities" in self.raw_data:
-                    self.raw_data["entities"] = self.entities
-                else:
-                    self.raw_data[entity_id] = self.entities[entity_id]
-                try:
-                    with open(self.baselines_path, "w", encoding="utf-8") as f:
-                        json.dump(self.raw_data, f, indent=2)
-                except Exception:
-                    pass
-                print(f"[Auto-Calibrator] Completed 30-sample calibration for new entity: {entity_id}")
+                self.entities[entity_id] = meta
+                self.runtime_entities[entity_id] = meta
+                self._persist_runtime_overlay()
+                self.calibration_buffers.pop(entity_id, None)
+                print(f"[Auto-Calibrator] Completed {len(buf)}-sample calibration for new entity: {entity_id}")
             elif fallback_meta:
                 z_vec = []
                 for col in ENTITY_FEATURE_COLS:
@@ -797,38 +858,70 @@ class PrometheusMetricsServer:
                 pass
 
 
+DETECTOR_VERDICTS = ("HEALTHY", "TRANSIENT_SPIKE_SUPPRESSED", "ALERT", "UNKNOWN")
+
+
+def _label(value):
+    """Escape a Prometheus exposition label value."""
+    return str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+
 def format_prometheus_metrics(sample_record, entity_results, trace_summary, probe_ms, probe_ok):
     lines = []
-    lines.append("# HELP ai_anomaly_likelihood_percent AI anomaly probability (0-100) per microservice entity")
+    lines.append("# HELP ai_anomaly_likelihood_percent Calibrated anomaly probability (0-100) from each entity's own scorer")
     lines.append("# TYPE ai_anomaly_likelihood_percent gauge")
     for eid, res in sorted(entity_results.items()):
+        if res.get("likelihood_pct") is None:
+            continue
         cp, _, sn = eid.partition(":")
-        lk = res.get("likelihood_pct", sample_record.get("likelihood_pct") or 0.0)
-        lines.append(f'ai_anomaly_likelihood_percent{{cloud_provider="{cp}",service_name="{sn}",model="universal_autoencoder"}} {lk:.2f}')
+        lines.append(f'ai_anomaly_likelihood_percent{{cloud_provider="{_label(cp)}",service_name="{_label(sn)}",'
+                     f'model="gru_tcn_ensemble"}} {res["likelihood_pct"]:.2f}')
 
-    lines.append("# HELP ai_reconstruction_error Reconstruction MSE of the autoencoder")
+    lines.append("# HELP ai_reconstruction_error Directional reconstruction MSE, mean of GRU and TCN autoencoders")
     lines.append("# TYPE ai_reconstruction_error gauge")
     for eid, res in sorted(entity_results.items()):
         cp, _, sn = eid.partition(":")
         mse = res.get("mse", 0.0)
-        lines.append(f'ai_reconstruction_error{{cloud_provider="{cp}",service_name="{sn}",model="gru_autoencoder"}} {mse:.6f}')
+        lines.append(f'ai_reconstruction_error{{cloud_provider="{_label(cp)}",service_name="{_label(sn)}",'
+                     f'model="gru_tcn_ensemble"}} {mse:.6f}')
+
+    lines.append("# HELP ai_entity_sustained_anomaly 1 when the entity's own scorer reports a sustained anomaly")
+    lines.append("# TYPE ai_entity_sustained_anomaly gauge")
+    for eid, res in sorted(entity_results.items()):
+        cp, _, sn = eid.partition(":")
+        lines.append(f'ai_entity_sustained_anomaly{{cloud_provider="{_label(cp)}",service_name="{_label(sn)}"}} '
+                     f'{1 if res.get("sustained") else 0}')
 
     lines.append("# HELP ai_rca_component_latency_ms Decomposed latency from Tempo distributed trace spans")
     lines.append("# TYPE ai_rca_component_latency_ms gauge")
     for link, lag in trace_summary.get("wan_links", {}).items():
-        lines.append(f'ai_rca_component_latency_ms{{component="wan",target="{link}"}} {lag:.2f}')
+        lines.append(f'ai_rca_component_latency_ms{{component="wan",target="{_label(link)}"}} {lag:.2f}')
     for ent, st in trace_summary.get("self_times", {}).items():
         cp, _, sn = ent.partition(":")
-        lines.append(f'ai_rca_component_latency_ms{{cloud_provider="{cp}",service_name="{sn}",component="self"}} {st:.2f}')
-    db_ms = trace_summary.get("db_time_ms", 0.0)
-    lines.append(f'ai_rca_component_latency_ms{{cloud_provider="azure",service_name="teastore-persistence",component="db"}} {db_ms:.2f}')
+        lines.append(f'ai_rca_component_latency_ms{{cloud_provider="{_label(cp)}",service_name="{_label(sn)}",component="self"}} {st:.2f}')
+    db_entity = trace_summary.get("db_entity")
+    if db_entity:
+        cp, _, sn = db_entity.partition(":")
+        lines.append(f'ai_rca_component_latency_ms{{cloud_provider="{_label(cp)}",service_name="{_label(sn)}",'
+                     f'component="db",target="{_label(trace_summary.get("db_target") or "")}"}} '
+                     f'{trace_summary.get("db_time_ms", 0.0):.2f}')
 
     lines.append("# HELP ai_detector_verdict Current detector verdict (1=active)")
     lines.append("# TYPE ai_detector_verdict gauge")
     verdict = sample_record.get("verdict", "HEALTHY")
-    lines.append(f'ai_detector_verdict{{verdict="HEALTHY"}} {1 if verdict == "HEALTHY" else 0}')
-    lines.append(f'ai_detector_verdict{{verdict="ALERT"}} {1 if verdict == "ALERT" else 0}')
-    lines.append(f'ai_detector_verdict{{verdict="UNKNOWN"}} {1 if verdict == "UNKNOWN" else 0}')
+    for name in DETECTOR_VERDICTS:
+        lines.append(f'ai_detector_verdict{{verdict="{name}"}} {1 if verdict == name else 0}')
+
+    lines.append("# HELP ai_detector_model_alert 1 when the autoencoder scorer alone reports a sustained anomaly")
+    lines.append("# TYPE ai_detector_model_alert gauge")
+    lines.append(f'ai_detector_model_alert {1 if sample_record.get("model_alert") else 0}')
+    lines.append("# HELP ai_detector_guard_alert 1 when a deterministic SLO guard rule fired")
+    lines.append("# TYPE ai_detector_guard_alert gauge")
+    lines.append(f'ai_detector_guard_alert {1 if sample_record.get("guard_reasons") else 0}')
+
+    lines.append("# HELP ai_tempo_query_ok 0 when the Tempo trace search failed this cycle (RCA lacks trace evidence)")
+    lines.append("# TYPE ai_tempo_query_ok gauge")
+    lines.append(f'ai_tempo_query_ok {1 if trace_summary.get("tempo_ok", True) else 0}')
 
     lines.append("# HELP ai_probe_latency_ms Synthetic end-to-end multi-cloud probe latency")
     lines.append("# TYPE ai_probe_latency_ms gauge")
@@ -836,6 +929,52 @@ def format_prometheus_metrics(sample_record, entity_results, trace_summary, prob
     lines.append(f'ai_probe_latency_ms{{status="{status_label}"}} {probe_ms:.2f}')
 
     return "\n".join(lines) + "\n"
+
+
+RCA_RECOMMENDATIONS = (
+    ("CROSS_CLOUD_WAN_DELAY", "Check the inter-cluster link / edge traffic shaping on the reported path."),
+    ("DATABASE_BOTTLENECK", "Inspect slow queries and connection pool saturation on the database."),
+    ("MEMORY_LEAK_GC_STALL", "Inspect heap usage and GC logs; consider a heap dump of the reported service."),
+    ("SERVICE_CPU_BOTTLENECK", "Check CPU limits/throttling and scale-out of the reported service."),
+)
+
+
+def format_telegram_alert(entity_id, likelihood_pct, mse, verdict, causes, trace_summary, guard_reasons=None):
+    """Builds an HTML-mode Telegram message. All dynamic text is escaped, so RCA strings
+    containing `_`, `[`, `<` or `*` cannot break Telegram's entity parser."""
+    esc = html.escape
+    causes = list(causes or [])
+    causes_text = "\n".join(f"  • {esc(c)}" for c in causes) if causes else "  • Uncorrelated deviation (no RCA signature matched)"
+    wan_links = trace_summary.get("wan_links", {})
+    top_wan = max(wan_links.values()) if wan_links else 0.0
+    top_self = trace_summary.get("self_times", {}).get(entity_id, 0.0)
+    db_ms = trace_summary.get("db_time_ms", 0.0)
+    joined = " ".join(causes)
+    recommendations = [text for tag, text in RCA_RECOMMENDATIONS if tag in joined]
+    lines = [
+        "🚨 <b>[AI-OPS ALERT] Multi-Cloud Anomaly Detected</b>",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        f"📍 <b>Target Entity</b>: <code>{esc(entity_id)}</code>",
+        f"📊 <b>Likelihood</b>: <code>{likelihood_pct:.1f}%</code> (MSE: <code>{mse:.4f}</code>)",
+        f"⚡ <b>Verdict</b>: <code>{esc(verdict)}</code>",
+    ]
+    if guard_reasons:
+        lines.append(f"🛡️ <b>SLO Guard</b>: {esc(', '.join(guard_reasons))}")
+    lines += [
+        "",
+        f"🔍 <b>Root Cause Evidence (RCA)</b>:\n{causes_text}",
+        "",
+        "⏱️ <b>Tempo Trace Decomposition</b>:",
+        f"  • Cross-Cloud WAN Lag: <code>{top_wan:.1f}ms</code>",
+        f"  • Microservice Self-Exec: <code>{top_self:.1f}ms</code>",
+        f"  • Database Query Time: <code>{db_ms:.1f}ms</code>",
+    ]
+    if not trace_summary.get("tempo_ok", True):
+        lines.append("  • ⚠️ Tempo unavailable this cycle: trace evidence missing")
+    if recommendations:
+        lines += ["━━━━━━━━━━━━━━━━━━━━━━━━━━", "💡 <b>Recommendation</b>:"]
+        lines += [f"  • {esc(text)}" for text in recommendations]
+    return "\n".join(lines)
 
 
 class TelegramAlertSink:
@@ -874,7 +1013,7 @@ class TelegramAlertSink:
         except Exception:
             pass
 
-    def send_alert(self, entity_id, likelihood_pct, mse, verdict, causes, trace_summary):
+    def send_alert(self, entity_id, likelihood_pct, mse, verdict, causes, trace_summary, guard_reasons=None):
         if not self.configured:
             return
         now = time.time()
@@ -882,34 +1021,14 @@ class TelegramAlertSink:
         if now - last < self.cooldown_seconds:
             return
 
-        causes_text = "\n".join(f"  • {c}" for c in causes) if causes else "  • Soft degradation / Uncorrelated deviation"
-        wan_links = trace_summary.get("wan_links", {})
-        top_wan = max(wan_links.values()) if wan_links else 0.0
-        self_times = trace_summary.get("self_times", {})
-        top_self = self_times.get(entity_id, 0.0)
-        db_ms = trace_summary.get("db_time_ms", 0.0)
-
-        msg = (
-            "🚨 *[AI-OPS ALERT] Multi-Cloud Anomaly Detected*\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📍 *Target Entity*: `{entity_id}`\n"
-            f"📊 *Likelihood*: `{likelihood_pct:.1f}%` (MSE: `{mse:.4f}`)\n"
-            f"⚡ *Verdict*: `{verdict}` (Sustained Anomaly)\n\n"
-            f"🔍 *Root Cause Evidence (RCA)*:\n{causes_text}\n\n"
-            "⏱️ *Tempo Trace Decomposition*:\n"
-            f"  • Cross-Cloud WAN Lag: `{top_wan:.1f}ms`\n"
-            f"  • Microservice Self-Exec: `{top_self:.1f}ms`\n"
-            f"  • Database Query Time: `{db_ms:.1f}ms`\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "💡 *Recommendation*: Inspect edge WAN shaping or database slow queries."
-        )
+        msg = format_telegram_alert(entity_id, likelihood_pct, mse, verdict, causes, trace_summary, guard_reasons)
 
         try:
             url = f"https://api.telegram.org/bot{self.token}/sendMessage"
             payload = json.dumps({
                 "chat_id": self.chat_id,
                 "text": msg,
-                "parse_mode": "Markdown",
+                "parse_mode": "HTML",
             }).encode("utf-8")
             req = urllib.request.Request(
                 url, data=payload,
@@ -946,7 +1065,6 @@ def main():
     tcn_ckpt_path = os.path.join(models_dir, "tcn_autoencoder.pt")
     baselines_path = os.path.join(models_dir, "entity_baselines.json")
     threshold_path = os.path.join(models_dir, "threshold_config.json")
-    iso_path = cfg["baseline"]["isolation_forest"]["save_path"]
 
     for p in [gru_ckpt_path, baselines_path, threshold_path]:
         if not os.path.isfile(p):
@@ -961,7 +1079,8 @@ def main():
     err_dist = threshold_meta["error_distribution"]
     dw_cfg = threshold_meta.get("dual_sliding_window", {})
 
-    iso_forest = joblib.load(iso_path) if os.path.isfile(iso_path) else None
+    # The IsolationForest artifact produced by train.py is an offline baseline only;
+    # it is intentionally not part of the online verdict.
     features = cfg["data"]["features"]
     window_size = int(cfg["data"]["window_size"])
     scale_floors = cfg["data"].get("physical_scale_floors", cfg["data"].get("scale_floors", {}))
@@ -1000,22 +1119,28 @@ def main():
     likelihood_calibrated = bool(cal_meta.get("calibration_verified", False)
         and cal_meta.get("score_input") == "min(current_mse,short_mean_mse)")
 
-    global_scorer = DualSlidingWindowScorer(
-        base_mean=err_dist["mean"],
-        base_std=err_dist["std"],
-        threshold=threshold_p99,
-        short_w=dw_cfg.get("short_window", 2),
-        long_w=dw_cfg.get("long_window", 15),
-        min_consecutive=dw_cfg.get("min_consecutive_breaches", 2),
-        temperature=cal_meta.get("temperature"),
-    )
+    def make_scorer():
+        return DualSlidingWindowScorer(
+            base_mean=err_dist["mean"],
+            base_std=err_dist["std"],
+            threshold=threshold_p99,
+            short_w=dw_cfg.get("short_window", 3),
+            long_w=dw_cfg.get("long_window", 18),
+            min_consecutive=dw_cfg.get("min_consecutive_breaches", 2),
+            temperature=cal_meta.get("temperature"),
+        )
+
+    # One scorer per entity: consecutive breaches must come from the same entity,
+    # and one entity's error history never leaks into another's likelihood.
+    entity_scorers = MultiEntityScorer(make_scorer)
+    reference_scorer = make_scorer()
 
     print("=" * 88)
     print("  MULTI-CLOUD REAL-TIME ANOMALY DETECTOR & TRACE RCA ENGINE (V3 ENTITY-INVARIANT)")
     print("=" * 88)
-    print(f"  * Deep Models      : Universal GRU + {'TCN Autoencoder' if tcn_model else 'Single'} + IsolationForest")
+    print(f"  * Deep Models      : GRU{' + TCN' if tcn_model else ''} Autoencoder ensemble (per-entity scoring)")
     print(f"  * Entity Vector    : {len(features)} universal features per (cloud_provider, service_name)")
-    print(f"  * Window Buffer    : {window_size} steps | Dual-Window (Short={global_scorer.short_w}, Long={global_scorer.long_w})")
+    print(f"  * Window Buffer    : {window_size} steps | Dual-Window (Short={reference_scorer.short_w}, Long={reference_scorer.long_w})")
     print(f"  * Decision Bound   : {threshold_p99:.4f} | Calibrated Likelihood: {'VERIFIED' if likelihood_calibrated else 'UNVERIFIED'}")
     print("=" * 88)
 
@@ -1033,7 +1158,9 @@ def main():
     sample_idx = 0
     consecutive_probe_failures = 0
     consecutive_slow_probes = 0
-    last_model_observation = None
+    # Records are only needed for --summary-out; an unbounded list would grow forever
+    # in the default infinite (--max-samples 0) mode.
+    keep_records = bool(args.summary_out)
 
     stats_summary = {
         "total_samples": 0,
@@ -1122,7 +1249,10 @@ def main():
                         trace_summary["db_time_ms"] / 1000.0,
                     )
 
-                z_vec, is_cal = calibrator.update_or_standardize(eid, raw_dict)
+                z_vec, is_cal = calibrator.update_or_standardize(
+                    eid, raw_dict,
+                    response_healthy=is_cluster_response_healthy and raw_dict["error_rate_5xx"] <= 0.05,
+                )
 
                 buf = entity_buffers.setdefault(eid, [])
                 if len(buf) == 0:
@@ -1183,7 +1313,8 @@ def main():
                     "calibrated": is_cal,
                 }
 
-            # Max entity MSE drives global anomaly scoring so a localized fault in any cloud is caught immediately
+            # Each entity is scored by its own dual-window scorer. A repeated export
+            # (same histogram timestamps and resource readings) is not new evidence.
             if entity_results:
                 worst_entity_id, worst_entity = max(entity_results.items(), key=lambda kv: kv[1]["mse"])
                 max_entity_mse = worst_entity["mse"]
@@ -1191,17 +1322,19 @@ def main():
                 worst_entity_id = "none"
                 max_entity_mse = 0.0
 
-            worst_fast = prom_client.fast_metrics.get(worst_entity_id, {})
-            worst_raw = entity_results.get(worst_entity_id, {}).get("raw", {})
-            observation = (worst_entity_id, *(worst_fast.get(side, {}).get("observed_at")
-                if worst_fast.get(side) else None for side in ("server", "client")),
-                *(worst_raw.get(name) for name in ("max_pod_cpu_pct", "max_pod_ram_pct", "ram_floor_2m_pct", "gc_pause_rate")))
-            dw_res = global_scorer.update_and_score(max_entity_mse,
-                new_observation=observation != last_model_observation) if telemetry_ok else {
-                "short_mean_mse": 0.0, "likelihood": 0.0, "likelihood_pct": 0.0,
-                "is_sustained_anomaly": False, "is_transient_spike": False}
-            if telemetry_ok:
-                last_model_observation = observation
+            observations = {}
+            for eid, res in entity_results.items():
+                fast = prom_client.fast_metrics.get(eid, {})
+                token = (*(fast[side].get("observed_at") if fast.get(side) else None for side in ("server", "client")),
+                         *(res["raw"].get(name) for name in ("max_pod_cpu_pct", "max_pod_ram_pct",
+                                                              "ram_floor_2m_pct", "gc_pause_rate")))
+                observations[eid] = (res["mse"], token)
+            per_entity_scores = entity_scorers.update(observations) if telemetry_ok else {}
+            for eid, score in per_entity_scores.items():
+                entity_results[eid]["likelihood_pct"] = score["likelihood_pct"]
+                entity_results[eid]["sustained"] = score["is_sustained_anomaly"]
+            dw_res = MultiEntityScorer.aggregate(per_entity_scores)
+            alert_entity_id = dw_res["entity"] or worst_entity_id
 
             rca_trace_summary = dict(trace_summary)
             evidence = tempo_analyzer.evidence.active(entity_results, time.time())
@@ -1278,8 +1411,12 @@ def main():
                     f"Likelihood: {dw_res['likelihood']*100:.1f}%",
                     flush=True,
                 )
+                if dw_res["sustained_entities"]:
+                    print(f"   ├── Model Sustained  : {', '.join(dw_res['sustained_entities'])}", flush=True)
                 if guard_triggered:
                     print(f"   ├── SLO Guard Trigger: {', '.join(guard_reasons)}", flush=True)
+                if not trace_summary.get("tempo_ok", True):
+                    print("   ├── Tempo unavailable: RCA has no trace evidence this cycle", flush=True)
 
                 top_causes = synthesize_multicloud_rca(
                     entity_results=entity_results,
@@ -1312,7 +1449,7 @@ def main():
                     print(f"       👉 Bất thường tại thực thể {worst_entity_id}", flush=True)
 
             stats_summary["total_samples"] = sample_idx
-            stats_summary["records"].append({
+            rec = {
                 "sample": sample_idx,
                 "timestamp": now_iso,
                 "entity_count": len(entities),
@@ -1324,6 +1461,8 @@ def main():
                 "probe_ms": round(probe_ms, 1),
                 "error_5xx": round(total_5xx, 4),
                 "worst_entity": worst_entity_id,
+                "alert_entity": alert_entity_id,
+                "model_sustained_entities": dw_res["sustained_entities"],
                 "instant_mse": round(max_entity_mse, 5),
                 "short_window_mse": round(dw_res["short_mean_mse"], 5),
                 "likelihood_pct": round(dw_res["likelihood_pct"], 2) if telemetry_ok else None,
@@ -1340,25 +1479,32 @@ def main():
                 "rca_evidence": evidence,
                 "guard_reasons": guard_reasons,
                 "traces_inspected": trace_summary.get("traces_inspected", 0),
+                "tempo_ok": trace_summary.get("tempo_ok", True),
+                "tempo_errors": trace_summary.get("tempo_errors", []),
                 "rca_causes": top_causes,
                 "tempo_wan_links": {k: round(v, 2) for k, v in trace_summary.get("wan_links", {}).items()},
                 "tempo_self_times": {k: round(v, 2) for k, v in trace_summary.get("self_times", {}).items()},
                 "entity_mse_map": {k: round(v["mse"], 5) for k, v in entity_results.items()},
-            })
+                "entity_likelihood_pct": {k: v["likelihood_pct"] for k, v in entity_results.items()
+                                          if v.get("likelihood_pct") is not None},
+            }
+            if keep_records:
+                stats_summary["records"].append(rec)
 
-            rec = stats_summary["records"][-1]
             if metrics_server:
                 prom_text = format_prometheus_metrics(rec, entity_results, trace_summary, probe_ms, probe_ok)
                 metrics_server.update_metrics(prom_text)
 
             if verdict == "ALERT" and alert_sink.configured:
+                alert_result = entity_results.get(alert_entity_id, {})
                 alert_sink.send_alert(
-                    entity_id=worst_entity_id,
-                    likelihood_pct=float(dw_res.get("likelihood_pct", 100.0) or 100.0),
-                    mse=float(max_entity_mse),
+                    entity_id=alert_entity_id,
+                    likelihood_pct=float(alert_result.get("likelihood_pct", dw_res.get("likelihood_pct", 0.0)) or 0.0),
+                    mse=float(alert_result.get("mse", max_entity_mse)),
                     verdict=verdict,
                     causes=top_causes,
-                    trace_summary=trace_summary,
+                    trace_summary=rca_trace_summary,
+                    guard_reasons=guard_reasons,
                 )
 
             if args.max_samples > 0 and sample_idx >= args.max_samples:

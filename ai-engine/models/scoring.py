@@ -347,3 +347,60 @@ def validate_likelihood_calibration(normal_mse_array, fault_mse_array, base_mean
         "calibration_verified": calibration_verified,
     }
 
+
+
+class MultiEntityScorer:
+    """
+    Keeps one `DualSlidingWindowScorer` per `(cloud_provider:service_name)` entity.
+
+    A sustained anomaly therefore requires consecutive breaches by the *same* entity;
+    a breach on entity A followed by a breach on entity B is two transient spikes,
+    not a sustained fault. Each entity's likelihood is computed from its own history.
+    """
+
+    def __init__(self, scorer_factory):
+        self.scorer_factory = scorer_factory
+        self.scorers = {}
+        self.last_observation = {}
+
+    def update(self, entity_observations):
+        """
+        `entity_observations`: dict `entity_id -> (mse, observation_token)`. A token equal
+        to the entity's previous one means no new telemetry arrived (repeated export),
+        so it cannot count as an additional consecutive breach.
+        Returns dict `entity_id -> update_and_score result`.
+        """
+        results = {}
+        for eid, (mse, token) in entity_observations.items():
+            scorer = self.scorers.get(eid)
+            if scorer is None:
+                scorer = self.scorers[eid] = self.scorer_factory()
+            is_new = token is None or token != self.last_observation.get(eid)
+            results[eid] = scorer.update_and_score(mse, new_observation=is_new)
+            self.last_observation[eid] = token
+        return results
+
+    @staticmethod
+    def aggregate(results):
+        """
+        Collapses per-entity results into one cluster verdict. The lead entity is the
+        sustained entity with the highest short-window MSE, otherwise the entity with
+        the highest likelihood.
+        """
+        if not results:
+            return {
+                "entity": None, "short_mean_mse": 0.0, "likelihood": 0.0, "likelihood_pct": 0.0,
+                "window_likelihood_pct": 0.0, "consecutive_breaches": 0,
+                "is_sustained_anomaly": False, "is_transient_spike": False, "sustained_entities": [],
+            }
+        sustained = sorted(eid for eid, res in results.items() if res["is_sustained_anomaly"])
+        if sustained:
+            lead = max(sustained, key=lambda eid: results[eid]["short_mean_mse"])
+        else:
+            lead = max(results, key=lambda eid: (results[eid]["likelihood"], results[eid]["short_mean_mse"]))
+        out = dict(results[lead])
+        out["entity"] = lead
+        out["is_sustained_anomaly"] = bool(sustained)
+        out["is_transient_spike"] = not sustained and any(res["is_transient_spike"] for res in results.values())
+        out["sustained_entities"] = sustained
+        return out

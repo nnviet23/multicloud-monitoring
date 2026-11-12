@@ -107,8 +107,8 @@ def evaluate_run(summary_json_path, traffic_log_path="", traffic_start_iso=""):
             start_dt = first_dt - timedelta(seconds=10)
         traffic_windows = parse_traffic_log(traffic_log_path, start_dt)
 
-    tp, tn, fp, fn = 0, 0, 0, 0
     consec_probe_fail = 0
+    actual_labels = []
 
     for r in records:
         s_dt = datetime.strptime(r["timestamp"], "%Y-%m-%dT%H:%M:%SZ")
@@ -133,37 +133,60 @@ def evaluate_run(summary_json_path, traffic_log_path="", traffic_start_iso=""):
             or (err_5xx > 0.20)
             or (consec_probe_fail >= 2)
         )
-        ai_alert = (r["verdict"] == "ALERT")
+        actual_labels.append(bool(actual_fault))
 
-        if actual_fault and ai_alert:
-            tp += 1
-        elif not actual_fault and not ai_alert:
-            tn += 1
-        elif not actual_fault and ai_alert:
-            fp += 1
-        else:
-            fn += 1
-
-    total = len(records)
-    healthy_total = tn + fp
-    fault_total = tp + fn
-    fpr = (fp / healthy_total * 100.0) if healthy_total > 0 else 0.0
-    tpr = (tp / fault_total * 100.0) if fault_total > 0 else 100.0
-    acc = ((tp + tn) / total * 100.0) if total > 0 else 0.0
+    report = score_detectors(records, actual_labels)
 
     print("=" * 92)
     print("  GROUND-TRUTH EVALUATION REPORT (MULTI-CLOUD LIVE TRAFFIC vs AI DETECTOR V3)")
     print("=" * 92)
-    print(f"  Total Samples          : {total}")
+    print(f"  Total Samples          : {len(records)}")
     print(f"  Discovered Entities    : {', '.join(summary.get('discovered_entities', []))}")
-    print(f"  Ground-Truth Healthy   : {healthy_total:2d} samples | True Negative (TN): {tn:2d} | False Positive (FP): {fp:2d}")
-    print(f"  Ground-Truth Faulty    : {fault_total:2d} samples | True Positive (TP): {tp:2d} | False Negative (FN): {fn:2d}")
+    for name, m in report.items():
+        print("-" * 92)
+        print(f"  [{name}]")
+        print(f"    Ground-Truth Healthy : {m['tn'] + m['fp']:3d} | TN: {m['tn']:3d} | FP: {m['fp']:3d}")
+        print(f"    Ground-Truth Faulty  : {m['tp'] + m['fn']:3d} | TP: {m['tp']:3d} | FN: {m['fn']:3d}")
+        recall = "n/a" if m["recall_pct"] is None else f"{m['recall_pct']:5.1f}%"
+        print(f"    Accuracy {m['accuracy_pct']:5.1f}% | FPR {m['fpr_pct']:5.1f}% | Recall {recall}")
     print("-" * 92)
-    print(f"  * Overall Accuracy     : {acc:5.1f}%")
-    print(f"  * False Alarm Rate(FPR): {fpr:5.1f}% (Mục tiêu: 0.0% khi đa đám mây ổn định)")
-    if fault_total > 0:
-        print(f"  * Fault Recall   (TPR) : {tpr:5.1f}%")
+    print("  Note: ground truth here is derived from SLO thresholds that overlap the detector's")
+    print("  guard rules, so 'guard_only' and 'combined' scores are partly circular. Use")
+    print("  'model_only' (autoencoder verdict) to judge the learned detector.")
     print("=" * 92)
+    return report
+
+
+def _confusion(actual, predicted):
+    tp = sum(a and p for a, p in zip(actual, predicted))
+    tn = sum((not a) and (not p) for a, p in zip(actual, predicted))
+    fp = sum((not a) and p for a, p in zip(actual, predicted))
+    fn = sum(a and (not p) for a, p in zip(actual, predicted))
+    total = len(actual)
+    return {
+        "tp": tp, "tn": tn, "fp": fp, "fn": fn,
+        "accuracy_pct": round((tp + tn) / total * 100.0, 2) if total else 0.0,
+        "fpr_pct": round(fp / (tn + fp) * 100.0, 2) if (tn + fp) else 0.0,
+        "recall_pct": round(tp / (tp + fn) * 100.0, 2) if (tp + fn) else None,
+    }
+
+
+def score_detectors(records, actual_labels):
+    """
+    Scores three detectors separately against the same labels:
+      - `combined`  : final verdict == ALERT (model OR SLO guard)
+      - `model_only`: autoencoder sustained-anomaly verdict (`model_alert`)
+      - `guard_only`: at least one deterministic SLO guard rule fired
+    Records whose telemetry was incomplete (verdict UNKNOWN) are excluded, because
+    no detector produced a decision for them.
+    """
+    pairs = [(r, a) for r, a in zip(records, actual_labels) if r.get("verdict") != "UNKNOWN"]
+    actual = [a for _, a in pairs]
+    return {
+        "combined": _confusion(actual, [r.get("verdict") == "ALERT" for r, _ in pairs]),
+        "model_only": _confusion(actual, [bool(r.get("model_alert")) for r, _ in pairs]),
+        "guard_only": _confusion(actual, [bool(r.get("guard_reasons")) for r, _ in pairs]),
+    }
 
 
 def run_fault_injection_benchmark(config_path="ai-engine/configs/model_config.yaml",

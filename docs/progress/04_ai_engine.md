@@ -267,7 +267,7 @@ flowchart LR
 
     subgraph NotificationPlane["2. Incident Notification Loop"]
         TelegramSink["TelegramAlertSink<br/>(Rate-limited cooldown)"]
-        TelegramBot["Telegram Channel / SRE On-Call<br/>(Markdown Rich Alert)"]
+        TelegramBot["Telegram Channel / SRE On-Call<br/>(HTML-escaped Rich Alert)"]
     end
 
     AIEngine -->|Update Metrics| PromServer

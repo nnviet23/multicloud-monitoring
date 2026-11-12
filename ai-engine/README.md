@@ -150,8 +150,20 @@ khi giảm lịch sử latency/5xx/CPU và giữ nguyên lịch sử memory/GC. 
 không tự xác nhận một cảnh báo mới. Gauge của JVM không còn hoạt động bị loại
 khỏi discovery/CPU/RAM; telemetry lỗi hoặc thiếu entity bắt buộc cho trạng thái
 mô hình UNKNOWN thay vì HEALTHY giả.
-Điểm ensemble hiện dùng GRU và TCN; artifact Isolation Forest chưa tham gia
-quyết định online.
+Điểm ensemble hiện dùng GRU và TCN; artifact Isolation Forest chỉ là baseline
+offline, không được detector load và không tham gia quyết định online.
+
+Mỗi entity `(cloud_provider:service_name)` có `DualSlidingWindowScorer` riêng
+(`MultiEntityScorer` trong `models/scoring.py`): cảnh báo bền vững (sustained)
+chỉ bật khi **cùng một entity** vượt ngưỡng liên tiếp, và likelihood export ra
+`ai_anomaly_likelihood_percent` là của chính entity đó. Bản ghi detector tách
+`model_alert` (autoencoder) khỏi `guard_reasons` (luật SLO); `evaluate_test.py`
+chấm riêng `model_only`, `guard_only` và `combined`.
+
+Auto-calibration cho entity mới chỉ dùng mẫu khi probe end-to-end và 5xx khỏe,
+và ghi vào overlay `models/saved/entity_baselines.runtime.json` (gitignored);
+`entity_baselines.json` do huấn luyện tạo ra không bị sửa lúc runtime.
+`ram_floor_2m_pct` dùng cửa sổ thời gian 120 giây ở cả collector lẫn detector.
 
 RCA giữ bằng chứng trace có ID/tuổi tối đa 90 giây trong cùng sự cố, vô hiệu
 khi phục hồi và lọc trường hợp CPU làm nhiễu suy luận WAN. `likelihood_pct` là
@@ -193,10 +205,11 @@ ai-engine/
 │   ├── gru_autoencoder.py                 # Universal GRU Autoencoder (input_dim=8)
 │   ├── tcn_autoencoder.py                 # Universal TCN Autoencoder (input_dim=8)
 │   └── saved/
-│       ├── entity_baselines.json          # Baseline phục vụ chuẩn hóa online & auto-calibration
+│       ├── entity_baselines.json          # Baseline do huấn luyện tạo ra (read-only lúc runtime)
+│       ├── entity_baselines.runtime.json  # Overlay auto-calibration entity mới (gitignored)
 │       ├── gru_autoencoder.pt             # Trọng số GRU Autoencoder
 │       ├── tcn_autoencoder.pt             # Trọng số TCN Autoencoder
-│       ├── isolation_forest.joblib        # Mô hình Isolation Forest (96 chiều)
+│       ├── isolation_forest.joblib        # Isolation Forest (96 chiều), chỉ dùng làm baseline offline
 │       └── threshold_config.json          # Ngưỡng cảnh báo P99 (0.3500) & RCA baselines
 ├── inference/
 │   ├── detector.py                        # Engine phát hiện bất thường + TempoTraceAnalyzer RCA

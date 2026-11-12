@@ -80,6 +80,8 @@ ai-engine/models/saved/*.pth
 ai-engine/models/saved/*.onnx
 ai-engine/models/saved/*.joblib
 ai-engine/models/saved/*.pkl
+# Online auto-calibration overlay written by detector.py at runtime (never edit trained baselines)
+ai-engine/models/saved/*.runtime.json
 !ai-engine/models/saved/.gitkeep
 
 # PyTorch / TensorBoard / MLflow logs

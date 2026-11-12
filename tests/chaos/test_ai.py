@@ -65,7 +65,12 @@ class CalibrationTests(unittest.TestCase):
                 np.testing.assert_array_equal(z, np.zeros(8))
             _, ready = calibrator.update_or_standardize("new:teastore-test", raw)
             self.assertTrue(ready)
-            self.assertIn("new:teastore-test", json.loads(path.read_text())["entities"])
+            # Trained baselines stay untouched; the calibration lands in the runtime overlay.
+            self.assertEqual(json.loads(path.read_text())["entities"], {})
+            overlay = Path(directory) / "baselines.runtime.json"
+            self.assertIn("new:teastore-test", json.loads(overlay.read_text())["entities"])
+            reloaded = EntityCalibrator(str(path), {k: 1 for k in ENTITY_FEATURE_COLS}, warmup_samples=3)
+            self.assertTrue(reloaded.is_calibrated("new:teastore-test"))
             z, _ = calibrator.update_or_standardize("new:teastore-test", {k: 10000 for k in raw})
             np.testing.assert_array_equal(z, np.full(8, 10.0))
 
