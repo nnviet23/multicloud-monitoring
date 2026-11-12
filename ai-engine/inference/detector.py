@@ -1311,6 +1311,7 @@ def main():
                     "z_vec": z_vec,
                     "raw": raw_dict,
                     "calibrated": is_cal,
+                    "response_healthy": bool(entity_healthy),
                 }
 
             # Each entity is scored by its own dual-window scorer. A repeated export
@@ -1485,6 +1486,11 @@ def main():
                 "tempo_wan_links": {k: round(v, 2) for k, v in trace_summary.get("wan_links", {}).items()},
                 "tempo_self_times": {k: round(v, 2) for k, v in trace_summary.get("self_times", {}).items()},
                 "entity_mse_map": {k: round(v["mse"], 5) for k, v in entity_results.items()},
+                # Model inputs as scored (after Tempo fusion), so runs can be replayed
+                # offline through other model versions with identical features.
+                "entity_features": {k: {name: round(float(v["raw"].get(name, 0.0)), 6) for name in features}
+                                    for k, v in entity_results.items()},
+                "entity_response_healthy": {k: v["response_healthy"] for k, v in entity_results.items()},
                 "entity_likelihood_pct": {k: v["likelihood_pct"] for k, v in entity_results.items()
                                           if v.get("likelihood_pct") is not None},
             }
