@@ -83,6 +83,115 @@ def split_entities_chronologically(df, val_split, window_size):
     return train_df, val_df, split_audit
 
 
+REQUIRED_RESOURCE_METRICS = ("max_pod_cpu_pct", "max_pod_ram_pct")
+
+
+def load_raw_runs(paths):
+    """Load one or more collector CSVs, tagging each row with its source run ID.
+
+    The run ID is the experiment directory name (experiments/raw/<run_id>/metrics/...)
+    or the file stem for legacy paths, so derived datasets record their inputs.
+    """
+    frames = []
+    for path in paths:
+        frame = pd.read_csv(path)
+        parts = os.path.normpath(path).split(os.sep)
+        run_id = parts[parts.index("raw") + 1] if "raw" in parts[:-1] and parts[-2] == "metrics" else os.path.splitext(os.path.basename(path))[0]
+        frame["source_run"] = run_id
+        frames.append(frame)
+    return pd.concat(frames, ignore_index=True)
+
+
+def drop_incomplete_rows(df):
+    """Drop rows the detector would score as UNKNOWN (no CPU/RAM series).
+
+    Returns the kept frame and the number of dropped rows; dropped rows become
+    gaps, so no window spans them.
+    """
+    if "missing_metrics" not in df.columns:
+        return df, 0
+    missing = df["missing_metrics"].fillna("").astype(str)
+    bad = missing.apply(lambda text: any(m in text.split(";") for m in REQUIRED_RESOURCE_METRICS))
+    return df[~bad].reset_index(drop=True), int(bad.sum())
+
+
+def assign_segments(df, max_gap_seconds):
+    """Number contiguous runs of samples per (source_run, entity).
+
+    A new segment starts whenever two consecutive samples are more than
+    `max_gap_seconds` apart (skipped collector cycles, dropped rows, restarts).
+    """
+    df = df.sort_values(["source_run", "cloud_provider", "service_name", "timestamp"]).reset_index(drop=True)
+    keys = ["source_run", "cloud_provider", "service_name"]
+    gap = df.groupby(keys)["timestamp"].diff()
+    new_segment = gap.isna() | (gap > max_gap_seconds)
+    df["segment"] = new_segment.cumsum().astype(int)
+    return df
+
+
+def split_entities_blocked(df, block_rows, val_every, embargo_rows, window_size):
+    """Interleaved (blocked) chronological split with an embargo.
+
+    Each (run, entity) timeline is cut into blocks of `block_rows` samples; every
+    `val_every`-th block goes to validation, so validation covers every load
+    regime of the run (warm-up, peak, cool-down) instead of only its final phase.
+    `embargo_rows` training rows on each side of a validation block are dropped,
+    so no training window sits directly next to a validation window.
+    """
+    df = df.copy()
+    df["split"] = "train"
+    audit = {}
+    for (run, cp, sn), grp in df.groupby(["source_run", "cloud_provider", "service_name"], sort=False):
+        idx = grp.sort_values("timestamp").index.to_numpy()
+        n = len(idx)
+        if n < 2 * window_size:
+            raise ValueError(f"{run} {cp}:{sn} has only {n} rows; need >= {2 * window_size}")
+        position = np.arange(n)
+        block = position // block_rows
+        is_val = (block % val_every) == (val_every - 1)
+        labels = np.where(is_val, "val", "train").astype(object)
+        val_pos = np.flatnonzero(is_val)
+        if embargo_rows > 0 and len(val_pos):
+            near = np.zeros(n, dtype=bool)
+            starts = val_pos[np.r_[True, np.diff(val_pos) > 1]]
+            ends = val_pos[np.r_[np.diff(val_pos) > 1, True]]
+            for start, end in zip(starts, ends):
+                near[max(0, start - embargo_rows):start] = True
+                near[end + 1:min(n, end + 1 + embargo_rows)] = True
+            labels[near & ~is_val] = "embargo"
+        df.loc[idx, "split"] = labels
+        audit[f"{run}|{cp}:{sn}"] = {
+            "total_rows": int(n),
+            "train_rows": int((labels == "train").sum()),
+            "val_rows": int((labels == "val").sum()),
+            "embargo_rows": int((labels == "embargo").sum()),
+            "start_ts": float(grp["timestamp"].min()),
+            "end_ts": float(grp["timestamp"].max()),
+        }
+    return df, audit
+
+
+def build_chunk_windows(df, baselines, features, window_size, stride, split):
+    """Windows inside contiguous chunks of one split (same run, entity, segment)."""
+    part = df[df["split"] == split]
+    chunks, counts, stamps = [], {}, set()
+    for (run, cp, sn), grp in part.groupby(["source_run", "cloud_provider", "service_name"], sort=False):
+        entity_key = f"{cp}:{sn}"
+        meta = baselines.get(entity_key, baselines["__default__"])
+        grp = grp.sort_values("timestamp")
+        # A chunk breaks at segment changes and wherever rows of this split are not adjacent.
+        original_pos = df.loc[grp.index].index.to_numpy()
+        chunk_id = (np.r_[True, np.diff(original_pos) > 1] | np.r_[True, np.diff(grp["segment"].to_numpy()) != 0]).cumsum()
+        for _, chunk in grp.groupby(chunk_id, sort=False):
+            windows = create_windows(transform_entity_df(chunk, meta, features), window_size, stride)
+            if len(windows):
+                chunks.append(windows)
+                counts[entity_key] = counts.get(entity_key, 0) + len(windows)
+        stamps.update((run, entity_key, float(ts)) for ts in grp["timestamp"].to_numpy())
+    windows = np.concatenate(chunks, axis=0) if chunks else np.empty((0, window_size, len(features)), np.float32)
+    return windows, counts, stamps
+
+
 def compute_entity_baselines(train_df, features, scale_floors):
     """
     Computes Median, IQR, P95, P99, and Scale-Floored Robust denominator per `(cloud_provider, service_name)`
@@ -296,28 +405,59 @@ def main():
     print("  MULTI-CLOUD PER-ENTITY PREPROCESSING PIPELINE (V3 ZERO-LEAKAGE)", flush=True)
     print("========================================================================", flush=True)
 
-    df = pd.read_csv(raw_csv)
-    df = df.sort_values(["cloud_provider", "service_name", "timestamp"]).reset_index(drop=True)
-
+    data_cfg = cfg["data"]
+    raw_paths = data_cfg.get("raw_csv_paths") or [raw_csv]
+    split_strategy = data_cfg.get("split_strategy", "chronological")
+    df = load_raw_runs(raw_paths)
     if "anomaly_label" in df.columns:
         df = df[df["anomaly_label"] == 0].reset_index(drop=True)
+    total_rows = int(len(df))
+    df, incomplete_rows = drop_incomplete_rows(df)
 
-    # Step 1: Chronological train/val split per entity BEFORE computing baselines or windows
-    train_df, val_df, split_audit = split_entities_chronologically(df, val_split=val_split, window_size=window_size)
-    train_df, val_df = impute_causally(train_df, val_df, features)
-
-    # Step 2: Fit per-entity baselines strictly on train_df
-    baselines = compute_entity_baselines(train_df, features, scale_floors)
+    if split_strategy == "blocked":
+        interval = float(data_cfg.get("sampling_interval_seconds", 10))
+        max_gap = float(data_cfg.get("max_gap_seconds", 2.5 * interval))
+        df = assign_segments(df, max_gap)
+        # Causal forward fill along each (run, entity) timeline; no statistic is fit here.
+        df[features] = df[features].replace([np.inf, -np.inf], np.nan)
+        df[features] = df.groupby(["source_run", "cloud_provider", "service_name"])[features].ffill().fillna(0.0)
+        df, split_audit = split_entities_blocked(
+            df,
+            block_rows=int(data_cfg.get("split_block_rows", 60)),
+            val_every=int(data_cfg.get("val_every_n_blocks", 5)),
+            embargo_rows=int(data_cfg.get("embargo_rows", window_size)),
+            window_size=window_size,
+        )
+        train_df = df[df["split"] == "train"]
+        val_df = df[df["split"] == "val"]
+        baselines = compute_entity_baselines(train_df, features, scale_floors)
+        base_train_windows, train_counts, train_stamps = build_chunk_windows(df, baselines, features, window_size, stride, "train")
+        val_windows, val_counts, val_stamps = build_chunk_windows(df, baselines, features, window_size, stride, "val")
+        if train_stamps & val_stamps:
+            raise AssertionError("Train/validation windows share timestamps")
+        entity_window_counts = {
+            key: {"train_windows": int(train_counts.get(key, 0)), "val_windows": int(val_counts.get(key, 0)),
+                  "total_windows": int(train_counts.get(key, 0) + val_counts.get(key, 0))}
+            for key in sorted(set(train_counts) | set(val_counts))
+        }
+        segments = int(df.groupby(["source_run", "cloud_provider", "service_name"])["segment"].nunique().sum())
+    else:
+        df = df.sort_values(["cloud_provider", "service_name", "timestamp"]).reset_index(drop=True)
+        # Step 1: Chronological train/val split per entity BEFORE computing baselines or windows
+        train_df, val_df, split_audit = split_entities_chronologically(df, val_split=val_split, window_size=window_size)
+        train_df, val_df = impute_causally(train_df, val_df, features)
+        # Step 2: Fit per-entity baselines strictly on train_df
+        baselines = compute_entity_baselines(train_df, features, scale_floors)
+        # Step 3: Build non-overlapping windows separately on train_df and val_df
+        base_train_windows, val_windows, entity_window_counts = build_disjoint_entity_windows(
+            train_df, val_df, baselines, features, window_size=window_size, stride=stride
+        )
+        segments = None
 
     with open(baselines_path, "w", encoding="utf-8") as f:
         json.dump(baselines, f, indent=2)
     with open(os.path.join(processed_dir, "entity_baselines.json"), "w", encoding="utf-8") as f:
         json.dump(baselines, f, indent=2)
-
-    # Step 3: Build non-overlapping windows separately on train_df and val_df
-    base_train_windows, val_windows, entity_window_counts = build_disjoint_entity_windows(
-        train_df, val_df, baselines, features, window_size=window_size, stride=stride
-    )
 
     # Step 4: Augment ONLY training windows
     rng = np.random.default_rng(seed)
@@ -332,11 +472,19 @@ def main():
 
     summary = {
         "architecture": "Per-Entity Z-Score Standardized Universal Autoencoder (V3)",
-        "split_strategy": "strict_chronological_per_entity_pre_windowing",
+        "source_runs": sorted(df["source_run"].unique().tolist()),
+        "source_files": list(raw_paths),
+        "split_strategy": ("blocked_interleaved_with_embargo" if split_strategy == "blocked"
+                           else "strict_chronological_per_entity_pre_windowing"),
+        "split_parameters": {k: data_cfg.get(k) for k in ("split_block_rows", "val_every_n_blocks", "embargo_rows",
+                                                          "max_gap_seconds", "sampling_interval_seconds", "val_split")},
         "baseline_fit_scope": "train_only",
-        "imputation": "causal_forward_fill_per_entity_after_split; initial_fallback=0",
+        "imputation": "causal_forward_fill_per_entity; initial_fallback=0",
         "window_overlap_between_train_and_val": 0,
-        "total_raw_entity_rows": int(len(df)),
+        "windows_cross_gaps": False if split_strategy == "blocked" else "not_checked",
+        "contiguous_segments": segments,
+        "total_raw_entity_rows": total_rows,
+        "dropped_incomplete_rows": incomplete_rows,
         "train_raw_entity_rows": int(len(train_df)),
         "val_raw_entity_rows": int(len(val_df)),
         "discovered_entities": list(entity_window_counts.keys()),
@@ -356,7 +504,9 @@ def main():
     with open(os.path.join(processed_dir, "preprocess_summary.json"), "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
 
-    print(f"  * Total Raw Entity Rows  : {len(df)} (Train: {len(train_df)}, Val: {len(val_df)})", flush=True)
+    print(f"  * Source Runs            : {', '.join(summary['source_runs'])}", flush=True)
+    print(f"  * Total Raw Entity Rows  : {total_rows} (Train: {len(train_df)}, Val: {len(val_df)}, "
+          f"dropped incomplete: {incomplete_rows})", flush=True)
     print(f"  * Baseline Fit Scope     : TRAIN ONLY ({len(train_df)} rows; 0 val rows leaked)", flush=True)
     print(f"  * Train/Val Overlap      : 0 shared timesteps", flush=True)
     print(f"  * Discovered Entities    : {', '.join(entity_window_counts.keys())}", flush=True)
