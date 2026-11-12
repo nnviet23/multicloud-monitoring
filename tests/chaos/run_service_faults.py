@@ -219,7 +219,7 @@ def main():
             children.append(subprocess.Popen([sys.executable, "tests/locust/traffic_generator.py", "--duration", str(total + 180),
                 "--min-users", str(args.users), "--max-users", str(args.users)], cwd=ROOT, env=env, stdout=tl, stderr=subprocess.STDOUT))
             children.append(subprocess.Popen([sys.executable, "ai-engine/inference/detector.py", "--interval", str(args.interval),
-                "--summary-out", str(output / "detector.json")], cwd=ROOT, env=env, stdout=dl, stderr=subprocess.STDOUT))
+                "--summary-out", str(output / "detector.json"), "--disable-telegram"], cwd=ROOT, env=env, stdout=dl, stderr=subprocess.STDOUT))
             deadline = time.monotonic() + 90
             while "Sample #" not in (output / "detector.log").read_text():
                 if children[-1].poll() is not None or time.monotonic() > deadline:

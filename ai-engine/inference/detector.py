@@ -983,13 +983,13 @@ class TelegramAlertSink:
     Sends structured AIOps alerts with Root Cause Analysis to Telegram Bot channel.
     Rate-limited per entity to avoid channel spam during sustained outages.
     """
-    def __init__(self, token=None, chat_id=None, cooldown_seconds=60):
-        self.token = token or os.environ.get("TELEGRAM_BOT_TOKEN")
-        self.chat_id = chat_id or os.environ.get("TELEGRAM_CHAT_ID")
+    def __init__(self, token=None, chat_id=None, cooldown_seconds=60, enabled=True):
+        self.token = (token or os.environ.get("TELEGRAM_BOT_TOKEN")) if enabled else None
+        self.chat_id = (chat_id or os.environ.get("TELEGRAM_CHAT_ID")) if enabled else None
         self.cooldown_seconds = cooldown_seconds
         self.last_sent = {}
 
-        if not self.token or self.token.startswith("CHANGE_ME"):
+        if enabled and (not self.token or self.token.startswith("CHANGE_ME")):
             self._load_env_fallback()
 
         self.configured = bool(self.token and self.chat_id
@@ -1053,6 +1053,8 @@ def parse_args():
     parser.add_argument("--telegram-token", default="", help="Telegram Bot Token for alerts")
     parser.add_argument("--telegram-chat-id", default="", help="Telegram Chat ID for alerts")
     parser.add_argument("--telegram-cooldown", type=int, default=60, help="Cooldown in seconds between alerts for same entity")
+    parser.add_argument("--disable-telegram", action="store_true",
+                        help="Never send Telegram alerts (experiments/chaos runs); ignores env and .env credentials")
     return parser.parse_args()
 
 
@@ -1156,6 +1158,7 @@ def main():
         token=args.telegram_token,
         chat_id=args.telegram_chat_id,
         cooldown_seconds=args.telegram_cooldown,
+        enabled=not args.disable_telegram,
     )
     entity_buffers = {}
     recovery = LatencyRecovery(limits=limits)

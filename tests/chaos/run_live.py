@@ -235,7 +235,7 @@ def main():
                                        stdout=traffic_log, stderr=subprocess.STDOUT)
             children.append(traffic)
             detector = subprocess.Popen([sys.executable, "ai-engine/inference/detector.py", "--interval",
-                                         str(args.interval), "--summary-out", str(output / "detector.json")],
+                                         str(args.interval), "--summary-out", str(output / "detector.json"), "--disable-telegram"],
                                         cwd=ROOT, env=env, stdout=detector_log, stderr=subprocess.STDOUT)
             children.append(detector)
             # Wait for actual inference, excluding Python imports and port-forward startup.

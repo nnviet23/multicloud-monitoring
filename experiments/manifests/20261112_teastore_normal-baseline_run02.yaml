@@ -1,0 +1,80 @@
+schema_version: "1.0"
+experiment_id: "20261112_teastore_normal-baseline_run02"
+status: "running" # planned | running | valid | invalid | incomplete
+purpose: "Fault-free training data for the AI anomaly detector on the 4-cluster topology (replaces the stopped run01)"
+started_at_utc: "2026-11-12T17:34:55Z"   # runner start; sampling starts after the 180s warm-up
+ended_at_utc: null
+
+repository:
+  commit: "4e5d4bf82a607f9507695a359d6fc3ebda392614"
+  branch: "AI"
+  dirty: true  # scripts/run_data_collection.sh was being edited; the exact runner is system/run_command.sh (committed later as ad08399)
+
+workload:
+  application: "TeaStore"
+  version_or_image_digest: "descartesresearch/teastore-*:1.4.1 (digests in raw/20261112_teastore_normal-baseline_run02/system/pods_snapshot_start.json)"
+  scenario: "normal-baseline"
+  entrypoint: "http://localhost:8080/tools.descartes.teastore.webui (AWS nginx-api-gateway)"
+  load_tool: "tests/locust/traffic_generator.py (stdlib generator; not Locust)"
+  concurrency: {min_users: 4, max_users: 50, profile: "4-phase daily curve + 15m/2m sine waves + flash bursts"}
+  duration_seconds: 14400
+  warmup_seconds: 180      # traffic only, not sampled (cold JVMs after cluster restart)
+  cooldown_seconds: 0
+  fault_injection: none
+  anomaly_label: 0
+
+environment:
+  clusters: ["hub-k3d", "aws-k3d", "azure-k3d", "gcp-k3d"]
+  placement:
+    aws-k3d: [nginx-api-gateway, teastore-webui, teastore-image, teastore-registry]
+    azure-k3d: [teastore-auth, teastore-persistence, teastore-db]
+    gcp-k3d: [teastore-recommender]
+  node_profile: "k3s v1.31.2+k3s1, 1 server per cluster, single host 16 vCPU / 12.8 GiB RAM"
+  resource_limits_snapshot: "raw/20261112_teastore_normal-baseline_run02/system/pods_snapshot_start.json"
+  network_profile: "baseline"
+  network_impairment:
+    rtt_ms: 10        # tc netem delay per spoke egress (see system/netem_start.txt)
+    jitter_ms: 2
+    packet_loss_percent: 0.1
+    bandwidth_mbps: null
+  lab_events_before_run:
+    - "k3d cluster start --all after power-off; playbooks 03 (netem) and 04 (hosts) re-applied"
+    - "nginx-api-gateway CrashLoop on cold start fixed (a4464d1) before the run"
+
+telemetry:
+  collector_version: "otel/opentelemetry-collector-contrib:0.114.0"
+  java_agent: "autoinstrumentation-java:2.10.0, OTEL_METRIC_EXPORT_INTERVAL=10000"
+  backend_versions: {prometheus: "v2.50.0", tempo: "2.4.0", loki: "2.9.4", thanos: "v0.36.1"}
+  transport_security: "mtls"
+  sampling_policy: "edge 20% traces + tail sampling at hub (metrics unsampled)"
+  ai_feature_collector:
+    script: "ai-engine/data/collector.py (4e5d4bf: detector feature path, histogram-delta latency)"
+    prometheus: "svc/prometheus via kubectl port-forward, auto-restarted (system/port-forward.log)"
+    interval_seconds: 10
+    features: [qps, server_latency_p95, client_latency_p95, error_rate_5xx, max_pod_cpu_pct, max_pod_ram_pct, ram_floor_2m_pct, gc_pause_rate]
+    cpu_definition: "% of one core from rate(jvm_cpu_time_seconds_total[1m])"
+    ram_floor_window_seconds: 120
+    missing_data: "failed query cycles are skipped and listed in metrics/collection_summary.json (no zero rows)"
+  probe_logger:
+    script: "scripts/probe_logger.py (detector probe_webui_health, 10s)"
+    started_at_utc: "2026-11-12T17:42:5xZ"   # started manually ~5 min after sampling began; see system/run.log
+
+artifacts:
+  raw:
+    - "experiments/raw/20261112_teastore_normal-baseline_run02/metrics/entity_features.csv"
+    - "experiments/raw/20261112_teastore_normal-baseline_run02/metrics/collection_summary.json"
+    - "experiments/raw/20261112_teastore_normal-baseline_run02/workload/probe.csv"
+    - "experiments/raw/20261112_teastore_normal-baseline_run02/workload/traffic_generator.log"
+  processed: []
+  logs:
+    - "experiments/raw/20261112_teastore_normal-baseline_run02/system/run.log"
+    - "experiments/raw/20261112_teastore_normal-baseline_run02/system/collector.log"
+    - "experiments/raw/20261112_teastore_normal-baseline_run02/system/port-forward.log"
+  notes:
+    - "experiments/raw/20261112_teastore_normal-baseline_run02/system/run_command.sh is the exact runner"
+
+quality:
+  validity_reason: null
+  missing_data_notes: []
+  deviations:
+    - "probe logger was not part of the runner at start; it was launched separately after ~5 min of sampling"
