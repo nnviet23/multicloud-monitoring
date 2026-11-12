@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules
+  namespace: monitoring
+data:
+  alerts.yaml: |
+    groups:
+      - name: multicloud-signoz-alerts
+        rules:
+          - alert: SpokeClusterHeartbeatAbsent
+            expr: absent(up{cluster="aws-k3d"} == 1) or absent(up{cluster="azure-k3d"} == 1)
+            for: 2m
+            labels:
+              severity: critical
+              category: availability
+              strategy: signoz-heartbeat
+            annotations:
+              summary: "Mất tín hiệu Heartbeat từ cụm Spoke đa đám mây (Absent Data)"
+              description: "Không nhận được bất kỳ số liệu telemetry nào từ cụm Spoke (AWS hoặc Azure) về Central Hub trong hơn 2 phút. Có thể do đứt kết nối mạng WAN hoặc Collector Spoke bị dừng."
+
+          - alert: MicroserviceHighErrorRate
+            expr: (sum by (server) (rate(traces_service_graph_request_failed_total[2m])) / (sum by (server) (rate(traces_service_graph_request_total[2m])) + 0.0001)) * 100 > 5
+            for: 2m
+            labels:
+              severity: high
+              category: performance
+              strategy: signoz-red-error
+            annotations:
+              summary: "Tỷ lệ lỗi dịch vụ microservice vượt ngưỡng 5%"
+              description: "Dịch vụ {{ $labels.server }} có tỷ lệ lỗi vượt quá 5% liên tục trong 2 phút."
+
+          - alert: CrossCloudWANLatencyDegraded
+            expr: histogram_quantile(0.99, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[2m]))) * 1000 > 1500
+            for: 2m
+            labels:
+              severity: high
+              category: performance
+              strategy: signoz-latency-spike
+            annotations:
+              summary: "Độ trễ P99 xuyên mây vượt ngưỡng 1.5 giây"
+              description: "Dịch vụ {{ $labels.server }} có độ trễ P99 vượt 1500ms liên tục trong 2 phút. Cần kiểm tra suy giảm mạng WAN (netem) hoặc tắc nghẽn cơ sở dữ liệu."
+
+          - alert: OTelCollectorMemoryHigh
+            expr: sum by (pod) (container_memory_working_set_bytes{pod=~"otel-collector.*"}) > 400000000
+            for: 2m
+            labels:
+              severity: warning
+              category: infrastructure
+              strategy: signoz-cardinality-buffer
+            annotations:
+              summary: "Bộ đệm OTel Collector chịu áp lực bộ nhớ cao (>400MB)"
+              description: "Pod {{ $labels.pod }} đang sử dụng bộ nhớ vượt 400MB RSS, có nguy cơ kích hoạt memory_limiter làm rơi dữ liệu viễn trắc."
+

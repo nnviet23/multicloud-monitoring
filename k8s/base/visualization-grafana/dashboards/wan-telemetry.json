@@ -1,5 +1,7 @@
 {
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -9,14 +11,25 @@
   "panels": [
     {
       "collapsed": false,
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
       "id": 1,
       "title": "Configured WAN Latency RTT",
       "type": "stat",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "vector(10.0)",
           "instant": true,
@@ -24,19 +37,37 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "color": { "fixedColor": "purple", "mode": "fixed" }, "unit": "ms", "decimals": 1 }
+        "defaults": {
+          "color": {
+            "fixedColor": "purple",
+            "mode": "fixed"
+          },
+          "unit": "ms",
+          "decimals": 1
+        }
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
       "id": 2,
       "title": "Simulated Netem Jitter",
       "type": "stat",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "vector(2.0)",
           "instant": true,
@@ -44,19 +75,37 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "color": { "fixedColor": "orange", "mode": "fixed" }, "unit": "ms", "decimals": 1 }
+        "defaults": {
+          "color": {
+            "fixedColor": "orange",
+            "mode": "fixed"
+          },
+          "unit": "ms",
+          "decimals": 1
+        }
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
       "id": 3,
       "title": "Simulated Packet Loss Rate",
       "type": "stat",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "vector(0.1)",
           "instant": true,
@@ -64,99 +113,174 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "color": { "fixedColor": "yellow", "mode": "fixed" }, "unit": "percent", "decimals": 2 }
+        "defaults": {
+          "color": {
+            "fixedColor": "yellow",
+            "mode": "fixed"
+          },
+          "unit": "percent",
+          "decimals": 2
+        }
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
       "id": 4,
       "title": "Cross-Cloud WAN Calls / sec",
       "type": "stat",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "sum(rate(traces_service_graph_request_total{client_cloud_provider!=server_cloud_provider}[1m]))",
+          "expr": "sum(rate(traces_service_graph_request_total{client_cloud_provider!=server_cloud_provider}[1m])) or sum(rate(traces_service_graph_request_total{server=~\"teadb|teastore-registry\"}[1m]))",
           "instant": true,
           "refId": "A"
         }
       ],
       "fieldConfig": {
-        "defaults": { "color": { "fixedColor": "green", "mode": "fixed" }, "unit": "reqps", "decimals": 2 }
+        "defaults": {
+          "color": {
+            "fixedColor": "green",
+            "mode": "fixed"
+          },
+          "unit": "reqps",
+          "decimals": 2
+        }
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
       "id": 5,
       "title": "Cross-Cloud Network Latency Duration (AWS -> Azure)",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le, client, server) (rate(traces_service_graph_request_server_seconds_bucket{client_cloud_provider!=server_cloud_provider}[1m]))) * 1000",
+          "expr": "histogram_quantile(0.95, sum by (le, client, server) (rate(traces_service_graph_request_server_seconds_bucket{client_cloud_provider!=server_cloud_provider}[5m]) or rate(traces_service_graph_request_server_seconds_bucket{server=~\"teadb|teastore-registry\"}[5m]))) * 1000",
           "legendFormat": "{{client}} (AWS) -> {{server}} (Azure) [P95]",
           "range": true,
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by (le, client, server) (rate(traces_service_graph_request_server_seconds_bucket{client_cloud_provider!=server_cloud_provider}[1m]))) * 1000",
+          "expr": "histogram_quantile(0.50, sum by (le, client, server) (rate(traces_service_graph_request_server_seconds_bucket{client_cloud_provider!=server_cloud_provider}[5m]) or rate(traces_service_graph_request_server_seconds_bucket{server=~\"teadb|teastore-registry\"}[5m]))) * 1000",
           "legendFormat": "{{client}} (AWS) -> {{server}} (Azure) [P50]",
           "range": true,
           "refId": "B"
         }
       ],
       "fieldConfig": {
-        "defaults": { "custom": { "lineWidth": 2 }, "unit": "ms" }
+        "defaults": {
+          "custom": {
+            "lineWidth": 2
+          },
+          "unit": "ms"
+        }
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
       "id": 6,
       "title": "WAN Bridge Network I/O Throughput (mc-monitoring-net)",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "sum by (k8s_cluster_name, direction) (rate(system_network_io_bytes_total[1m]))",
+          "expr": "sum by (k8s_cluster_name, direction) (rate(system_network_io_bytes_total{k8s_cluster_name=~\"$cluster\"}[1m]))",
           "legendFormat": "{{k8s_cluster_name}} - {{direction}}",
           "range": true,
           "refId": "A"
         }
       ],
       "fieldConfig": {
-        "defaults": { "custom": { "fillOpacity": 15, "lineWidth": 2 }, "unit": "Bps" }
+        "defaults": {
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          },
+          "unit": "Bps"
+        }
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
       "id": 7,
       "title": "Actual Network Packet Drops & Transmission Errors",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "sum by (k8s_cluster_name, direction) (rate(system_network_dropped_total[1m]))",
+          "expr": "sum by (k8s_cluster_name, direction) (rate(system_network_dropped_total{k8s_cluster_name=~\"$cluster\"}[1m]))",
           "legendFormat": "{{k8s_cluster_name}} Drops ({{direction}})",
           "range": true,
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "sum by (k8s_cluster_name, direction) (rate(system_network_errors_total[1m]))",
+          "expr": "sum by (k8s_cluster_name, direction) (rate(system_network_errors_total{k8s_cluster_name=~\"$cluster\"}[1m]))",
           "legendFormat": "{{k8s_cluster_name}} Errors ({{direction}})",
           "range": true,
           "refId": "B"
@@ -164,49 +288,144 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": { "lineWidth": 2 },
+          "custom": {
+            "lineWidth": 2
+          },
           "unit": "pps",
-          "color": { "mode": "palette-classic" }
+          "color": {
+            "mode": "palette-classic"
+          }
         }
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
       "id": 8,
       "title": "Cross-Cluster Packet Rates & TCP Socket Saturation",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "sum by (k8s_cluster_name, direction) (rate(system_network_packets_total[1m]))",
+          "expr": "sum by (k8s_cluster_name, direction) (rate(system_network_packets_total{k8s_cluster_name=~\"$cluster\"}[1m]))",
           "legendFormat": "{{k8s_cluster_name}} Packets ({{direction}})",
           "range": true,
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "sum by (k8s_cluster_name, state) (system_network_connections{state=~\"ESTABLISHED|TIME_WAIT|CLOSE_WAIT\"})",
+          "expr": "sum by (k8s_cluster_name, state) (system_network_connections{k8s_cluster_name=~\"$cluster\", state=~\"ESTABLISHED|TIME_WAIT|CLOSE_WAIT\"})",
           "legendFormat": "{{k8s_cluster_name}} Sockets ({{state}})",
           "range": true,
           "refId": "B"
         }
       ],
       "fieldConfig": {
-        "defaults": { "custom": { "lineWidth": 2 }, "unit": "short" }
+        "defaults": {
+          "custom": {
+            "lineWidth": 2
+          },
+          "unit": "short"
+        }
       }
     }
   ],
   "refresh": "5s",
   "schemaVersion": 39,
-  "tags": ["multicloud", "wan", "netem", "latency", "network"],
-  "templating": { "list": [] },
-  "time": { "from": "now-15m", "to": "now" },
+  "tags": [
+    "multicloud",
+    "wan",
+    "netem",
+    "latency",
+    "network"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "thanos-query-ds"
+        },
+        "definition": "label_values(system_cpu_time_seconds_total, k8s_cluster_name)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Cluster",
+        "multi": true,
+        "name": "cluster",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(system_cpu_time_seconds_total, k8s_cluster_name)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "production",
+          "value": "production"
+        },
+        "hide": 0,
+        "includeAll": true,
+        "label": "Environment",
+        "multi": false,
+        "name": "environment",
+        "options": [
+          {
+            "selected": false,
+            "text": "All",
+            "value": "$__all"
+          },
+          {
+            "selected": true,
+            "text": "production",
+            "value": "production"
+          },
+          {
+            "selected": false,
+            "text": "staging",
+            "value": "staging"
+          }
+        ],
+        "query": "production, staging",
+        "skipUrlSync": false,
+        "type": "custom"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
   "timezone": "browser",
-  "title": "Simulated WAN Network Emulation & Latency",
+  "title": "05. Network & WAN Transport",
   "uid": "mc-wan-telemetry",
   "version": 2
 }

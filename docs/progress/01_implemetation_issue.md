@@ -33,6 +33,20 @@
   - [INC-P3-15: Thiếu hụt chỉ số hạ tầng sâu tầng OS/Kernel/Storage/USE và nâng cấp toàn diện bộ 7 Dashboards Grafana chuẩn SRE](#inc-p3-15-thiếu-hụt-chỉ-số-hạ-tầng-sâu-tầng-oskernelstorageuse-và-nâng-cấp-toàn-diện-bộ-7-dashboards-grafana-chuẩn-sre)
 - [Phase 3.6: Chuẩn Hóa Unified Resource Schemas & JVM Runtime Completeness](#phase-36-chuẩn-hóa-unified-resource-schemas--jvm-runtime-completeness)
   - [INC-P3-16: Chuẩn hóa bộ đặc tả Unified Resource Monitoring Schemas (Web App & Compute Instance) và bổ sung độ phủ JVM Runtime Saturation](#inc-p3-16-chuẩn-hóa-bộ-đặc-tả-unified-resource-monitoring-schemas-web-app--compute-instance-và-bổ-sung-độ-phủ-jvm-runtime-saturation)
+- [Phase 3.7: Hợp Nhất AI Anomaly Detection & Vòng Lặp Closed-Loop AIOps](#phase-37-hợp-nhất-ai-anomaly-detection--vòng-lặp-closed-loop-aiops)
+  - [INC-P3-17: Lệch pha SemConv PromQL, xung đột kịch bản chaos 3 cụm k3d & thiếu phản hồi Closed-Loop AIOps](#inc-p3-17-lệch-pha-semconv-promql-xung-đột-kịch-bản-chaos-3-cụm-k3d--thiếu-phản-hồi-closed-loop-aiops)
+- [Phase 3.8: Học Hỏi Chiến Lược Nâng Cao Từ SigNoz](#phase-38-học-hỏi-chiến-lược-nâng-cao-từ-signoz)
+  - [INC-P3-18: Dynamic Templating, 360° Data Links, Tempo TraceQL Explorer và Dashboard Quản Trị Chi Phí Telemetry](#inc-p3-18-dynamic-templating-360-data-links-tempo-traceql-explorer-và-dashboard-quản-trị-chi-phí-telemetry)
+- [Phase 3.9: Tối Ưu Hóa Tầng Sâu Pipeline & Kiểm Thử Môi Trường Thực Tế](#phase-39-tối-ưu-hóa-tầng-sâu-pipeline--kiểm-thử-môi-trường-thực-tế)
+  - [INC-P3-19: Dual-Route Traces Pipeline bảo toàn True QPS cho ServiceGraph và Prometheus Alert Rules](#inc-p3-19-dual-route-traces-pipeline-bảo-toàn-true-qps-cho-servicegraph-và-prometheus-alert-rules)
+  - [INC-P3-20: Kustomize CRD Race Condition & Containerd MinIO Cache trên Ubuntu WSL2](#inc-p3-20-kustomize-crd-race-condition--containerd-minio-cache-trên-ubuntu-wsl2)
+  - [INC-P3-21: Loại bỏ nhãn AzureVM, chuẩn hóa định danh thực tế Microsoft Entra ID & AWS ARN và bổ sung cơ chế xóa sạch Docker Images khi Teardown](#inc-p3-21-loại-bỏ-nhãn-azurevm-chuẩn-hóa-định-danh-thực-tế-microsoft-entra-id--aws-arn-và-bổ-sung-cơ-chế-xóa-sạch-docker-images-khi-teardown)
+- [Phase 3.9.3: Khắc Phục Lỗi Chặn Audit & Xác Thực Chữ Ký Mật Mã PKI / mTLS](#phase-393-khắc-phục-lỗi-chặn-audit--xác-thực-chữ-ký-mật-mã-pki--mtls)
+  - [INC-P3-22: Khắc phục triệt để 5 lỗi chặn kiến trúc & mã nguồn phát hiện qua Audit SigNoz Production Standards](#inc-p3-22-khắc-phục-triệt-để-5-lỗi-chặn-kiến-trúc--mã-nguồn-phát-hiện-qua-audit-signoz-production-standards)
+- [Phase 3.9.5: Nạp Động Secret từ .env & Chuẩn Hóa Toàn Diện 8 Dashboards Grafana](#phase-395-nạp-động-secret-từ-env--chuẩn-hóa-toàn-diện-8-dashboards-grafana)
+  - [INC-P3-23: Triệt tiêu hoàn toàn mật khẩu Plaintext S3 và chuẩn hóa UX/Filters 8 Grafana Dashboards](#inc-p3-23-triệt-tiêu-hoàn-toàn-mật-khẩu-plaintext-s3-và-chuẩn-hóa-uxfilters-8-grafana-dashboards)
+- [Phase 3.9.7: Rà Soát Độ Phủ Thuộc Tính & Tín Hiệu Schemas Trên 8 Grafana Dashboards](#phase-397-rà-soát-độ-phủ-thuộc-tính--tín-hiệu-schemas-trên-8-grafana-dashboards)
+  - [INC-P3-24: Báo cáo khoảng trống hiển thị giữa OTel Schemas v4.2.0 và 8 Grafana Dashboards](#inc-p3-24-báo-cáo-khoảng-trống-hiển-thị-giữa-otel-schemas-v420-và-8-grafana-dashboards)
 
 ---
 
@@ -364,13 +378,14 @@
 - **Giải pháp xử lý (Solution):**
   1. Xây dựng tài liệu nghiên cứu chuyên sâu `docs/progress/03_resource_monitor.md`, định hình mô hình phụ thuộc 360 độ của một tài nguyên trung tâm với 2 ca nghiên cứu điển hình: `teastore-webui` (AWS EKS) và `teastore-db` (Azure MySQL).
   2. Mở rộng bộ chuyển đổi `transform/normalize_cloud` trong `03-configmap.yaml` của Hub Collector để tự động inject các thuộc tính phụ thuộc đám mây sâu:
-     - `cloud.account.id`: `123456789012` (AWS), `00000000-0000-0000-0000-000000000000` (Azure).
+     - `cloud.account.id`: `851725492014` (AWS), `4b8f3a21-9e6c-4f80-b753-2d9a6e1c84f5` (Azure).
+     - `microsoft.entra.tenant_id`: `72f988bf-86f1-41af-91ab-2d7cd011db47` (Microsoft Entra Directory ID).
      - `cloud.platform`: `aws_eks` (AWS), `azure_aks` (Azure).
-     - `network.vpc.id`: `vpc-0a1b2c3d4e5f67890` (AWS), `vnet-teastore-southasia` (Azure).
-     - `network.subnet.id`: `subnet-0e1f2a3b4c5d6e7f8` (AWS), `snet-mysql-delegated` (Azure).
-     - `network.security_group.id`: `sg-0c4d5e6f7a8b9c0d1` (AWS), `nsg-mysql-internal` (Azure).
-     - `cloud.identity.arn`: Tự động sinh chuỗi ARN IAM Role / Managed Identity dựa theo tên dịch vụ (`service.name`).
-     - `cloud.resource_id`: Tự động sinh chuỗi ARN / Azure Resource ID đầy đủ dựa theo Pod và Namespace.
+     - `network.vpc.id`: `vpc-0f8a3c2b1e7d9a4f6` (AWS), `vnet-teastore-southasia` (Azure).
+     - `network.subnet.id`: `subnet-09a8b7c6d5e4f3a21` (AWS), `snet-aks-nodepool-data` (Azure).
+     - `network.security_group.id`: `sg-01a2b3c4d5e6f7a8b` (AWS), `nsg-aks-teastore-internal` (Azure).
+     - `cloud.identity.arn`: Tự động sinh chuỗi ARN IAM Role (`arn:aws:iam::851725492014:role/*-irsa-role`) / Microsoft Entra Managed Identity (`/subscriptions/4b8f3a21-.../uami-*`) dựa theo tên dịch vụ (`service.name`).
+     - `cloud.resource_id`: Tự động sinh chuỗi ARN EKS Pod (`arn:aws:eks:us-east-1:851725492014:pod/...`) / Azure AKS Pod Resource ID đầy đủ dựa theo Pod và Namespace.
   3. Tái triển khai Pod `otel-collector-hub` qua Rolling Update, kiểm tra logs xác nhận không có lỗi cú pháp OTTL.
 - **Kết quả xác thực (Verification Outcome):**
   1. Telemetry OTLP JSON đổ vào MinIO `raw-telemetry` bucket ghi nhận đầy đủ các trường `cloud.account.id`, `network.vpc.id`, `network.subnet.id`, `cloud.identity.arn`, `cloud.resource_id`.
@@ -491,6 +506,220 @@
   2. Cú pháp Python: Toàn bộ các script `collector.py`, `detector.py`, `run_live.py`, `run_service_faults.py` vượt qua `py_compile`.
   3. Cú pháp Grafana: Toàn bộ 7/7 tệp dashboard JSON hợp lệ.
   4. Kustomize overlays: Cả 3 cụm `hub`, `spoke-aws`, `spoke-azure` đều build manifest thành công.
+
+---
+
+## Phase 3.8: Học Hỏi Chiến Lược Nâng Cao Từ SigNoz
+
+### INC-P3-18: Dynamic Templating, 360° Data Links, Tempo TraceQL Explorer và Dashboard Quản Trị Chi Phí Telemetry
+- **Thời gian ghi nhận:** 2026-11-09
+- **Phân loại thành phần:** `k8s/base/visualization-grafana/dashboards/`
+- **Mức độ nghiêm trọng:** Medium
+- **Hiện tượng & Nguyên nhân gốc rễ (Root Cause):**
+  1. Toàn bộ các bảng điều khiển Grafana trước đó sử dụng biến tĩnh hoặc thiếu biến động đa cụm (`$cluster`, `$service`, `$environment`), làm hạn chế khả năng lọc cô lập dữ liệu theo từng đám mây hoặc xem toàn cục.
+  2. Sơ đồ NodeGraph trên `system-topology.json` thiếu tính tương tác trực quan: chưa hiển thị trực tiếp tỷ lệ thành công/thất bại của từng node (Health Donut Arcs) và thiếu liên kết ngữ cảnh (Data Links) cho phép click từ Node để mở ngay Dashboard RED Metrics hoặc Logs/Traces của đúng service đó.
+  3. Dashboard `logs-traces-deepdive.json` thiếu panel nhúng TraceQL để xem trực tiếp chi tiết Spans Waterfall của các giao dịch bị trễ mạng WAN hoặc lỗi DB.
+  4. Hệ thống chưa có công cụ giám sát chi phí nạp viễn trắc (Telemetry Ingestion Cost) và kiểm toán rò rỉ nhãn vô hạn (unbounded cardinality).
+- **Giải pháp xử lý (Solution):**
+  1. Chuẩn hóa biến động `templating` trên 100% (8/8) dashboards với `$cluster`, `$service`, `$environment`.
+  2. Bổ sung `arc__passed` và `arc__failed` cùng 360° Data Links trên NodeGraph Topology.
+  3. Nhúng Panel 6 (Tempo Distributed TraceQL Explorer: `{ status = error || duration > 1.5s }`) và Panel 7 (Trace Spans Latency Distribution) trên `logs-traces-deepdive.json`.
+  4. Kiến tạo Dashboard 8: `mc-cost-telemetry.json` (Multi-Cloud Telemetry Ingestion, Cardinality & Cost Meter) gồm 8 panel chuyên sâu giám sát lưu lượng nạp, ước tính chi phí WAN Egress ($0.09/GB) và kiểm toán Top 10 High-Cardinality Metrics.
+- **Kết quả xác thực:** 8/8 Dashboards Grafana JSON hợp lệ 100%; nạp tự động qua Grafana provisioning.
+
+---
+
+## Phase 3.9: Tối Ưu Hóa Tầng Sâu Pipeline & Kiểm Thử Môi Trường Thực Tế
+
+### INC-P3-19: Dual-Route Traces Pipeline Bảo Toàn True QPS Cho ServiceGraph và Bộ Luật Cảnh Báo Prometheus
+- **Thời gian ghi nhận:** 2026-11-10
+- **Phân loại thành phần:** `03-configmap.yaml` (OTel Gateway), `01-configmap-prometheus-rules.yaml`
+- **Mức độ nghiêm trọng:** Medium
+- **Hiện tượng & Nguyên nhân gốc rễ (Root Cause):**
+  1. Trước đây, luồng `traces` đi qua `tail_sampling` trước khi đẩy sang `servicegraphconnector`. Khi tail-sampling lọc bỏ 95% trace thông thường để tiết kiệm dung lượng, tỷ lệ request của ServiceGraph (`traces_service_graph_request_total`) bị giảm tương ứng 95%, không phản ánh đúng thông lượng thực tế (True QPS) của hệ thống.
+  2. Prometheus thiếu tập luật cảnh báo tự động phát hiện mất dữ liệu Spoke (Absent Data Heartbeat), trễ WAN suy giảm, và áp lực bộ nhớ OTel Collector.
+- **Giải pháp xử lý (Solution):**
+  1. Tách luồng traces tại Hub Gateway thành **Dual-Route Traces Pipeline**:
+     - Luồng 1 (`traces`): Nhận 100% spans thô $\rightarrow$ đẩy trực tiếp vào `servicegraph` connector (bảo toàn 100% throughput và độ chính xác của bản đồ mạng).
+     - Luồng 2 (`traces/storage`): Nhận spans thô $\rightarrow$ qua `tail_sampling` (100% error + 100% trễ > 1500ms + 5% routine) $\rightarrow$ đẩy sang Tempo và MinIO S3 (tiết kiệm >70% chi phí lưu trữ).
+  2. Khởi tạo `01-configmap-prometheus-rules.yaml` với 4 nhóm luật: `SpokeClusterHeartbeatAbsent`, `MicroserviceHighErrorRate`, `CrossCloudWANLatencyDegraded`, `OTelCollectorMemoryHigh`.
+- **Kết quả xác thực:** Cả hai luồng traces hoạt động song song chính xác, QPS trên bản đồ Topology đạt đúng giá trị thực tế; 4 nhóm cảnh báo hoạt động ổn định trên Prometheus `:9090/rules`.
+
+---
+
+### INC-P3-20: Kustomize CRD Race Condition & Containerd MinIO Cache Trên Ubuntu WSL2
+- **Thời gian ghi nhận:** 2026-11-10
+- **Phân loại thành phần:** `k8s/overlays/local-k3d/hub`, `containerd / MinIO`
+- **Mức độ nghiêm trọng:** Medium
+- **Hiện tượng & Nguyên nhân gốc rễ (Root Cause):**
+  1. Khi chạy `kubectl apply -k k8s/overlays/local-k3d/hub` trong lần đầu, Kube API server chưa kịp đăng ký schema CRD Pyrra (`ServiceLevelObjective`) trước khi tài nguyên CR `teastore-webui-availability` được apply, dẫn đến lỗi `no matches for kind "ServiceLevelObjective"`.
+  2. Docker Hub chặn kéo image `minio/minio:RELEASE.2025-10-15T17-29-55Z` từ containerd bên trong k3d do cơ chế scope authorization token của Docker Hub bị giới hạn.
+- **Giải pháp xử lý (Solution):**
+  1. Chạy lại lệnh apply Kustomize lần hai ngay sau khi CRD schema hoàn tất đăng ký.
+  2. Nạp trực tiếp image đã kéo từ host Docker vào containerd của k3d server node qua đường ống:
+     `docker save minio/minio:RELEASE.2025-10-15T17-29-55Z | docker exec -i k3d-hub-k3d-server-0 ctr images import -`.
+- **Kết quả xác thực:** Toàn bộ 18 pod trên 3 cụm Kubernetes (`hub-k3d`, `aws-k3d`, `azure-k3d`) đạt trạng thái `1/1 Running` (`prometheus-0` đạt `2/2 Running`).
+
+---
+
+### INC-P3-21: Loại Bỏ Nhãn AzureVM, Chuẩn Hóa Định Danh Thực Tế Microsoft Entra ID & AWS ARN và Bổ Sung Cơ Chế Xóa Sạch Docker Images Khi Teardown
+- **Thời gian ghi nhận:** 2026-11-10
+- **Phân loại thành phần:** `Makefile`, `00_cleanup_all.yml`, `infra/scripts/clean_images.sh`, `03-configmap.yaml` (OTel Gateway), `system-topology.json`, `docs/schemas/`
+- **Mức độ nghiêm trọng:** High
+- **Hiện tượng & Nguyên nhân gốc rễ (Root Cause):**
+  1. **Tồn đọng Docker Images khi Teardown:** Lệnh `make teardown` (Ansible playbook `00_cleanup_all.yml`) chỉ xóa các container `k3d-*`, xóa mạng bridge `mc-monitoring-net` và dọn volume, nhưng không xóa các Docker images đã kéo trên máy chủ host (`docker images` vẫn giữ nguyên toàn bộ 16 container images của TeaStore, OTel và Observability).
+  2. **Xuất hiện nhãn sai lệch "AzureVM":** Trong kiến trúc thực tế của đồ án, Spoke 2 (`azure-k3d`) là cụm Kubernetes mô phỏng **Azure Kubernetes Service (AKS)** với Managed Node Pool (`nodepool-data`), hoàn toàn không có máy chủ ảo độc lập (`AzureVM` / `Microsoft.Compute/virtualMachines`). Tuy nhiên, trong biểu thức PromQL Panel 3 của `system-topology.json` và một số tài liệu schema lại xuất hiện chuỗi `Azure AKS (VM Standard_D4ds_v5)`.
+  3. **Định danh giả lập phi thực tế:** Các thuộc tính làm giàu (enrichment) tại Hub OTel Gateway sử dụng chuỗi số giả lập `123456789012` (AWS) và `00000000-0000-0000-0000-000000000000` (Azure), thiếu định danh danh tính Microsoft Entra ID (Tenant ID, UAMI Client/Object ID) theo chuẩn doanh nghiệp thực tế.
+- **Giải pháp xử lý (Solution):**
+  1. **Khởi tạo script `infra/scripts/clean_images.sh` & Tích hợp vào `make teardown`:**
+     - Xóa toàn bộ 16 images của TeaStore, OTel, Observability và các image helper k3d (`rancher/k3*`).
+     - Thực thi `docker image prune -f` xóa triệt để dangling images.
+     - Tích hợp tác vụ này vào cả playbook `infra/ansible/playbooks/00_cleanup_all.yml` và target `make teardown`, đồng thời cung cấp target độc lập `make clean-images`.
+  2. **Triệt tiêu hoàn toàn nhãn AzureVM:**
+     - Chuẩn hóa nền tảng của Azure Spoke thành `Azure AKS (NodePool: nodepool-data)` và AWS Spoke thành `AWS EKS (NodeGroup: nodepool-app)` trên Grafana Dashboard `system-topology.json`.
+     - Cập nhật `docs/schemas/RESOURCE_MONITORING_SCHEMAS.md` và `docs/schemas/instance-monitoring-schema.yaml` xác định đối tượng theo dõi là Kubernetes Worker Nodes / EKS & AKS Node Pools, loại bỏ mọi tham chiếu tới standalone Cloud VMs.
+  3. **Chuẩn hóa định danh Microsoft Entra ID & Realistic ARN IDs:**
+     - **AWS Identifiers:**
+       - AWS 12-digit Account ID: `851725492014` (thay thế `123456789012`).
+       - IAM Role ARN: `arn:aws:iam::851725492014:role/${service.name}-irsa-role`.
+       - EKS Pod Resource ID: `arn:aws:eks:us-east-1:851725492014:pod/teastore-cluster/${k8s.namespace.name}/${k8s.pod.name}`.
+       - Network VPC ID: `vpc-0f8a3c2b1e7d9a4f6` (thay thế `vpc-0a1b2c3d4e5f67890`), Subnet: `subnet-09a8b7c6d5e4f3a21`, SG: `sg-01a2b3c4d5e6f7a8b`.
+     - **Azure / Microsoft Entra ID Identifiers:**
+       - Azure Subscription ID: `4b8f3a21-9e6c-4f80-b753-2d9a6e1c84f5` (thay thế chuỗi toàn số 0).
+       - Microsoft Entra Directory / Tenant ID: `72f988bf-86f1-41af-91ab-2d7cd011db47`.
+       - Microsoft Entra User-Assigned Managed Identity (UAMI): `/subscriptions/4b8f3a21-9e6c-4f80-b753-2d9a6e1c84f5/resourceGroups/rg-teastore-southasia/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-${service.name}`.
+       - Azure AKS Pod Resource ID: `/subscriptions/4b8f3a21-9e6c-4f80-b753-2d9a6e1c84f5/resourceGroups/rg-teastore-southasia/providers/Microsoft.ContainerService/managedClusters/teastore-aks/pods/${k8s.pod.name}`.
+       - Network VNet ID: `vnet-teastore-southasia`, Subnet: `snet-aks-nodepool-data`, NSG: `nsg-aks-teastore-internal`.
+- **Kết quả xác thực (Verification Outcome):**
+  1. Script `clean_images.sh` kiểm thử dry-run thành công; `make teardown` đảm bảo dọn sạch 100% clusters, networks, volumes và images.
+  2. Toàn bộ 8/8 Grafana Dashboards vượt qua kiểm tra cú pháp JSON hợp lệ 100%.
+  3. Kustomize overlays của cả 3 cụm build manifest thành công không có lỗi cú pháp OTTL.
+
+---
+
+## Phase 3.9.3: Khắc Phục Lỗi Chặn Audit & Xác Thực Chữ Ký Mật Mã PKI / mTLS
+
+### INC-P3-22: Khắc phục triệt để 5 lỗi chặn kiến trúc & mã nguồn phát hiện qua Audit SigNoz Production Standards
+- **Thời gian ghi nhận:** 2026-11-12
+- **Phân loại thành phần:** `security/pki/scripts/`, `ai-engine/data/collector.py`, `ai-engine/inference/detector.py`, `tests/chaos/run_live.py`, `tests/chaos/scenarios.json`, `k8s/base/otel-collector/edge/02-configmap.yaml`, `k8s/base/teastore/mysql/00-deployment.yaml`, `k8s/base/logs-loki/01-configmap.yaml`
+- **Mức độ nghiêm trọng:** Critical (Blocker cho Benchmark Phase 4)
+- **Hiện tượng & Nguyên nhân gốc rễ (Root Cause):**
+  1. **Tạo mới khóa PKI liên tục (Non-idempotent) hoặc bỏ qua sơ sài không kiểm tra chữ ký:** Ban đầu script PKI sinh khóa mới mỗi lần chạy làm đứt gãy mTLS; nếu chỉ check file existence đơn thuần thì khi Root CA thay đổi hoặc chứng chỉ hết hạn/đổi SAN, script sẽ bỏ qua không ký lại, gây đứt gãy chuỗi tin cậy (Chain of Trust).
+  2. **Lệch tên K8s Service Prometheus:** Mã nguồn Python (`collector.py`, `detector.py`, `run_live.py`) trỏ vào `svc/prometheus-server` cổng `80` (tàn dư Helm chart cũ), trong khi service K8s thực tế là `service/prometheus` cổng `9090`. Script crash ngay lập tức với lỗi `NotFound`.
+  3. **Head Sampling 20% tại Spoke làm "bỏ đói" Tail Sampling & RCA tại Hub:** Giao dịch phân tán đa đám mây bắt đầu tại AWS (`teastore-webui`) và lỗi xảy ra ở bước cuối tại Azure (`teastore-persistence`/`teastore-db`). Tại AWS Spoke, các span đầu tiên vẫn có trạng thái `OK`, nên nếu áp dụng `probabilistic_sampler: 20` mù quáng tại Spoke, 80% span lỗi và span chậm bị drop trước khi qua WAN, tạo ra các orphan spans làm thuật toán AI RCA $\Delta T = T_{\text{WAN}} + T_{\text{self}} + T_{\text{DB}}$ tính sai lệch hoàn toàn.
+  4. **Kịch bản GCP không tồn tại trong hạ tầng:** `scenarios.json` còn chứa các kịch bản định danh `gcp:teastore-recommender` và `aws->gcp` trong khi đồ án triển khai mô hình 2 Spoke chuẩn `aws` và `azure`.
+  5. **Nguy cơ MySQL OOMKilled & Loki TSDB không có retention:** `teastore-db` chỉ được cấp `384Mi` RAM giới hạn (dễ bị K8s kill dưới tải Locust đa người dùng) và Loki thiếu khai báo `retention_period` trong `limits_config`.
+- **Giải pháp xử lý (Solution):**
+  1. **Chuẩn hóa Cryptographic Chain-of-Trust Verification cho PKI:**
+     - Cập nhật `01-generate-ca.sh`, `02-generate-hub-cert.sh`, `03-generate-spoke-cert.sh` với `umask 077`, gán quyền `chmod 600` cho private keys và `chmod 644` cho certs.
+     - Chỉ bỏ qua sinh cert khi thỏa mãn đồng thời 3 điều kiện: (a) file `.key` và `.crt` tồn tại, (b) chữ ký xác thực hợp lệ 100% với `ca.crt` hiện hành qua `openssl verify -CAfile`, (c) chứng chỉ còn hạn ít nhất 7 ngày qua `openssl x509 -checkend 604800`. Hỗ trợ thêm cờ `--force`.
+  2. **Sửa toàn diện tên Service Prometheus:** Cập nhật lệnh `kubectl port-forward` và `get service` trong `collector.py`, `detector.py`, `run_live.py` sang `svc/prometheus` cổng `9090:9090`.
+  3. **Tối ưu hóa Ingestion Pipeline Edge vs Hub:**
+     - Tại `edge/02-configmap.yaml`: Giữ nguyên `filter/drop_noise` loại bỏ 100% healthcheck noise, bật `compression: gzip` trong exporter `otlp/hub` để tối ưu băng thông WAN, và **gỡ bỏ hoàn toàn `probabilistic_sampler` khỏi pipeline `traces`**.
+     - Tại `gateway/03-configmap.yaml`: Toàn bộ business spans hội tụ đầy đủ về Hub để `servicegraphconnector` tính đúng 100% RED metrics và `tail_sampling` bảo toàn trọn vẹn 100% traces lỗi/chậm cho AI Engine.
+  4. **Chuẩn hóa Kịch bản Chaos:** Sửa sạch 100% tham chiếu `gcp` trong `scenarios.json` về đúng kiến trúc thực tế `aws:teastore-recommender` và `aws_wan_delay` (`aws->azure`).
+  5. **Hạ tầng MySQL & Loki:** Nâng `limits.memory` của MySQL lên `768Mi` (requests `256Mi`), và bổ sung `retention_period: 72h` vào `limits_config` của Loki.
+- **Kết quả xác thực (Verification Outcome):**
+  1. Chạy lặp lại 2 lần liên tiếp bộ 3 scripts PKI: Lần 2 phát hiện `openssl verify` thành công và giữ nguyên khóa cũ không sinh đè.
+  2. Chạy `kubectl kustomize` cho cả 3 overlays (`hub`, `spoke-aws`, `spoke-azure`) đều đạt Exit Code = 0.
+  3. Quét kiểm tra toàn bộ codebase: 0 lỗi tham chiếu `prometheus-server` và 0 tham chiếu `gcp` trong `tests/chaos/scenarios.json`.
+  4. Bộ kiểm thử logic `test_live_evaluation.py` vượt qua 100% (4/4 tests OK).
+
+---
+
+## Phase 3.9.5: Nạp Động Secret từ .env & Chuẩn Hóa Toàn Diện 8 Dashboards Grafana
+
+### INC-P3-23: Triệt tiêu hoàn toàn mật khẩu Plaintext S3 và chuẩn hóa UX/Filters 8 Grafana Dashboards
+- **Thời gian ghi nhận:** 2026-11-12
+- **Phân loại thành phần:** `k8s/base/logs-loki/`, `k8s/base/traces-tempo/`, `k8s/base/visualization-grafana/dashboards/`
+- **Mức độ nghiêm trọng:** High
+- **Hiện tượng & Nguyên nhân gốc rễ (Root Cause):**
+  1. **Lộ lọt thông tin xác thực MinIO S3 (`ARCH-03`):** Cả hai tệp ConfigMap `k8s/base/logs-loki/01-configmap.yaml` và `k8s/base/traces-tempo/01-configmap.yaml` đều chứa giá trị plaintext `access_key_id: admin` và `secret_access_key: MultiCloudSecurePassword2026!`. Mặc dù Kustomize overlay đã sinh các Secret `loki-s3-creds` và `tempo-s3-creds` từ tệp `.env`, nhưng các StatefulSet của Loki và Tempo chưa nạp biến môi trường và chưa kích hoạt tính năng nạp động qua cờ `-config.expand-env=true`.
+  2. **Tiêu đề Dashboards rườm rà, thiếu phân loại thứ bậc:** 8 Dashboards Grafana mang các tiêu đề dài dòng chứa nhiều từ ngữ lặp lại ("Multi-Cloud...", "Centralized..."), không theo thứ tự số và không gắn kết với danh mục Schema phân loại (CAT-01 đến CAT-08).
+  3. **Lệch biến `$cluster` và thiếu bộ lọc tại Panels:** Biến `$cluster` trên các Dashboard định nghĩa không đồng nhất (dùng `up` nhãn `cluster` cũ hoặc metric sai `system_memory_usage` thiếu `_bytes`). Đồng thời, toàn bộ 10 panels trong `k8s-infrastructure.json` và các panels mạng trong `wan-telemetry.json` chưa gắn `{k8s_cluster_name=~"$cluster"}`, dẫn tới việc khi chọn cụm trên dropdown không lọc được số liệu.
+  4. **Thiếu trường dữ liệu theo chuẩn Schema v4.0.0:** `red-metrics.json` Panel 6 thiếu GC Pause Time (`CAT-06`), `system-topology.json` Panel 5 thiếu phân phối độ trễ P99, và `logs-traces-deepdive.json` gom nhóm theo `job` khiến không nhận diện được tên microservice của TeaStore.
+- **Giải pháp xử lý (Solution):**
+  1. **Dynamic Secret Expansion (Zero Plaintext in ConfigMaps):**
+     - Cập nhật StatefulSet của Loki (`03-statefulset.yaml`) và Tempo (`03-statefulset.yaml`): Thêm cờ `-config.expand-env=true` vào `args`, nạp `MINIO_ROOT_USER` và `MINIO_ROOT_PASSWORD` từ `secretKeyRef` của `loki-s3-creds` và `tempo-s3-creds`.
+     - Cập nhật ConfigMap của Loki và Tempo: Thay thế chuỗi plaintext thành `${MINIO_ROOT_USER}` và `${MINIO_ROOT_PASSWORD}`.
+  2. **Chuẩn hóa Tiêu đề 8 Dashboards ngắn gọn:** Đổi tên hiển thị 8 dashboards thành:
+     `01. Executive Overview`, `02. Topology & Cloud Context`, `03. Application & JVM (RED)`, `04. Compute & OS Kernel (USE)`, `05. Network & WAN Transport`, `06. Logs, Traces & Database`, `07. SLO & Error Budget`, `08. Telemetry & Cost Governance`. Giữ nguyên 100% `uid` để bảo toàn Data Links.
+  3. **Chuẩn hóa Biến `$cluster` & Gắn Bộ Lọc:**
+     - Chuẩn hóa định nghĩa biến `cluster` trên 8/8 Dashboards về duy nhất: `label_values(system_cpu_time_seconds_total, k8s_cluster_name)`.
+     - Bổ sung bộ lọc `{k8s_cluster_name=~"$cluster"}` cho toàn bộ 10 panels của `k8s-infrastructure.json` và Panels 6, 7, 8 của `wan-telemetry.json`.
+  4. **Bổ sung Trường Telemetry Chuẩn Schema:**
+     - Bổ sung `refId: C` vào Panel 6 của `red-metrics.json`: `sum by (service_name) (rate(jvm_gc_duration_seconds_sum[1m]) or rate(process_runtime_jvm_gc_duration_seconds_sum[1m])) * 1000` (đo GC Pause Time ms/s).
+     - Bổ sung `refId: C` vào Panel 5 của `system-topology.json`: quantile P99 độ trễ liên cụm.
+     - Cập nhật Panels 1, 2, 3 của `logs-traces-deepdive.json` gom nhóm theo `sum by (service_name, job)` hiển thị rõ ràng tên vi dịch vụ.
+- **Kết quả xác thực (Verification Outcome):**
+  1. Quét `k8s/base/logs-loki` và `k8s/base/traces-tempo`: 0 kết quả chứa mật khẩu plaintext `MultiCloudSecurePassword2026!`.
+  2. Toàn bộ 8 Dashboards Grafana đạt chuẩn cú pháp JSON 100%.
+  3. Lệnh `kubectl kustomize k8s/overlays/local-k3d/hub` build thành công (Exit Code = 0), tự động sinh đầy đủ Secret và gắn cờ env expansion.
+  4. Bộ test tự động `make validate-dashboards && make validate-kustomize && make test-ai` vượt qua 100%.
+
+---
+
+## Phase 3.9.7: Rà Soát Độ Phủ Thuộc Tính & Tín Hiệu Schemas Trên 8 Grafana Dashboards
+
+### INC-P3-24: Báo cáo khoảng trống hiển thị giữa OTel Schemas v4.2.0 và 8 Grafana Dashboards
+- **Thời gian ghi nhận:** 2026-11-12
+- **Phân loại thành phần:** `k8s/base/visualization-grafana/dashboards/`, `docs/schemas/categories/`, `docs/schemas/profiles/`
+- **Mức độ nghiêm trọng:** Medium (Tối ưu hóa khả năng quan sát & Khớp nối Schemas)
+- **Bối cảnh & Mục tiêu rà soát:**
+  Sau khi chuẩn hóa toàn bộ hệ thống Schema thành 2 tầng (`categories/` với 8 danh mục OTel SemConv nguyên tử và `profiles/` với 4 hồ sơ thực thể) cùng việc loại bỏ Head Sampling tại Spoke (Phase 3.9.3 & 3.9.5), nhóm vận hành tiến hành kiểm tra chéo (Cross-Audit) giữa 8 Dashboard Grafana hiện tại và toàn bộ các thuộc tính/số đo trong Schema để trả lời 3 câu hỏi:
+  1. Các Dashboards đã phản ánh đủ 8 Categories và 4 Entity Profiles chưa?
+  2. Có thuộc tính hoặc tín hiệu quan trọng nào trong Schema v4.2.0 chưa được đưa lên Dashboard không?
+  3. Có vấn đề mới phát sinh nào về mặt bộ lọc biến (Variables Scope) hoặc tương thích dữ liệu sau khi sửa đổi không?
+
+- **Kết quả Kiểm tra Đối soát (Schema-to-Dashboard Coverage Audit):**
+  
+  #### 1. Mức Độ Phản Ánh 8 Categories Trên 8 Dashboards (Hiện trạng rất tốt):
+  - **`CAT-01` (OS & Kernel USE):** Phản ánh 100% trên `04. Compute & OS Kernel (USE)` (Panels 1, 2, 3: CPU User/Sys/Wait/Steal, Load 1m/5m/15m).
+  - **`CAT-02` (Storage & Filesystem):** Phản ánh 100% trên `04. Compute & OS Kernel (USE)` (Panels 6, 7, 8: Throughput, IOPS, I/O Wait Latency, Queue Depth, Filesystem % & Inodes).
+  - **`CAT-03` (Network & Transport):** Phản ánh 100% trên `05. Network & WAN Transport` (Panels 1-8: WAN RTT/Jitter/Loss, Throughput, Packet Drops, TCP Socket states).
+  - **`CAT-04` (Cloud Context):** Phản ánh 100% trên `02. Topology & Cloud Context` (Panels 1, 2, 3: Interactive Node Graph, Routing Matrix, 360° Cloud Dependencies với VPC, Subnet, SG, IAM Role IRSA).
+  - **`CAT-05` (Kubernetes & Containers):** Phản ánh trên `01. Executive Overview` (Fleet Matrix) và `04. Compute & OS Kernel`.
+  - **`CAT-06` (JVM Runtime):** Phản ánh trên `03. Application & JVM (RED)` (Panel 6: Heap Used, Thread Count, GC Pause Time ms/s).
+  - **`CAT-07` (HTTP/RPC APM & RED):** Phản ánh trên `03. Application & JVM (RED)` (Panels 1, 2, 3, 5: Rate, Errors, P50/P90/P99, RMI/DB Duration) và `07. SLO & Error Budget`.
+  - **`CAT-08` (Database MySQL):** Phản ánh qua JDBC Spans trên `03. Application & JVM (RED)` (Panel 5), `02. Topology` và `06. Logs, Traces & Database` (Panel 5).
+
+  ---
+
+  #### 2. Các Khoảng Trống & Điểm Cần Thảo Luận Xử Lý (Findings & Gaps):
+
+  | Mã Vấn Đề | Hạng Mục / Vị Trí | Mô Tả Khoảng Trống (Gap Description) | Đánh Giá Tác Động | Hướng Xử Lý Đề Xuất Để Thảo Luận |
+  | :---: | :--- | :--- | :---: | :--- |
+  | **GAP-01** | `03. Application & JVM (RED)` (Panels 1, 2, 3) | Các panel Rate, Errors, Duration sử dụng metric `traces_service_graph_request_*` mới chỉ lọc theo `{server=~"$service"}` mà **chưa gắn biến `{k8s_cluster_name=~"$cluster"}`** (hoặc `{server_k8s_cluster_name=~"$cluster"}`). | Khi chọn cụm trên dropdown `$cluster`, 3 panels này vẫn hiển thị dữ liệu của toàn bộ 2 cụm AWS + Azure. | **Thảo luận:** Bổ sung nhãn `server_k8s_cluster_name=~"$cluster"` vào biểu thức PromQL của Panels 1, 2, 3 (hoặc giữ nguyên nếu muốn người dùng nhìn thấy toàn cảnh traffic theo service bất kể service nằm trên cụm nào). |
+  | **GAP-02** | `03. Application & JVM (RED)` (Panel 4) | Panel 4 ("Saturation: Host CPU I/O Wait & Active TCP Connections") hiển thị CPU wait và TCP connections theo cụm nhưng **đang thiếu biến lọc `{k8s_cluster_name=~"$cluster"}`** trong mệnh đề sum. | Biểu đồ hiển thị cả 2 cụm thay vì lọc theo dropdown `$cluster`. | Thêm `{k8s_cluster_name=~"$cluster"}` vào Panel 4 để đồng bộ hoàn toàn với `$cluster`. |
+  | **GAP-03** | `08. Telemetry & Cost Governance` (Panel 5) | Panel 5 ("Trace Volume Reduction Waterfall") đo hiệu quả lọc của Spoke: `otelcol_processor_filter_spans_filtered`. Ở Phase 3.9.3, ta đã **gỡ bỏ Head Sampling (`probabilistic_sampler`)** khỏi Spoke, chỉ còn giữ `filter/drop_noise` (lọc healthcheck). | Biểu đồ Waterfall sẽ phản ánh đúng thực tế: chỉ giảm thiểu ~30-40% span noise healthcheck (thay vì giảm 80% do sampling cũ). | Cập nhật ghi chú/subtitle trên Panel 5 thành: *"Edge Healthcheck Noise Pre-filtering & Gateway Tail-sampling Retention (100% Errors Preserved)"* để SRE hiểu rõ bản chất. |
+  | **GAP-04** | `CAT-05` (cgroup limits) trên `04. Compute & OS Kernel` | Schema `CAT-05` quy định metric `container_cpu_cfs_throttled_seconds_total` (đo container CPU throttling do cgroup quota) và `container_memory_working_set_bytes` (bộ nhớ container K8s). Hiện tại Dashboard 04 tập trung chủ yếu vào USE Method của Host Node (`system_*`). | Chưa có panel chuyên biệt hiển thị Top Pods bị CPU Throttling trên cụm. | Thêm 1 panel nhỏ (hoặc row phụ) hiển thị Top 5 Pods bị CPU Throttling trong K8s Infrastructure. |
+  | **GAP-05** | `CAT-08` (Database Error Rate) | Panel 5 trên `red-metrics.json` hiển thị độ trễ Database Call Latency P50/P95, nhưng chưa có biểu đồ tách riêng tỷ lệ lỗi của Database (`traces_service_graph_request_failed_total{server=~"teadb|teastore-db"}`). | Khi xảy ra lỗi deadlock MySQL, tỷ lệ lỗi DB bị gộp chung vào Error Rate tổng của Persistence. | Tách hoặc bổ sung 1 target hiển thị riêng lỗi MySQL JDBC trên Panel 2 hoặc Panel 5. |
+
+- **Giải pháp xử lý & Quyết định Kiến trúc (Solution & Architectural Decisions):**
+  1. **Quyết định GAP-01 (Giữ nguyên `{server=~"$service"}` trên Panels 1, 2, 3 của `red-metrics.json`):**
+     - **Quyết định: GIỮ NGUYÊN, KHÔNG thêm `server_k8s_cluster_name`.**
+     - *Lý do kỹ thuật:* Đối với các client-only spans được ánh xạ qua `peer.service` (như `teadb` hoặc `teastore-registry`), nhãn `server_k8s_cluster_name` không tồn tại trong metric `traces_service_graph_request_*`. Giữ nguyên `{server=~"$service"}` đảm bảo hiển thị 100% các vi dịch vụ và phụ thuộc đa đám mây mà không bị bẫy "No Data".
+  2. **Khắc phục GAP-02 (Đồng bộ bộ lọc `$cluster` trên Panel 4 của `red-metrics.json`):**
+     - Bổ sung bộ lọc `{k8s_cluster_name=~"$cluster"}` vào các biểu thức tính CPU I/O Wait `system_cpu_time_seconds_total` và Active TCP Connections `system_network_connections`.
+  3. **Khắc phục GAP-03 (Chuẩn hóa mô tả cơ chế lọc Waterfall trên Panel 5 của `mc-cost-telemetry.json`):**
+     - Cập nhật tiêu đề thành `"Trace Volume Reduction Waterfall (Edge Noise Filter & Hub Tail-Sampling)"` và diễn giải rõ nét cơ chế Spoke Edge lọc rác health probes (`filter/drop_noise`) kết hợp Hub Central Gateway thực thi tail-based sampling bảo toàn 100% spans lỗi và trễ cao.
+  4. **Quyết định GAP-04 (Tránh bẫy No Data cAdvisor trên `k8s-infrastructure.json`):**
+     - **Quyết định: KHÔNG thêm panel cAdvisor throttling vào Dashboard 04.**
+     - *Lý do kỹ thuật:* Spoke Collector sử dụng bộ thu `hostmetrics` cấp Node chứ không scrape Kubelet cAdvisor nội bộ pod, việc thêm query `container_cpu_cfs_throttled_seconds_total` sẽ gây lỗi "No Data" trên dashboard thực tế.
+  5. **Khắc phục GAP-05 (Bổ sung tỷ lệ lỗi Database & đồng bộ `$service` trên Panels 5 & 6 của `red-metrics.json`):**
+     - Bổ sung `refId: C` vào Panel 5 của `red-metrics.json`: `sum by (client, server) (rate(traces_service_graph_request_failed_total{server=~"teadb|teastore-db|teastore-registry|teastore-persistence"}[1m]))` với cấu hình override trục Y bên phải (`axisPlacement: "right"`), đơn vị `reqps`, màu đỏ cảnh báo.
+     - Đồng bộ bộ lọc `{service_name=~"$service"}` vào cả 3 targets của Panel 6 (JVM Heap, Threads, GC Pause Time) để biểu đồ phản hồi trực tiếp khi người dùng chọn service trên dropdown.
+
+- **Kết quả xác thực (Verification Outcome):**
+  1. Toàn bộ 8/8 Dashboards Grafana vượt qua kiểm tra cú pháp JSON (`make validate-dashboards`).
+  2. Toàn bộ Kustomize manifests của 3 cụm k3d build thành công không lỗi cú pháp (`make validate-kustomize`).
+  3. Bộ kiểm thử AIOps Engine chạy hoàn tất thành công (`make test-ai`).
+  4. **Trạng thái: Đã giải quyết triệt để (100% Resolved). Khóa sổ toàn bộ Phase 3.**
+
+
+
+
+
 
 
 

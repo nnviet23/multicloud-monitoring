@@ -104,6 +104,7 @@ multicloud-monitoring/
 │   │   ├── 02_solution_plan.md             # Kế hoạch chi tiết phương án kỹ thuật
 │   │   ├── 03_resource_monitor.md          # Báo cáo thiết kế giải pháp giám sát tài nguyên
 │   │   ├── 04_ai_engine.md                 # Báo cáo hợp nhất AI Anomaly Detection & Closed-Loop AIOps
+│   │   ├── 05_SigNoz_strategy.md           # Báo cáo chiến lược quan sát nâng cao học hỏi từ SigNoz
 │   │   └── IMPLEMENTATION.md               # Sổ tay hướng dẫn cài đặt & vận hành hệ thống bằng Makefile
 │   ├── schemas/
 │   │   ├── README.md                       # Hướng dẫn sử dụng thư mục Schemas
@@ -138,7 +139,8 @@ multicloud-monitoring/
 │   │   └── spoke-azure/                    # Cấu hình cụm Spoke 2 (Azure)
 │   └── scripts/                            # Shell scripts hỗ trợ
 │       ├── pull_images.sh                  # Kéo trước toàn bộ Docker images ghim cứng phiên bản
-│       └── import_k3d_images.sh            # Nạp image vào cụm k3d không cần kéo từ Internet
+│       ├── import_k3d_images.sh            # Nạp image vào cụm k3d không cần kéo từ Internet
+│       └── clean_images.sh                 # Xóa sạch toàn bộ project images và dangling images khi teardown
 │
 ├── security/                               # AN NINH & HẠ TẦNG KHÓA CÔNG KHAI (PKI / mTLS 1.3)
 │   └── pki/

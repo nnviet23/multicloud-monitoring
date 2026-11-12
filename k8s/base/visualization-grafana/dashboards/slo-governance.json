@@ -1,5 +1,7 @@
 {
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -9,14 +11,25 @@
   "panels": [
     {
       "collapsed": false,
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
       "id": 1,
       "title": "SLO Objective Target",
       "type": "stat",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "vector(99.5)",
           "instant": true,
@@ -24,19 +37,37 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "color": { "fixedColor": "blue", "mode": "fixed" }, "unit": "percent", "decimals": 2 }
+        "defaults": {
+          "color": {
+            "fixedColor": "blue",
+            "mode": "fixed"
+          },
+          "unit": "percent",
+          "decimals": 2
+        }
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
       "id": 2,
       "title": "Current Availability SLI",
       "type": "stat",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "clamp_max(100 - (sum(rate(traces_service_graph_request_failed_total[5m])) / (sum(rate(traces_service_graph_request_total[5m])) + 0.0001) * 100), 100)",
           "instant": true,
@@ -45,23 +76,52 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "unit": "percent",
           "decimals": 3,
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 99.0 }, { "color": "green", "value": 99.5 }] }
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 99.0
+              },
+              {
+                "color": "green",
+                "value": 99.5
+              }
+            ]
+          }
         }
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
       "id": 3,
       "title": "Remaining Error Budget",
       "type": "stat",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "clamp_min(100 - ((sum(rate(traces_service_graph_request_failed_total[1h])) / (sum(rate(traces_service_graph_request_total[1h])) + 0.0001)) / 0.005 * 100), 0)",
           "instant": true,
@@ -70,23 +130,52 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "unit": "percent",
           "decimals": 1,
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 20.0 }, { "color": "green", "value": 75.0 }] }
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 20.0
+              },
+              {
+                "color": "green",
+                "value": 75.0
+              }
+            ]
+          }
         }
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
       "id": 4,
       "title": "Error Budget Burn Rate (1h)",
       "type": "stat",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "(sum(rate(traces_service_graph_request_failed_total[1h])) / (sum(rate(traces_service_graph_request_total[1h])) + 0.0001)) / 0.005",
           "instant": true,
@@ -95,22 +184,51 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "decimals": 2,
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1.0 }, { "color": "red", "value": 2.0 }] }
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1.0
+              },
+              {
+                "color": "red",
+                "value": 2.0
+              }
+            ]
+          }
         }
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
       "id": 5,
       "title": "Multi-Window Error Budget Burn Rate Trend",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "(sum(rate(traces_service_graph_request_failed_total[5m])) / (sum(rate(traces_service_graph_request_total[5m])) + 0.0001)) / 0.005",
           "legendFormat": "Burn Rate (5m short window)",
@@ -118,7 +236,10 @@
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
           "expr": "(sum(rate(traces_service_graph_request_failed_total[30m])) / (sum(rate(traces_service_graph_request_total[30m])) + 0.0001)) / 0.005",
           "legendFormat": "Burn Rate (30m medium window)",
@@ -127,39 +248,167 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "custom": { "lineWidth": 2 }, "unit": "short" }
+        "defaults": {
+          "custom": {
+            "lineWidth": 2
+          },
+          "unit": "short"
+        }
       }
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
       "id": 6,
       "title": "Service Error Budget Consumption Breakdown",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "thanos-query-ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
           "editorMode": "code",
-          "expr": "sum by (server) (rate(traces_service_graph_request_failed_total[5m]))",
+          "expr": "sum by (server) (rate(traces_service_graph_request_failed_total{server=~\"$service\"}[5m]))",
           "legendFormat": "{{server}} Errors/sec",
           "range": true,
           "refId": "A"
         }
       ],
+      "links": [
+        {
+          "title": "Investigate Error Traces & Logs (${__field.name})",
+          "url": "/d/mc-logs-traces-deepdive?var-service=${__field.name}&var-cluster=${cluster}&from=${__from}&to=${__to}",
+          "targetBlank": true
+        }
+      ],
       "fieldConfig": {
-        "defaults": { "custom": { "fillOpacity": 20, "lineWidth": 2 }, "unit": "reqps" }
+        "defaults": {
+          "custom": {
+            "fillOpacity": 20,
+            "lineWidth": 2
+          },
+          "unit": "reqps"
+        }
       }
     }
   ],
   "refresh": "5s",
   "schemaVersion": 39,
-  "tags": ["multicloud", "slo", "pyrra", "sre", "errorbudget"],
-  "templating": { "list": [] },
-  "time": { "from": "now-15m", "to": "now" },
+  "tags": [
+    "multicloud",
+    "slo",
+    "pyrra",
+    "sre",
+    "errorbudget"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "thanos-query-ds"
+        },
+        "definition": "label_values(system_cpu_time_seconds_total, k8s_cluster_name)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Cluster",
+        "multi": true,
+        "name": "cluster",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(system_cpu_time_seconds_total, k8s_cluster_name)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "thanos-query-ds"
+        },
+        "definition": "label_values(traces_service_graph_request_total, server)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Service",
+        "multi": true,
+        "name": "service",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(traces_service_graph_request_total, server)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "production",
+          "value": "production"
+        },
+        "hide": 0,
+        "includeAll": true,
+        "label": "Environment",
+        "multi": false,
+        "name": "environment",
+        "options": [
+          {
+            "selected": false,
+            "text": "All",
+            "value": "$__all"
+          },
+          {
+            "selected": true,
+            "text": "production",
+            "value": "production"
+          },
+          {
+            "selected": false,
+            "text": "staging",
+            "value": "staging"
+          }
+        ],
+        "query": "production, staging",
+        "skipUrlSync": false,
+        "type": "custom"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
   "timezone": "browser",
-  "title": "SLO Management & Error Budget Governance",
+  "title": "07. SLO & Error Budget",
   "uid": "mc-slo-governance",
   "version": 1
 }
-

@@ -22,6 +22,18 @@ spec:
           imagePullPolicy: IfNotPresent
           args:
             - -config.file=/etc/tempo/tempo.yaml
+            - -config.expand-env=true
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: tempo-s3-creds
+                  key: MINIO_ROOT_USER
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tempo-s3-creds
+                  key: MINIO_ROOT_PASSWORD
           ports:
             - containerPort: 3200
               name: http

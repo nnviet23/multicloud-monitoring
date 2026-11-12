@@ -58,11 +58,13 @@
 - [x] Standardize chaos engineering scripts (run_live.py, run_service_faults.py, FaultAgent.java) for 3-cluster baseline.
 
 ### Phase 4 — Benchmark and evaluation (Ready)
-- [ ] Define workload profile, repetitions, warm-up, cooldown, and noise controls.
-- [ ] Capture immutable raw data and run manifests.
-- [ ] Compare no-sampling and sampling profiles.
-- [ ] Evaluate coverage, accuracy, latency (including encryption overhead), scalability, and cost.
-- [ ] Publish analysis scripts, plots, and limitations.
+- [ ] Implement SigNoz-inspired Edge Pre-filtering (`filter/drop_noise`) to eliminate health probes before WAN traversal.
+- [ ] Implement Hub Tail-based sampling (`tail_sampling`) to guarantee 100% error trace and high-latency span preservation.
+- [ ] Evaluate TSDB sample reduction via Collection Interval Tiering (10s Golden Signals vs 30s-60s Host OS metrics).
+- [ ] Execute Locust workload generator benchmarks across multiple concurrency tiers (Browse, Cart, Checkout).
+- [ ] Evaluate AI Anomaly Detection Engine V3 across 11 chaos injection scenarios (Network WAN, JVM Leak, CPU burn, MySQL Lock).
+- [ ] Measure observability metrics: Coverage, Accuracy, End-to-End Latency, Encryption Overhead, and Bandwidth Savings.
+- [ ] Publish scientific benchmark analysis, trade-off matrix, and final graduation thesis report.
 
 ### Phase 5 — Real cloud design (after local validation)
 - [ ] Select providers and regions based on explicit criteria.
@@ -90,7 +92,7 @@
 - [x] Raw-data retention and storage format: MinIO S3 immutable raw partition with run IDs.
 - [x] Sampling policy per signal: Phương án A with initial 20% head-based trace sampling.
 - [x] WAN impairment profiles: tc/netem with RTT 10ms, jitter 2ms, packet loss 0.1%.
-- [x] GitOps & delivery: Kustomize for local lab declarative overlays; ArgoCD ready for multi-cluster sync.
+- [x] GitOps & delivery: Kustomize SRP (Base vs Overlays) with GNU Make master orchestration; Ansible for local lab provisioning.
 
 ## Next action
 Inspect the repository and existing diagrams/configs. Produce a gap analysis before changing deployment files.

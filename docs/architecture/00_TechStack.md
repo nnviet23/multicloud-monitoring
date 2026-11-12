@@ -94,8 +94,8 @@ Hệ thống sử dụng OpenTelemetry làm chuẩn thống nhất cho cả 3 tr
 ### 3.5.1. Cơ Chế Chuẩn Hóa Cloud Dependencies Tại Hub Theo OTel Semantic Conventions
 Một thách thức lớn nhất trong giám sát đa đám mây là **tính không đồng nhất của siêu dữ liệu đám mây (Cloud Metadata Heterogeneity)**. Mỗi nhà cung cấp dịch vụ đám mây (hoặc môi trường mô phỏng cục bộ) sử dụng các định dạng và khóa thuộc tính khác nhau để mô tả tài nguyên:
 - **AWS:** Sử dụng `aws.region`, `aws.ec2.instance_id`, ARN (`arn:aws:ec2:...`), VPC ID.
-- **Azure:** Sử dụng `azure.vm.id`, Subscription ID, Resource Group, ARM URI (`/subscriptions/...`).
-- **GCP:** Sử dụng `gcp.project_id`, `gcp.zone`, Compute Engine Instance Name.
+- **Azure:** Sử dụng Subscription ID, Microsoft Entra ID (Tenant/Client ID), Resource Group, User-Assigned Managed Identity, ARM URI (`/subscriptions/...`), và AKS Managed Node Pools.
+- **GCP:** Sử dụng `gcp.project_id`, `gcp.zone`, GKE Node Pool Name.
 - **Local k3d Lab:** Sử dụng nhãn cụm `aws-k3d`, `azure-k3d`, hostname container Docker.
 
 Nếu không chuẩn hóa tại Hub, các truy vấn PromQL, LogQL, TraceQL và biểu đồ Grafana sẽ bị phân mảnh, buộc người vận hành phải viết các câu lệnh điều kiện phức tạp `IF provider == 'aws' THEN ... ELSE IF ...`.
@@ -107,13 +107,14 @@ Hub OTel Gateway giải quyết triệt để vấn đề này bằng cách áp 
 | Khái niệm nghiệp vụ | AWS / Spoke 1 (Mô phỏng/Thực tế) | Azure / Spoke 2 (Mô phỏng/Thực tế) | Chuẩn OTel Semantic Convention Chính Tắc (Canonical) | Cấp độ thuộc tính (Placement Level) |
 |---|---|---|---|---|
 | **Cloud Provider** | `aws` / `amazon` / `aws-k3d` | `azure` / `microsoft` / `azure-k3d` | `cloud.provider` (`"aws"`, `"azure"`, `"gcp"`) | Resource Attribute |
-| **Khu vực địa lý** | `aws.region` (vd: `us-east-1`) | `azure.location` (vd: `westeurope`) | `cloud.region` | Resource Attribute |
-| **Availability Zone** | `aws.zone` (vd: `us-east-1a`) | `azure.zone` (vd: `1`) | `cloud.availability_zone` | Resource Attribute |
-| **Tài khoản / Đơn vị quản lý** | `aws.account_id` (12 số) | `azure.subscription_id` (UUID) | `cloud.account.id` | Resource Attribute |
-| **Nền tảng thực thi** | `aws_eks` / `aws_ec2` | `azure_aks` / `azure_vm` | `cloud.platform` (`"aws_eks"`, `"azure_aks"`) | Resource Attribute |
-| **Định danh máy chủ** | `aws.ec2.instance_id` (`i-0a1b2c3d`) | `azure.vm.id` (UUID) | `host.id` | Resource Attribute |
-| **Loại máy chủ (Type/Size)** | `aws.ec2.instance_type` (`t3.medium`) | `azure.vm.size` (`Standard_D2s_v3`) | `host.type` | Resource Attribute |
+| **Khu vực địa lý** | `aws.region` (vd: `us-east-1`) | `azure.location` (vd: `southasia`) | `cloud.region` | Resource Attribute |
+| **Availability Zone** | `aws.zone` (vd: `us-east-1a`) | `azure.zone` (vd: `southasia-1`) | `cloud.availability_zone` | Resource Attribute |
+| **Tài khoản / Danh tính (IAM / Entra ID)** | `aws.account_id` (`851725492014`), IAM Role ARN | `azure.subscription_id` (`4b8f3a21-...`), Entra Tenant ID (`72f988bf-...`), UAMI | `cloud.account.id`, `cloud.identity.arn`, `microsoft.entra.tenant_id` | Resource Attribute |
+| **Nền tảng thực thi** | `aws_eks` (NodeGroup: `nodepool-app`) | `azure_aks` (NodePool: `nodepool-data`) | `cloud.platform` (`"aws_eks"`, `"azure_aks"`) | Resource Attribute |
+| **Định danh máy chủ** | `aws.ec2.instance_id` (`i-0f8a3c2b1e7d`) | `k8s.node.name` / Node Pool Agent | `host.id` / `host.name` | Resource Attribute |
+| **Loại cấu hình Node** | `aws.ec2.instance_type` (`m5.xlarge`) | `azure.aks.vm_size` (`Standard_D4ds_v5`) | `host.type` | Resource Attribute |
 | **Cụm Kubernetes** | `aws-k3d` / EKS Cluster Name | `azure-k3d` / AKS Cluster Name | `k8s.cluster.name` | Resource Attribute |
+| **Mạng & Perimeter** | VPC `vpc-0f8a3c2b1e7d9a4f6`, Subnet, SG | VNet `vnet-teastore-southasia`, Subnet, NSG | `network.vpc.id`, `network.vnet.id`, `network.subnet.id`, `network.security_group.id` | Resource Attribute |
 | **Phân cấp K8s** | `k8s.namespace`, `k8s.pod` | `k8s.namespace`, `k8s.pod` | `k8s.namespace.name`, `k8s.pod.name`, `k8s.pod.uid` | Resource Attribute |
 | **Cơ sở dữ liệu phụ thuộc** | `aws.rds.endpoint` / JDBC URL | `azure.database.endpoint` / URL | `db.system` (`"mysql"`), `net.peer.name`, `net.peer.port` | Span Attribute |
 
@@ -131,13 +132,13 @@ processors:
           - set(attributes["cloud.provider"], "aws") where attributes["k8s.cluster.name"] == "aws-k3d" or attributes["cloud.provider"] == "amazon"
           - set(attributes["cloud.provider"], "azure") where attributes["k8s.cluster.name"] == "azure-k3d" or attributes["cloud.provider"] == "microsoft"
           
-          # 2. Chuẩn hóa cloud.platform theo ngữ cảnh đa đám mây
+          # 2. Chuẩn hóa cloud.platform theo ngữ cảnh đa đám mây (EKS & AKS)
           - set(attributes["cloud.platform"], "aws_eks") where attributes["cloud.provider"] == "aws" and attributes["k8s.cluster.name"] != nil
           - set(attributes["cloud.platform"], "azure_aks") where attributes["cloud.provider"] == "azure" and attributes["k8s.cluster.name"] != nil
           
-          # 3. Chuẩn hóa định danh máy chủ (host.id) từ các khóa đặc thù nhà cung cấp
+          # 3. Chuẩn hóa định danh máy chủ (host.id / host.name)
           - set(attributes["host.id"], attributes["aws.ec2.instance_id"]) where attributes["aws.ec2.instance_id"] != nil
-          - set(attributes["host.id"], attributes["azure.vm.id"]) where attributes["azure.vm.id"] != nil
+          - set(attributes["host.id"], attributes["k8s.node.name"]) where attributes["host.id"] == nil
           
           # 4. Gán nhãn môi trường và nguồn gốc dữ liệu thống nhất
           - set(attributes["deployment.environment.name"], "production") where attributes["deployment.environment.name"] == nil

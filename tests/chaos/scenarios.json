@@ -36,7 +36,7 @@
   {
     "id": "scale_out",
     "description": "Healthy pod scale-out warm-up",
-    "entity": "gcp:teastore-recommender",
+    "entity": "aws:teastore-recommender",
     "z": [
       -0.3,
       -0.1,
@@ -85,9 +85,9 @@
     "expected": "HEALTHY"
   },
   {
-    "id": "gcp_wan_delay",
-    "description": "WAN latency AWS to GCP",
-    "entity": "gcp:teastore-recommender",
+    "id": "aws_wan_delay",
+    "description": "WAN latency AWS to Azure (cross-cloud spoke latency)",
+    "entity": "azure:teastore-persistence",
     "z": [
       -0.5,
       6.2,
@@ -105,11 +105,11 @@
     },
     "trace": {
       "wan_links": {
-        "aws->gcp (gcp:teastore-recommender)": 125
+        "aws->azure (azure:teastore-persistence)": 125
       }
     },
     "expected": "ALERT",
-    "expected_rca": "[CROSS_CLOUD_WAN_DELAY] aws->gcp"
+    "expected_rca": "[CROSS_CLOUD_WAN_DELAY] aws->azure"
   },
   {
     "id": "azure_wan_delay",
@@ -163,8 +163,8 @@
   },
   {
     "id": "cpu_saturation",
-    "description": "GCP recommender CPU saturation and HTTP 5xx",
-    "entity": "gcp:teastore-recommender",
+    "description": "AWS recommender CPU saturation and HTTP 5xx",
+    "entity": "aws:teastore-recommender",
     "z": [
       1.1,
       5.4,
@@ -183,11 +183,11 @@
     },
     "trace": {
       "self_times": {
-        "gcp:teastore-recommender": 380
+        "aws:teastore-recommender": 380
       }
     },
     "expected": "ALERT",
-    "expected_rca": "[SERVICE_CPU_BOTTLENECK] gcp:teastore-recommender"
+    "expected_rca": "[SERVICE_CPU_BOTTLENECK] aws:teastore-recommender"
   },
   {
     "id": "database_slow",

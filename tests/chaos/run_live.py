@@ -160,7 +160,7 @@ def main():
             if any(item.get("kind") != "noqueue" for item in original):
                 raise RuntimeError(f"Existing WAN shaping on {cloud}: {original}")
         command(["kubectl", "--context", "k3d-hub-k3d", "--request-timeout=10s",
-                 "-n", "monitoring", "get", "service/prometheus-server", "service/tempo"])
+                 "-n", "monitoring", "get", "service/prometheus", "service/tempo"])
         command(["kubectl", "--context", "k3d-hub-k3d", "--request-timeout=10s",
                  "-n", "monitoring", "wait", "--for=condition=Ready", "pod",
                  "-l", "app.kubernetes.io/name=tempo", "--timeout=10s"])

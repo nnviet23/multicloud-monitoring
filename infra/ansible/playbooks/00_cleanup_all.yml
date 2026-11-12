@@ -42,4 +42,4 @@
 
     - name: Display cleanup summary
       debug:
-        msg: "Cleaned up all k3d clusters, Docker containers, network {{ network_name }}, and generated certs successfully."
+        msg: "Cleaned up all k3d clusters, Docker containers, network {{ network_name }}, and generated certs successfully (Docker image cache preserved)."

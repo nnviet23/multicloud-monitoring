@@ -18,3 +18,4 @@ configMapGenerator:
       - dashboards/slo-governance.json
       - dashboards/wan-telemetry.json
       - dashboards/logs-traces-deepdive.json
+      - dashboards/mc-cost-telemetry.json

@@ -21,9 +21,9 @@ ENV/
 htmlcov/
 
 # Agent & Prompting metadata
-.agent/
-.agent/**
-*.agent/
+.agents/
+.agents/**
+*.agents/
 
 # Benchmark application source (huge Descartes TeaStore repository)
 Benchmark-app/
@@ -161,3 +161,6 @@ Thumbs.db
 test.md
 docs/architecture/memory-graph.json
 **/memory-graph.json
+
+# Large external reference documentation (SigNoz Docs, etc.)
+docs/other-reference/
