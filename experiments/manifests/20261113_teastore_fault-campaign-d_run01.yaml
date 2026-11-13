@@ -1,0 +1,61 @@
+schema_version: "1.0"
+experiment_id: "20261113_teastore_fault-campaign-d_run01"
+status: "valid" # planned | running | valid | invalid | incomplete
+purpose: "Campaign D: WAN-only live validation of the final RCA localisation (round-trip probe search 56be347 + path evidence kept across destination recovery 5248324), model v2 unchanged. Not used for tuning."
+started_at_utc: "2026-11-13T00:59:43Z"
+ended_at_utc: "2026-11-13T01:15:36Z"
+
+repository:
+  commit: "754b7d0"
+  branch: "AI"
+  dirty: false
+  model: "v2 (ai-engine/models/saved/model_v2_sha256.txt; exact hashes in raw/20261113_teastore_fault-campaign-d_run01/system/model_sha256.txt)"
+
+workload:
+  application: "TeaStore"
+  scenario: "fault-campaign"
+  entrypoint: "http://localhost:8080/tools.descartes.teastore.webui (AWS nginx-api-gateway)"
+  load_tool: "runner-internal stdlib load (12 users) started by each chaos runner"
+  concurrency: {users: 12}
+  fault_injection:
+    wan_runner: "tests/chaos/run_live.py --baseline 120 --fault 120 --recovery 150 --settle 30 --interval 10"
+    wan_faults:
+      gcp_wan_delay: "netem delay 250ms on gcp-k3d node egress (keeps 2ms jitter, 0.1% loss); restored to delay 10ms 2ms loss 0.1%"
+      azure_wan_delay: "netem delay 180ms on azure-k3d node egress; restored to baseline"
+      aws_wan_delay: "netem delay 200ms on aws-k3d node egress; restored to baseline"
+    service_runner: "skipped (SERVICE_SCENARIOS empty)"
+  anomaly_label: "per phase in events.json"
+
+environment:
+  clusters: ["hub-k3d", "aws-k3d", "azure-k3d", "gcp-k3d"]
+  node_profile: "k3s v1.31.2+k3s1, 1 server per cluster, single host 16 vCPU / 12.8 GiB RAM"
+  network_profile: "baseline netem delay 10ms 2ms loss 0.1% on each spoke (verified before start)"
+  changes_since_campaign_a: ["persistence memory limit 768Mi (3d982e4)"]
+  warmup: "none beyond campaign C traffic, which ended 2 min before (00:57:35Z)"
+
+telemetry:
+  detector: "ai-engine/inference/detector.py --interval 10 --disable-telegram (spawned by each runner; one detector per runner)"
+  outputs: "detector.json (per-cycle records incl. entity_features), events.json (phase timeline), report.json"
+
+artifacts:
+  raw:
+    - "experiments/raw/20261113_teastore_fault-campaign-d_run01/wan/"
+    - "experiments/raw/20261113_teastore_fault-campaign-d_run01/service/"
+    - "experiments/raw/20261113_teastore_fault-campaign-d_run01/system/model_sha256.txt"
+  processed: []
+  logs:
+    - "experiments/raw/20261113_teastore_fault-campaign-d_run01/system/run.log"
+    - "experiments/raw/20261113_teastore_fault-campaign-d_run01/system/wan_runner.log"
+    - "experiments/raw/20261113_teastore_fault-campaign-d_run01/system/service_runner.log"
+
+quality:
+  validity_reason: >-
+    Complete, no runner/cleanup error, netem restored. Detection: gcp/azure/aws WAN 9/9 model alerts each
+    (first alert 27.7/16.4/15.2 s); baseline and all three recoveries 0 alerts (all PASS).
+    RCA localisation on alert cycles: aws 10/11, azure 5/11 (PASS), gcp 0/10 (FAIL), 0 wrong clouds.
+    Diagnosis: the only delayed gcp->aws heartbeat (259 ms, at +97 s) was a few seconds newer than the
+    concurrent healthy azure->aws heartbeat, which the strict "healthy must be newer" rule rejected;
+    relaxed to a 15 s concurrency window afterwards.
+  missing_data_notes: []
+  deviations:
+    - "detector code at 754b7d0 (includes 56be347 probe search and 5248324 path evidence)"
