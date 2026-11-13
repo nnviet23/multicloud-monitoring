@@ -97,6 +97,10 @@ STOP_REQUESTED = False
 
 # Wall-clock budget for per-trace fetches so one detector cycle cannot stall on Tempo.
 TEMPO_TRACE_FETCH_BUDGET_SECONDS = 4.0
+# Client-rooted traces fetched per cycle as WAN round-trip probes (one per calling service).
+TRACE_PROBES_PER_CYCLE = 4
+# The entrypoint's own client-rooted traces are load-generator/browser calls, not inter-cloud probes.
+TRACE_PROBE_EXCLUDED_ROOTS = {"teastore-webui"}
 
 
 def handle_signal(sig, frame):
@@ -409,8 +413,35 @@ class TempoTraceAnalyzer:
 
             traces.sort(key=trace_sort_key, reverse=True)
 
+            # Round-trip probes: traces rooted in a CLIENT span (e.g. registry heartbeats)
+            # give client-minus-server WAN for every calling cloud. Healthy ones are short,
+            # so the duration-filtered search above never returns them, yet WAN localisation
+            # needs them to exonerate clouds. Fetch the newest one per calling service first.
+            probes = []
+            try:
+                probe_params = urllib.parse.urlencode({
+                    "q": "{ kind = client }", "start": start_sec, "end": now_sec + 5, "limit": 40})
+                with urllib.request.urlopen(f"{self.base_url}/api/search?{probe_params}", timeout=3.0) as resp:
+                    candidates = json.loads(resp.read().decode("utf-8")).get("traces", [])
+                newest = {}
+                for tr in candidates:
+                    root = tr.get("rootServiceName", "")
+                    if root and root not in TRACE_PROBE_EXCLUDED_ROOTS and (
+                            root not in newest or int(tr.get("startTimeUnixNano", 0) or 0)
+                            > int(newest[root].get("startTimeUnixNano", 0) or 0)):
+                        newest[root] = tr
+                probes = sorted(newest.values(), key=lambda tr: tr.get("rootServiceName", ""))[:TRACE_PROBES_PER_CYCLE]
+            except Exception as err:
+                summary["tempo_errors"].append(f"probe search: {type(err).__name__}")
+
+            selected, seen = [], set()
+            for tr_meta in probes + traces[:12]:
+                if tr_meta.get("traceID") and tr_meta["traceID"] not in seen:
+                    seen.add(tr_meta["traceID"])
+                    selected.append(tr_meta)
+
             fetch_deadline = time.time() + TEMPO_TRACE_FETCH_BUDGET_SECONDS
-            for tr_meta in traces[:12]:
+            for tr_meta in selected:
                 tid = tr_meta.get("traceID")
                 if not tid:
                     continue

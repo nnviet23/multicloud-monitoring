@@ -3,9 +3,11 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 import urllib.error
+import urllib.parse
 
 import numpy as np
 
@@ -162,6 +164,49 @@ class TempoFailureTests(unittest.TestCase):
         self.assertTrue(summary["tempo_ok"])
         self.assertEqual(summary["traces_inspected"], 1)
         self.assertEqual(len(summary["tempo_errors"]), 1)
+
+
+class TraceProbeTests(unittest.TestCase):
+    @staticmethod
+    def heartbeat(client_cloud, client_service, client_ms, server_ms):
+        def resource(cloud, service):
+            return {"attributes": [{"key": "cloud.provider", "value": {"stringValue": cloud}},
+                                   {"key": "service.name", "value": {"stringValue": service}}]}
+        now_ns = int(time.time() * 1e9)
+        return {"batches": [
+            {"resource": resource(client_cloud, client_service), "scopeSpans": [{"spans": [
+                {"spanId": "c", "kind": "SPAN_KIND_CLIENT", "name": "GET",
+                 "startTimeUnixNano": now_ns - int(client_ms * 1e6), "endTimeUnixNano": now_ns}]}]},
+            {"resource": resource("aws", "teastore-registry"), "scopeSpans": [{"spans": [
+                {"spanId": "s", "parentSpanId": "c", "kind": "SPAN_KIND_SERVER", "name": "GET",
+                 "startTimeUnixNano": now_ns - int(server_ms * 1e6), "endTimeUnixNano": now_ns}]}]}]}
+
+    def test_short_round_trip_probes_feed_wan_localisation(self):
+        now_ns = int(time.time() * 1e9)
+        meta = lambda tid, root, age: {"traceID": tid, "rootServiceName": root,
+                                       "startTimeUnixNano": str(now_ns - int(age * 1e9)), "durationMs": 25}
+        probe_search = {"traces": [meta("rec-old", "teastore-recommender", 20), meta("rec", "teastore-recommender", 3),
+                                   meta("auth", "teastore-auth", 2), meta("ui", "teastore-webui", 1)]}
+        traces = {"rec": self.heartbeat("gcp", "teastore-recommender", 280, 20),
+                  "auth": self.heartbeat("azure", "teastore-auth", 40, 20)}
+        fetched = []
+
+        def fake_urlopen(url, timeout=None):
+            if "/api/search" in url:
+                return _Response(probe_search if "kind" in urllib.parse.unquote_plus(url) else {"traces": []})
+            fetched.append(url.rsplit("/", 1)[-1])
+            return _Response(traces[fetched[-1]])
+
+        analyzer = TempoFailureTests.analyzer(None)
+        with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            summary = analyzer.analyze_recent_traces()
+        self.assertEqual(sorted(fetched), ["auth", "rec"])          # newest per service, webui excluded
+        self.assertAlmostEqual(summary["rtt_links"]["gcp->aws (aws:teastore-registry)"], 260, delta=1)
+        results = {e: {"raw": {"client_latency_p95": 0.6 if e.startswith("gcp") else 0.02,
+                               "server_latency_p95": 0.005, "max_pod_cpu_pct": 5.0}}
+                   for e in ("gcp:teastore-recommender", "azure:teastore-auth", "aws:teastore-registry")}
+        # The healthy azure round trip is newer than the delayed gcp one, so it exonerates aws/azure.
+        self.assertEqual(analyzer.evidence.localize(results, time.time())["cloud"], "gcp")
 
 
 class EvaluationSeparationTests(unittest.TestCase):
