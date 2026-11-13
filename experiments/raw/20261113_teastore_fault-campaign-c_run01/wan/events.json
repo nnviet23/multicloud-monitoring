@@ -1,0 +1,173 @@
+{
+  "phases": [
+    {
+      "id": "baseline",
+      "start": "2026-11-13T00:41:51.929518+00:00",
+      "end": "2026-11-13T00:43:51.937727+00:00"
+    },
+    {
+      "id": "gcp_wan_delay",
+      "start": "2026-11-13T00:43:52.781734+00:00",
+      "end": "2026-11-13T00:45:52.782096+00:00",
+      "qdisc_before": [
+        {
+          "kind": "netem",
+          "handle": "8003:",
+          "root": true,
+          "refcnt": 17,
+          "options": {
+            "limit": 1000,
+            "delay": {
+              "delay": 0.01,
+              "jitter": 0.002,
+              "correlation": 0
+            },
+            "loss-random": {
+              "loss": 0.001,
+              "correlation": 0
+            },
+            "ecn": false,
+            "gap": 0
+          }
+        }
+      ],
+      "qdisc_restored": [
+        {
+          "kind": "netem",
+          "handle": "8003:",
+          "root": true,
+          "refcnt": 17,
+          "options": {
+            "limit": 1000,
+            "delay": {
+              "delay": 0.01,
+              "jitter": 0.002,
+              "correlation": 0
+            },
+            "loss-random": {
+              "loss": 0.001,
+              "correlation": 0
+            },
+            "ecn": false,
+            "gap": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "recovery_after_gcp_wan_delay",
+      "start": "2026-11-13T00:45:53.196565+00:00",
+      "end": "2026-11-13T00:48:23.196864+00:00"
+    },
+    {
+      "id": "azure_wan_delay",
+      "start": "2026-11-13T00:48:24.042132+00:00",
+      "end": "2026-11-13T00:50:24.042565+00:00",
+      "qdisc_before": [
+        {
+          "kind": "netem",
+          "handle": "8002:",
+          "root": true,
+          "refcnt": 17,
+          "options": {
+            "limit": 1000,
+            "delay": {
+              "delay": 0.01,
+              "jitter": 0.002,
+              "correlation": 0
+            },
+            "loss-random": {
+              "loss": 0.001,
+              "correlation": 0
+            },
+            "ecn": false,
+            "gap": 0
+          }
+        }
+      ],
+      "qdisc_restored": [
+        {
+          "kind": "netem",
+          "handle": "8002:",
+          "root": true,
+          "refcnt": 17,
+          "options": {
+            "limit": 1000,
+            "delay": {
+              "delay": 0.01,
+              "jitter": 0.002,
+              "correlation": 0
+            },
+            "loss-random": {
+              "loss": 0.001,
+              "correlation": 0
+            },
+            "ecn": false,
+            "gap": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "recovery_after_azure_wan_delay",
+      "start": "2026-11-13T00:50:24.476629+00:00",
+      "end": "2026-11-13T00:52:54.476972+00:00"
+    },
+    {
+      "id": "aws_wan_delay",
+      "start": "2026-11-13T00:52:55.288945+00:00",
+      "end": "2026-11-13T00:54:55.289431+00:00",
+      "qdisc_before": [
+        {
+          "kind": "netem",
+          "handle": "8001:",
+          "root": true,
+          "refcnt": 17,
+          "options": {
+            "limit": 1000,
+            "delay": {
+              "delay": 0.01,
+              "jitter": 0.002,
+              "correlation": 0
+            },
+            "loss-random": {
+              "loss": 0.001,
+              "correlation": 0
+            },
+            "ecn": false,
+            "gap": 0
+          }
+        }
+      ],
+      "qdisc_restored": [
+        {
+          "kind": "netem",
+          "handle": "8001:",
+          "root": true,
+          "refcnt": 17,
+          "options": {
+            "limit": 1000,
+            "delay": {
+              "delay": 0.01,
+              "jitter": 0.002,
+              "correlation": 0
+            },
+            "loss-random": {
+              "loss": 0.001,
+              "correlation": 0
+            },
+            "ecn": false,
+            "gap": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "recovery_after_aws_wan_delay",
+      "start": "2026-11-13T00:54:55.746138+00:00",
+      "end": "2026-11-13T00:57:25.746542+00:00"
+    }
+  ],
+  "active_helpers": {},
+  "cleanup_errors": []
+}

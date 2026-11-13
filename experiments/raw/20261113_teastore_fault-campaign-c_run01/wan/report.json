@@ -1,0 +1,325 @@
+{
+  "mode": "live_k3d_fault_injection",
+  "settle_seconds": 30,
+  "passed": 5,
+  "total": 7,
+  "results": [
+    {
+      "id": "baseline",
+      "start": "2026-11-13T00:41:51.929518+00:00",
+      "end": "2026-11-13T00:43:51.937727+00:00",
+      "samples": 9,
+      "alerts": 0,
+      "model_alerts": 0,
+      "telemetry_complete": true,
+      "probes_healthy": true,
+      "rca_ok": true,
+      "rca_causes": [],
+      "detection_seconds": null,
+      "passed": true
+    },
+    {
+      "id": "gcp_wan_delay",
+      "start": "2026-11-13T00:43:52.781734+00:00",
+      "end": "2026-11-13T00:45:52.782096+00:00",
+      "qdisc_before": [
+        {
+          "kind": "netem",
+          "handle": "8003:",
+          "root": true,
+          "refcnt": 17,
+          "options": {
+            "limit": 1000,
+            "delay": {
+              "delay": 0.01,
+              "jitter": 0.002,
+              "correlation": 0
+            },
+            "loss-random": {
+              "loss": 0.001,
+              "correlation": 0
+            },
+            "ecn": false,
+            "gap": 0
+          }
+        }
+      ],
+      "qdisc_restored": [
+        {
+          "kind": "netem",
+          "handle": "8003:",
+          "root": true,
+          "refcnt": 17,
+          "options": {
+            "limit": 1000,
+            "delay": {
+              "delay": 0.01,
+              "jitter": 0.002,
+              "correlation": 0
+            },
+            "loss-random": {
+              "loss": 0.001,
+              "correlation": 0
+            },
+            "ecn": false,
+            "gap": 0
+          }
+        }
+      ],
+      "samples": 9,
+      "alerts": 9,
+      "model_alerts": 9,
+      "telemetry_complete": true,
+      "probes_healthy": true,
+      "rca_ok": false,
+      "rca_causes": [
+        "[gcp:teastore-recommender] client_latency_p95 (lệch x6.1)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x48.2)",
+        "[CROSS_CLOUD_WAN_DELAY] gcp->aws (aws:teastore-registry) (T_WAN=260ms)",
+        "[gcp:teastore-recommender] client_latency_p95 (lệch x6.8)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x52.8)",
+        "[gcp:teastore-recommender] client_latency_p95 (lệch x7.3)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x56.5)",
+        "[CROSS_CLOUD_WAN_DELAY] gcp->aws (aws:teastore-registry) (T_WAN=259ms)",
+        "[gcp:teastore-recommender] client_latency_p95 (lệch x7.6)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x56.1)",
+        "[CROSS_CLOUD_WAN_DELAY] gcp->aws (aws:teastore-registry) (T_WAN=261ms)",
+        "[gcp:teastore-recommender] client_latency_p95 (lệch x7.8)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x58.5)",
+        "[gcp:teastore-recommender] client_latency_p95 (lệch x8.0)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x56.3)",
+        "[CROSS_CLOUD_WAN_DELAY] gcp->aws (aws:teastore-registry) (T_WAN=262ms)",
+        "[gcp:teastore-recommender] client_latency_p95 (lệch x8.1)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x55.9)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x50.1)",
+        "[gcp:teastore-recommender] client_latency_p95 (lệch x8.2)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x50.2)"
+      ],
+      "detection_seconds": 27.2,
+      "passed": false
+    },
+    {
+      "id": "recovery_after_gcp_wan_delay",
+      "start": "2026-11-13T00:45:53.196565+00:00",
+      "end": "2026-11-13T00:48:23.196864+00:00",
+      "samples": 12,
+      "alerts": 0,
+      "model_alerts": 0,
+      "telemetry_complete": true,
+      "probes_healthy": true,
+      "rca_ok": true,
+      "rca_causes": [],
+      "detection_seconds": 6.8,
+      "passed": true
+    },
+    {
+      "id": "azure_wan_delay",
+      "start": "2026-11-13T00:48:24.042132+00:00",
+      "end": "2026-11-13T00:50:24.042565+00:00",
+      "qdisc_before": [
+        {
+          "kind": "netem",
+          "handle": "8002:",
+          "root": true,
+          "refcnt": 17,
+          "options": {
+            "limit": 1000,
+            "delay": {
+              "delay": 0.01,
+              "jitter": 0.002,
+              "correlation": 0
+            },
+            "loss-random": {
+              "loss": 0.001,
+              "correlation": 0
+            },
+            "ecn": false,
+            "gap": 0
+          }
+        }
+      ],
+      "qdisc_restored": [
+        {
+          "kind": "netem",
+          "handle": "8002:",
+          "root": true,
+          "refcnt": 17,
+          "options": {
+            "limit": 1000,
+            "delay": {
+              "delay": 0.01,
+              "jitter": 0.002,
+              "correlation": 0
+            },
+            "loss-random": {
+              "loss": 0.001,
+              "correlation": 0
+            },
+            "ecn": false,
+            "gap": 0
+          }
+        }
+      ],
+      "samples": 9,
+      "alerts": 9,
+      "model_alerts": 9,
+      "telemetry_complete": true,
+      "probes_healthy": false,
+      "rca_ok": true,
+      "rca_causes": [
+        "[CROSS_CLOUD_WAN_DELAY] aws->azure (azure:teastore-persistence) (T_WAN=193ms)",
+        "[CROSS_CLOUD_WAN_DELAY] aws->azure (azure:teastore-auth) (T_WAN=191ms)",
+        "[CROSS_CLOUD_WAN_DELAY] azure->aws (aws:teastore-registry) (T_WAN=189ms)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x98.1)",
+        "[CROSS_CLOUD_WAN_DELAY] azure->aws (aws:teastore-registry) (T_WAN=192ms)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x108.3)",
+        "[azure:teastore-persistence] client_latency_p95 (lệch x2.7)",
+        "[azure:teastore-auth] client_latency_p95 (lệch x2.6)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x112.8)",
+        "[azure:teastore-persistence] client_latency_p95 (lệch x2.9)",
+        "[azure:teastore-auth] client_latency_p95 (lệch x2.8)",
+        "[CROSS_CLOUD_WAN_DELAY] localized_cloud=azure (delayed: aws->azure=190ms, aws->azure=193ms, azure->aws=192ms; healthy round-trips: gcp->aws)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x115.1)",
+        "[azure:teastore-persistence] client_latency_p95 (lệch x3.0)",
+        "[azure:teastore-auth] client_latency_p95 (lệch x2.9)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x119.4)",
+        "[azure:teastore-persistence] client_latency_p95 (lệch x3.1)",
+        "[azure:teastore-auth] client_latency_p95 (lệch x3.0)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x118.1)",
+        "[azure:teastore-auth] client_latency_p95 (lệch x3.1)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x118.8)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x120.7)",
+        "[azure:teastore-persistence] client_latency_p95 (lệch x3.2)",
+        "[CROSS_CLOUD_WAN_DELAY] localized_cloud=azure (delayed: aws->azure=188ms, aws->azure=191ms, azure->aws=189ms; healthy round-trips: gcp->aws)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x124.5)"
+      ],
+      "detection_seconds": 16.0,
+      "passed": true
+    },
+    {
+      "id": "recovery_after_azure_wan_delay",
+      "start": "2026-11-13T00:50:24.476629+00:00",
+      "end": "2026-11-13T00:52:54.476972+00:00",
+      "samples": 12,
+      "alerts": 0,
+      "model_alerts": 0,
+      "telemetry_complete": true,
+      "probes_healthy": true,
+      "rca_ok": true,
+      "rca_causes": [],
+      "detection_seconds": 5.5,
+      "passed": true
+    },
+    {
+      "id": "aws_wan_delay",
+      "start": "2026-11-13T00:52:55.288945+00:00",
+      "end": "2026-11-13T00:54:55.289431+00:00",
+      "qdisc_before": [
+        {
+          "kind": "netem",
+          "handle": "8001:",
+          "root": true,
+          "refcnt": 17,
+          "options": {
+            "limit": 1000,
+            "delay": {
+              "delay": 0.01,
+              "jitter": 0.002,
+              "correlation": 0
+            },
+            "loss-random": {
+              "loss": 0.001,
+              "correlation": 0
+            },
+            "ecn": false,
+            "gap": 0
+          }
+        }
+      ],
+      "qdisc_restored": [
+        {
+          "kind": "netem",
+          "handle": "8001:",
+          "root": true,
+          "refcnt": 17,
+          "options": {
+            "limit": 1000,
+            "delay": {
+              "delay": 0.01,
+              "jitter": 0.002,
+              "correlation": 0
+            },
+            "loss-random": {
+              "loss": 0.001,
+              "correlation": 0
+            },
+            "ecn": false,
+            "gap": 0
+          }
+        }
+      ],
+      "samples": 9,
+      "alerts": 9,
+      "model_alerts": 9,
+      "telemetry_complete": true,
+      "probes_healthy": false,
+      "rca_ok": true,
+      "rca_causes": [
+        "[CROSS_CLOUD_WAN_DELAY] localized_cloud=aws (delayed: aws->azure=211ms, aws->azure=212ms, aws->gcp=210ms, azure->aws=210ms, gcp->aws=208ms; healthy round-trips: none)",
+        "[CROSS_CLOUD_WAN_DELAY] aws->azure (azure:teastore-persistence) (T_WAN=212ms)",
+        "[CROSS_CLOUD_WAN_DELAY] aws->azure (azure:teastore-auth) (T_WAN=211ms)",
+        "[CROSS_CLOUD_WAN_DELAY] aws->gcp (gcp:teastore-recommender) (T_WAN=210ms)",
+        "[CROSS_CLOUD_WAN_DELAY] localized_cloud=aws (delayed: aws->azure=209ms, aws->azure=211ms, aws->gcp=210ms, azure->aws=210ms, gcp->aws=207ms; healthy round-trips: none)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x103.4)",
+        "[gcp:teastore-recommender] client_latency_p95 (lệch x2.6)",
+        "[azure:teastore-persistence] client_latency_p95 (lệch x2.6)",
+        "[CROSS_CLOUD_WAN_DELAY] localized_cloud=aws (delayed: aws->azure=210ms, aws->azure=210ms, aws->gcp=209ms, azure->aws=210ms, gcp->aws=207ms; healthy round-trips: none)",
+        "[CROSS_CLOUD_WAN_DELAY] aws->azure (azure:teastore-persistence) (T_WAN=210ms)",
+        "[CROSS_CLOUD_WAN_DELAY] aws->azure (azure:teastore-auth) (T_WAN=210ms)",
+        "[CROSS_CLOUD_WAN_DELAY] aws->gcp (gcp:teastore-recommender) (T_WAN=209ms)",
+        "[CROSS_CLOUD_WAN_DELAY] localized_cloud=aws (delayed: aws->azure=211ms, aws->azure=211ms, aws->gcp=211ms, azure->aws=210ms, gcp->aws=207ms; healthy round-trips: none)",
+        "[CROSS_CLOUD_WAN_DELAY] aws->azure (azure:teastore-persistence) (T_WAN=211ms)",
+        "[CROSS_CLOUD_WAN_DELAY] aws->gcp (gcp:teastore-recommender) (T_WAN=211ms)",
+        "[CROSS_CLOUD_WAN_DELAY] localized_cloud=aws (delayed: aws->azure=210ms, aws->azure=211ms, aws->gcp=207ms, azure->aws=211ms, gcp->aws=209ms; healthy round-trips: none)",
+        "[CROSS_CLOUD_WAN_DELAY] gcp->aws (aws:teastore-registry) (T_WAN=209ms)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x117.3)",
+        "[gcp:teastore-recommender] client_latency_p95 (lệch x4.3)",
+        "[CROSS_CLOUD_WAN_DELAY] localized_cloud=aws (delayed: aws->azure=209ms, aws->azure=210ms, aws->gcp=208ms, azure->aws=210ms, gcp->aws=210ms; healthy round-trips: none)",
+        "[CROSS_CLOUD_WAN_DELAY] aws->azure (azure:teastore-auth) (T_WAN=209ms)",
+        "[CROSS_CLOUD_WAN_DELAY] aws->gcp (gcp:teastore-recommender) (T_WAN=208ms)",
+        "[CROSS_CLOUD_WAN_DELAY] localized_cloud=aws (delayed: aws->azure=211ms, aws->azure=211ms, aws->gcp=212ms, azure->aws=209ms, gcp->aws=210ms; healthy round-trips: none)",
+        "[CROSS_CLOUD_WAN_DELAY] azure->aws (aws:teastore-registry) (T_WAN=209ms)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x119.3)",
+        "[gcp:teastore-recommender] client_latency_p95 (lệch x3.6)",
+        "[CROSS_CLOUD_WAN_DELAY] localized_cloud=aws (delayed: aws->azure=209ms, aws->azure=210ms, aws->gcp=209ms, azure->aws=209ms, gcp->aws=211ms; healthy round-trips: none)",
+        "[CROSS_CLOUD_WAN_DELAY] gcp->aws (aws:teastore-registry) (T_WAN=211ms)",
+        "[CROSS_CLOUD_WAN_DELAY] aws->azure (azure:teastore-auth) (T_WAN=209ms, trace_age=26s)",
+        "[CROSS_CLOUD_WAN_DELAY] azure->aws (aws:teastore-registry) (T_WAN=209ms, trace_age=27s)",
+        "[CROSS_CLOUD_WAN_DELAY] localized_cloud=aws (delayed: aws->azure=208ms, aws->azure=212ms, aws->gcp=210ms, azure->aws=209ms, gcp->aws=213ms; healthy round-trips: none)",
+        "[CROSS_CLOUD_WAN_DELAY] gcp->aws (aws:teastore-registry) (T_WAN=213ms)",
+        "[aws:teastore-webui] server_latency_p95 (lệch x118.3)",
+        "[azure:teastore-auth] client_latency_p95 (lệch x4.3)"
+      ],
+      "detection_seconds": 14.7,
+      "passed": true
+    },
+    {
+      "id": "recovery_after_aws_wan_delay",
+      "start": "2026-11-13T00:54:55.746138+00:00",
+      "end": "2026-11-13T00:57:25.746542+00:00",
+      "samples": 12,
+      "alerts": 1,
+      "model_alerts": 1,
+      "telemetry_complete": true,
+      "probes_healthy": true,
+      "rca_ok": true,
+      "rca_causes": [
+        "[azure:teastore-persistence] client_latency_p95 (lệch x4.9)"
+      ],
+      "detection_seconds": 4.3,
+      "passed": false
+    }
+  ],
+  "error": null,
+  "cleanup_errors": []
+}
