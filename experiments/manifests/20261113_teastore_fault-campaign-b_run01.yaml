@@ -1,0 +1,71 @@
+schema_version: "1.0"
+experiment_id: "20261113_teastore_fault-campaign-b_run01"
+status: "valid" # planned | running | valid | invalid | incomplete
+purpose: "Campaign B: final held-out evaluation of model v2 (v1 weights, threshold 1.6) with the WAN cloud-localisation RCA (9c6e468). Nothing from this run is used for tuning."
+started_at_utc: "2026-11-12T23:59:47Z"   # 13 s before the date in the ID; all faults ran on 2026-11-13
+ended_at_utc: "2026-11-13T00:40:02Z"
+
+repository:
+  commit: "0e30d18"
+  branch: "AI"
+  dirty: false
+  model: "v2 (ai-engine/models/saved/model_v2_sha256.txt; exact hashes in raw/20261113_teastore_fault-campaign-b_run01/system/model_sha256.txt)"
+
+workload:
+  application: "TeaStore"
+  scenario: "fault-campaign"
+  entrypoint: "http://localhost:8080/tools.descartes.teastore.webui (AWS nginx-api-gateway)"
+  load_tool: "runner-internal stdlib load (12 users) started by each chaos runner"
+  concurrency: {users: 12}
+  fault_injection:
+    wan_runner: "tests/chaos/run_live.py --baseline 120 --fault 120 --recovery 150 --settle 30 --interval 10"
+    wan_faults:
+      gcp_wan_delay: "netem delay 250ms on gcp-k3d node egress (keeps 2ms jitter, 0.1% loss); restored to delay 10ms 2ms loss 0.1%"
+      azure_wan_delay: "netem delay 180ms on azure-k3d node egress; restored to baseline"
+      aws_wan_delay: "netem delay 200ms on aws-k3d node egress; restored to baseline"
+    service_runner: "tests/chaos/run_service_faults.py --fault 90 --recovery 150 --interval 10"
+    service_faults:
+      cpu: "JVM attach CPU burn in gcp:teastore-recommender"
+      db_lock: "MariaDB LOCK TABLES pulses on PERSISTENCEPRODUCT/CATEGORY (verified by a blocked independent reader) + persistence JPA cache eviction"
+      memory_leak: "JVM attach gradual heap leak (<=6 MiB/0.9s, stops at 86% heap or 88% container working set) in azure:teastore-persistence, 180s"
+      http_5xx: "POST cartAction with invalid productid every 0.35s (HTTP 500 verified) on aws:teastore-webui"
+      webui_outage: "scale aws deploy/teastore-webui to 0, then restore replicas"
+  anomaly_label: "per phase in events.json"
+
+environment:
+  clusters: ["hub-k3d", "aws-k3d", "azure-k3d", "gcp-k3d"]
+  node_profile: "k3s v1.31.2+k3s1, 1 server per cluster, single host 16 vCPU / 12.8 GiB RAM"
+  network_profile: "baseline netem delay 10ms 2ms loss 0.1% on each spoke (verified before start)"
+  changes_since_campaign_a: ["persistence memory limit 768Mi (3d982e4)"]
+  warmup: "120 s of 12-user traffic before start (webui pod had restarted after campaign A webui_outage)"
+
+telemetry:
+  detector: "ai-engine/inference/detector.py --interval 10 --disable-telegram (spawned by each runner; one detector per runner)"
+  outputs: "detector.json (per-cycle records incl. entity_features), events.json (phase timeline), report.json"
+
+artifacts:
+  raw:
+    - "experiments/raw/20261113_teastore_fault-campaign-b_run01/wan/"
+    - "experiments/raw/20261113_teastore_fault-campaign-b_run01/service/"
+    - "experiments/raw/20261113_teastore_fault-campaign-b_run01/system/model_sha256.txt"
+  processed: []
+  logs:
+    - "experiments/raw/20261113_teastore_fault-campaign-b_run01/system/run.log"
+    - "experiments/raw/20261113_teastore_fault-campaign-b_run01/system/wan_runner.log"
+    - "experiments/raw/20261113_teastore_fault-campaign-b_run01/system/service_runner.log"
+
+quality:
+  validity_reason: >-
+    Runs complete, no runner error or cleanup error, netem restored to baseline, pods healthy afterwards.
+    Detection (model alert in the fault phase): gcp/azure/aws WAN 9/9 each (first alert 27.4/16.1/14.9 s),
+    cpu 2/6, db_lock 6/6, memory_leak 12/15, http_5xx 6/6; webui_outage 5/6 via the HTTP probe guard (no JVM
+    telemetry by design). Baseline 0 alerts. Runner verdicts: PASS for aws_wan_delay (localized_cloud=aws on
+    every alert cycle), cpu, db_lock, memory_leak, http_5xx, webui_outage and 6/7 recoveries.
+    FAIL gcp_wan_delay and azure_wan_delay: detected, but no localized_cloud (round-trip probe traces were not
+    fetched; fixed after this run in 56be347 and re-tested in a separate WAN campaign).
+    FAIL recovery_after_cpu: one alert 37 s into recovery while the CPU feature still read 50.6% because
+    rate(jvm_cpu_time_seconds_total[1m]) decays over 60 s (runner settle is 30 s); kept as a known limitation.
+  missing_data_notes: ["webui JVM telemetry absent during webui_outage by design"]
+  deviations:
+    - "runner started 13 s before 2026-11-13 UTC; the experiment ID uses the date on which all faults ran"
+    - "detector code at 0e30d18 (WAN localisation without round-trip probe search)"
