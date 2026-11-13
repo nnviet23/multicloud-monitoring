@@ -187,14 +187,17 @@ class TraceEvidence:
         source, destination = path.split("->", 1)
         return source, destination, entity.rstrip(")")
 
-    def localize(self, entity_results, now, delayed_ms=65.0):
+    def localize(self, entity_results, now, delayed_ms=65.0, concurrency_s=15.0):
         """Name the one cloud whose WAN path explains every delayed cross-cloud link.
 
         A netem/egress fault on cloud X delays every link that touches X, so X is in the
         intersection of the endpoints of all delayed links. Clouds on a concurrently
         healthy *round-trip* link (client span minus its child server span, Method A)
         are exonerated. Gap-decomposed links (Method B) cannot see a one-way delay, so
-        they may accuse but never exonerate. Returns None when evidence is ambiguous.
+        they may accuse but never exonerate. A healthy round trip counts when it was
+        observed at most `concurrency_s` before the earliest delayed link (heartbeats of
+        different services are sampled independently, seconds apart). Returns None when
+        evidence is ambiguous.
         """
         recent = {link: v for link, v in self.paths.items() if 0 <= now - v["observed_at"] <= self.ttl}
         delayed = {link: v for link, v in recent.items()
@@ -203,7 +206,7 @@ class TraceEvidence:
             return None
         since = min(v["observed_at"] for v in delayed.values())
         healthy = {link: v for link, v in recent.items()
-                   if v["rtt"] and v["delay_ms"] < delayed_ms and v["observed_at"] >= since}
+                   if v["rtt"] and v["delay_ms"] < delayed_ms and v["observed_at"] >= since - concurrency_s}
         endpoints = [set(self._parse(link)[:2]) for link in delayed]
         candidates = set.intersection(*endpoints)
         exonerated = set().union(*(set(self._parse(link)[:2]) for link in healthy)) if healthy else set()

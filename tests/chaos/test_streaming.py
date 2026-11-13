@@ -185,6 +185,18 @@ class WanLocalizationTests(unittest.TestCase):
         self.assertEqual(loc["cloud"], "gcp")
         self.assertIn("azure->aws (aws:teastore-registry)", loc["healthy_rtt"])
 
+    def test_slightly_older_healthy_heartbeat_still_exonerates(self):
+        # Campaign D: the only delayed gcp->aws heartbeat arrived a few seconds after the
+        # newest healthy azure->aws one.
+        cache = TraceEvidence()
+        self.observe(cache, 96, rtt={"azure->aws (aws:teastore-registry)": 23.0})
+        self.observe(cache, 100, rtt={"gcp->aws (aws:teastore-registry)": 259.0})
+        self.assertEqual(cache.localize(self.results(["gcp:teastore-recommender"]), 101)["cloud"], "gcp")
+        cache = TraceEvidence()
+        self.observe(cache, 60, rtt={"azure->aws (aws:teastore-registry)": 23.0})   # long before: ignored
+        self.observe(cache, 100, rtt={"gcp->aws (aws:teastore-registry)": 259.0})
+        self.assertIsNone(cache.localize(self.results(["gcp:teastore-recommender"]), 101))
+
     def test_azure_egress_fault(self):
         cache = TraceEvidence()
         self.observe(cache, 100, gap={"aws->azure (azure:teastore-persistence)": 190.0},
@@ -194,12 +206,20 @@ class WanLocalizationTests(unittest.TestCase):
 
     def test_aws_egress_fault_has_aws_as_the_common_endpoint(self):
         cache = TraceEvidence()
-        self.observe(cache, 90, rtt={"azure->aws (aws:teastore-registry)": 21.0})   # before the fault
+        self.observe(cache, 80, rtt={"azure->aws (aws:teastore-registry)": 21.0})   # well before the fault
         self.observe(cache, 100, gap={"aws->azure (azure:teastore-persistence)": 212.0,
                                       "aws->gcp (gcp:teastore-recommender)": 211.0},
                      rtt={"gcp->aws (aws:teastore-registry)": 211.0})
-        # A healthy round trip observed before the delayed evidence must not exonerate aws.
         self.assertEqual(cache.localize(self.results(), 101)["cloud"], "aws")
+
+    def test_onset_race_gives_no_answer_until_the_healthy_link_is_superseded(self):
+        cache = TraceEvidence()
+        self.observe(cache, 92, rtt={"azure->aws (aws:teastore-registry)": 21.0})   # seconds before onset
+        self.observe(cache, 100, rtt={"gcp->aws (aws:teastore-registry)": 211.0},
+                     gap={"aws->azure (azure:teastore-persistence)": 212.0})
+        self.assertIsNone(cache.localize(self.results(), 101))                 # ambiguous, never wrong
+        self.observe(cache, 108, rtt={"azure->aws (aws:teastore-registry)": 209.0})
+        self.assertEqual(cache.localize(self.results(), 109)["cloud"], "aws")
 
     def test_ambiguous_or_absent_evidence_is_not_localized(self):
         cache = TraceEvidence()
