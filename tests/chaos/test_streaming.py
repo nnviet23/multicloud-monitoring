@@ -216,8 +216,17 @@ class WanLocalizationTests(unittest.TestCase):
         self.assertIsNone(cache.localize(self.results(), 140))
         cache = TraceEvidence()
         self.observe(cache, 100, rtt={"gcp->aws (aws:teastore-registry)": 259.0})
+        self.observe(cache, 110, rtt={"gcp->aws (aws:teastore-registry)": 21.0})   # link healed
+        self.assertIsNone(cache.localize(self.results(), 111))
+
+    def test_destination_recovery_does_not_erase_a_delayed_caller_path(self):
+        # gcp egress fault: the registry (aws) passes recovery checks every cycle,
+        # but the gcp->aws round trip is still +250 ms.
+        cache = TraceEvidence()
+        self.observe(cache, 100, rtt={"gcp->aws (aws:teastore-registry)": 260.0})
         cache.forget("aws:teastore-registry", now=101)
-        self.assertIsNone(cache.localize(self.results(), 102))
+        self.observe(cache, 105, rtt={"azure->aws (aws:teastore-registry)": 21.0})
+        self.assertEqual(cache.localize(self.results(["gcp:teastore-recommender"]), 106)["cloud"], "gcp")
 
     def test_caller_side_symptom_keeps_link_evidence(self):
         cache = TraceEvidence()

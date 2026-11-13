@@ -165,7 +165,11 @@ class TraceEvidence:
             if parsed is None or not math.isfinite(delay):
                 continue
             source, destination, entity = parsed
-            if source == destination or observed_at <= self.cleared_at.get(entity, -math.inf):
+            # Path evidence is per link, latest observation wins: a newer healthy round
+            # trip on the same link supersedes a delayed one. It is deliberately not
+            # cleared when the *destination* entity recovers - during a gcp egress fault
+            # the registry (aws) looks healthy while the gcp->aws round trip is +250 ms.
+            if source == destination:
                 continue
             rtt = link in rtt_links and math.isfinite(rtt_links[link])
             previous = self.paths.get(link)
@@ -221,7 +225,6 @@ class TraceEvidence:
 
     def forget(self, entity, now=None):
         self.links = {link: value for link, value in self.links.items() if value["entity"] != entity}
-        self.paths = {link: value for link, value in self.paths.items() if value["entity"] != entity}
         if self.db is not None and self.db.get("entity") == entity:
             self.db = None
         if now is not None:
