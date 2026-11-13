@@ -60,7 +60,7 @@ quality:
     Detection (model alert in the fault phase): gcp/azure/aws WAN 9/9 each (first alert 27.4/16.1/14.9 s),
     cpu 2/6, db_lock 6/6, memory_leak 12/15, http_5xx 6/6; webui_outage 5/6 via the HTTP probe guard (no JVM
     telemetry by design). Baseline 0 alerts. Runner verdicts: PASS for aws_wan_delay (localized_cloud=aws on
-    every alert cycle), cpu, db_lock, memory_leak, http_5xx, webui_outage and 6/7 recoveries.
+    every alert cycle after the 30 s settle; 10/11 alert cycles of the phase), cpu, db_lock, memory_leak, http_5xx, webui_outage and 6/7 recoveries.
     FAIL gcp_wan_delay and azure_wan_delay: detected, but no localized_cloud (round-trip probe traces were not
     fetched; fixed after this run in 56be347 and re-tested in a separate WAN campaign).
     FAIL recovery_after_cpu: one alert 37 s into recovery while the CPU feature still read 50.6% because

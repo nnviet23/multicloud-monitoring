@@ -95,6 +95,14 @@ Khi một request `/product` đi qua chuỗi gọi đồng bộ xuyên đám mâ
 
 ## 4. Kết quả Huấn luyện & Kiểm thử Thực nghiệm 4 Kịch bản Đa Đám Mây
 
+> **Kết quả hiện hành (2026-11-13, topology 4 cụm, model v2):** xem
+> [báo cáo đánh giá](../experiments/reports/report_ai-engine-v2-evaluation_20261113.md).
+> Model v1 train trên `20261112_teastore_normal-baseline_run02` (4 giờ, 1440 chu kỳ,
+> blocked split xen kẽ + embargo); v2 = trọng số v1 với ngưỡng quyết định 1.6 chọn
+> bằng replay sweep (`experiments/processed/20261113_threshold-sweep_model-v1.json`).
+> Các mục 4.1–4.2 bên dưới là kết quả lịch sử của topology/feature cũ, không so sánh
+> trực tiếp được.
+
 ### 4.1. Hiệu năng Hội tụ & Kiểm định Không Rò rỉ Dữ liệu (Zero-Leakage Validation & Calibration)
 * **Chia dữ liệu theo thời gian chống rò rỉ (`split_entities_chronologically`)**: `666` dòng thực thể sạch (`111 chu kỳ × 6 thực thể`) được tách theo trục thời gian cho từng thực thể **trước khi** tính baseline và **trước khi** tạo cửa sổ trượt:
   * Tập huấn luyện (`train_df`): `534` dòng (`89` chu kỳ đầu $\times$ `6` thực thể), dùng **độc quyền** để ước lượng `entity_baselines.json` (`fit_scope = "train_only"`) và sinh `468` cửa sổ gốc $\to$ `2,808` cửa sổ huấn luyện tăng cường (`12 × 8`).
@@ -119,6 +127,24 @@ Khi một request `/product` đi qua chuỗi gọi đồng bộ xuyên đám mâ
 
 ## 5. Hướng dẫn Thực thi & Vận hành (Runbook)
 
+Quy trình hiện hành (dữ liệu thô bất biến trong `experiments/raw/<run_id>/`, mỗi run có manifest):
+
+```bash
+# 1. Thu dữ liệu bình thường (warm-up 180 s, collector + probe logger, chu kỳ 10 s)
+scripts/run_data_collection.sh <YYYYMMDD>_teastore_normal-baseline_runNN 14400 4 50
+scripts/run_data_collection.sh <YYYYMMDD>_teastore_normal-erratic_runNN 2700 4 50 --erratic   # tập test giữ riêng
+# 2. Preprocess (data.raw_csv_paths, blocked split) -> processed/, slo_guards.json; train
+python3.12 ai-engine/data/preprocess.py && OMP_NUM_THREADS=8 python3.12 ai-engine/training/train.py
+# 3. Đánh giá chỉ-mô-hình trên dữ liệu thật đã ghi; quét ngưỡng; đổi điểm vận hành có bằng chứng
+python3.12 ai-engine/inference/replay_eval.py --normal <csv>... --chaos <campaign>/wan <campaign>/service
+python3.12 scripts/threshold_sweep.py experiments/processed/<date>_threshold-sweep_<model>.json --thresholds ... --normal ... --chaos ...
+python3.12 ai-engine/training/recalibrate.py --threshold <t> --evidence <sweep.json> --reason "<lý do>"
+# 4. Tiêm lỗi thật trên lab (detector --interval 10 --disable-telegram do runner khởi chạy)
+scripts/run_fault_campaign.sh <YYYYMMDD>_teastore_fault-campaign_runNN 12
+```
+
+Lệnh lịch sử (topology/feature cũ):
+
 ```bash
 # 1. Thu thập dữ liệu thực thể đa đám mây từ Prometheus
 python3.12 ai-engine/data/collector.py --duration 1200 --interval 6 --output ai-engine/data/raw/multicloud_entity_baseline.csv
@@ -134,7 +160,8 @@ python3.12 ai-engine/training/train.py
 python3.12 ai-engine/inference/evaluate_test.py --benchmark
 
 # 5. Khởi chạy Giám sát & Khoanh vùng Nguyên nhân Gốc rễ Xuyên Cloud Thời gian thực
-python3.12 ai-engine/inference/detector.py --interval 6
+#    (hiện tại: --interval 10 để khớp chu kỳ train; thêm --disable-telegram khi thí nghiệm)
+python3.12 ai-engine/inference/detector.py --interval 10
 ```
 
 ---
@@ -176,8 +203,9 @@ risk score dựa trên `min(current_mse, short_mean_mse)`;
 đã được kiểm định trên tập sự cố production độc lập.
 
 Đọc [báo cáo cải thiện và giới hạn còn lại](../tests/chaos/IMPROVEMENTS-2026-10-31.md)
-trước khi diễn giải các kết quả lab lịch sử ở mục 4.2. Runner mới có CPU JVM,
-SQL lock có xác minh độc lập và WebUI outage thật; memory leak vẫn là replay.
+trước khi diễn giải các kết quả lab lịch sử ở mục 4.2. Runner hiện có CPU JVM,
+SQL lock có xác minh độc lập, memory leak JVM thật (tăng dần, giới hạn theo cgroup),
+HTTP 5xx và WebUI outage thật.
 
 ```bash
 # Chỉ hiệu chỉnh lại metadata risk score, giữ nguyên trọng số và ngưỡng MSE
@@ -214,10 +242,13 @@ ai-engine/
 │       ├── gru_autoencoder.pt             # Trọng số GRU Autoencoder
 │       ├── tcn_autoencoder.pt             # Trọng số TCN Autoencoder
 │       ├── isolation_forest.joblib        # Isolation Forest (96 chiều), chỉ dùng làm baseline offline
-│       └── threshold_config.json          # Ngưỡng cảnh báo P99 (0.3500) & RCA baselines
+│       ├── threshold_config.json          # Ngưỡng quyết định (v2: 1.6, threshold_selection), likelihood, RCA baselines, slo_guards
+│       └── model_v*_sha256.txt            # Hash artifact của từng phiên bản model (trọng số .pt bị gitignore)
 ├── inference/
 │   ├── detector.py                        # Engine phát hiện bất thường + TempoTraceAnalyzer RCA
 │   ├── evaluate_test.py                   # Công cụ thẩm định Ground-Truth & Benchmark
+│   ├── replay_eval.py                     # Replay dữ liệu thật đã ghi qua một phiên bản model (FP, phát hiện, khoanh vùng)
+│   ├── streaming.py                       # Histogram delta, TraceEvidence (+ khoanh vùng cloud WAN), LatencyRecovery
 │   └── test_runs/                         # Log và JSON kết quả kiểm thử thực tế 4 kịch bản
 └── training/
     ├── train.py                           # Pipeline huấn luyện mô hình V3

@@ -63,7 +63,8 @@
 - [ ] Implement Hub Tail-based sampling (`tail_sampling`) to guarantee 100% error trace and high-latency span preservation.
 - [ ] Evaluate TSDB sample reduction via Collection Interval Tiering (10s Golden Signals vs 30s-60s Host OS metrics).
 - [ ] Execute Locust workload generator benchmarks across multiple concurrency tiers (Browse, Cart, Checkout).
-- [ ] Evaluate AI Anomaly Detection Engine V3 across 11 chaos injection scenarios (Network WAN, JVM Leak, CPU burn, MySQL Lock).
+- [x] Retrain the AI engine on the 4-cluster topology (model v1 on 4 h run02, v2 = v1 at replay-tuned threshold 1.6) and evaluate on real faults: 8 scenarios (3 WAN, CPU, DB lock, JVM memory leak, HTTP 5xx, WebUI outage); see `experiments/reports/report_ai-engine-v2-evaluation_20261113.md`.
+- [ ] Reach reliable WAN RCA localisation for GCP (sparse sampled heartbeats) and remove the CPU `rate[1m]` recovery tail; evaluate the remaining synthetic-only scenarios.
 - [ ] Measure observability metrics: Coverage, Accuracy, End-to-End Latency, Encryption Overhead, and Bandwidth Savings.
 - [ ] Publish scientific benchmark analysis, trade-off matrix, and final graduation thesis report.
 
@@ -96,4 +97,6 @@
 - [x] GitOps & delivery: Kustomize SRP (Base vs Overlays) with GNU Make master orchestration; Ansible for local lab provisioning.
 
 ## Next action
-Inspect the repository and existing diagrams/configs. Produce a gap analysis before changing deployment files.
+AI engine (2026-11-13): model v2 is deployed in `ai-engine/models/saved` (hashes in `model_v2_sha256.txt`).
+Open items from the evaluation report: GCP WAN localisation coverage, CPU recovery tail (`rate[1m]`), minimum
+request count for client P95, robusta CrashLoop and Makefile CRD ordering. Nothing has been pushed from branch `AI`.
