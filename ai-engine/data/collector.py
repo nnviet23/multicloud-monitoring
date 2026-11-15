@@ -1,8 +1,8 @@
 #!/usr/bin/env python3.12
 """
 Multi-Cloud Dynamic Entity Telemetry Collector (V3).
-Automatically discovers all active (cloud_provider, service_name) entities from Prometheus
-across AWS, Azure, GCP (and any future clouds) using vectorized PromQL queries,
+Automatically discovers all active (k8s_cluster_name, cloud_provider, service_name) entities from Prometheus / Thanos
+across AWS, Azure, and Central Hub using vectorized PromQL queries,
 and records per-entity multivariate time-series rows for Universal Autoencoder training.
 """
 
@@ -31,43 +31,115 @@ def handle_signal(sig, frame):
 signal.signal(signal.SIGINT, handle_signal)
 signal.signal(signal.SIGTERM, handle_signal)
 
-# Vectorized PromQL queries grouped by (cloud_provider, service_name)
-# Scales in O(1) queries regardless of the number of pods, services, or clouds!
+# Vectorized PromQL queries grouped by standard labels: k8s_cluster_name, cloud_provider, service_name
+# Scales in O(1) queries regardless of the number of pods, services, or clusters!
 # Dual-compatible with both OpenTelemetry SemConv v1.x (jvm_*) and v2.x (process_runtime_jvm_*)
 ACTIVE_JVM_PODS = (
-    '(sum by (cloud_provider, service_name, host_name) (rate(jvm_cpu_time_seconds_total[30s]) or rate(process_runtime_jvm_cpu_time_seconds_total[30s])) > 0)'
-    ' or (sum by (cloud_provider, service_name, host_name) (rate(http_server_request_duration_seconds_count[30s]) or rate(http_server_duration_milliseconds_count[30s])) > 0)'
-    ' or (sum by (cloud_provider, service_name, host_name) (rate(http_client_request_duration_seconds_count[30s]) or rate(http_client_duration_milliseconds_count[30s])) > 0)'
+    '(sum by (k8s_cluster_name, cloud_provider, service_name, host_name) (rate(jvm_cpu_time_seconds_total[30s]) or rate(process_runtime_jvm_cpu_time_seconds_total[30s])) > 0)'
+    ' or (sum by (k8s_cluster_name, cloud_provider, service_name, host_name) (rate(http_server_request_duration_seconds_count[30s]) or rate(http_server_duration_milliseconds_count[30s])) > 0)'
+    ' or (sum by (k8s_cluster_name, cloud_provider, service_name, host_name) (rate(http_client_request_duration_seconds_count[30s]) or rate(http_client_duration_milliseconds_count[30s])) > 0)'
+    ' or (sum by (cloud_provider, service_name, host_name) (rate(jvm_cpu_time_seconds_total[30s]) or rate(process_runtime_jvm_cpu_time_seconds_total[30s])) > 0)'
 )
 
+# 1. Web App Domain Entity Queries (TeaStore Microservices)
 ENTITY_VECTOR_QUERIES = {
     "discover": (
-        f'(count by (cloud_provider, service_name) ((jvm_memory_used_bytes{{jvm_memory_type="heap"}} or process_runtime_jvm_memory_usage_bytes{{type="heap"}} or process_runtime_jvm_memory_usage_bytes) and on (cloud_provider, service_name, host_name) ({ACTIVE_JVM_PODS})))'
+        f'(count by (k8s_cluster_name, cloud_provider, service_name) ((jvm_memory_used_bytes{{jvm_memory_type="heap"}} or process_runtime_jvm_memory_usage_bytes{{type="heap"}} or process_runtime_jvm_memory_usage_bytes) and on (cloud_provider, service_name, host_name) ({ACTIVE_JVM_PODS})))'
+        ' or (count by (k8s_cluster_name, cloud_provider, service_name) (jvm_memory_used_bytes{{jvm_memory_type="heap"}} or process_runtime_jvm_memory_usage_bytes{{type="heap"}} or process_runtime_jvm_memory_usage_bytes))'
         ' or (count by (cloud_provider, service_name) (jvm_memory_used_bytes{{jvm_memory_type="heap"}} or process_runtime_jvm_memory_usage_bytes{{type="heap"}} or process_runtime_jvm_memory_usage_bytes))'
     ),
-    "qps": 'sum by (cloud_provider, service_name) (rate(http_server_request_duration_seconds_count[1m]) or rate(http_server_duration_milliseconds_count[1m]))',
-    "server_latency_p95": 'histogram_quantile(0.95, sum by (le, cloud_provider, service_name) (rate(http_server_request_duration_seconds_bucket[1m]) or rate(http_server_duration_milliseconds_bucket[1m])))',
-    "client_latency_p95": 'histogram_quantile(0.95, sum by (le, cloud_provider, service_name) (rate(http_client_request_duration_seconds_bucket[1m]) or rate(http_client_duration_milliseconds_bucket[1m])))',
-    "error_rate_5xx": 'sum by (cloud_provider, service_name) (rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[1m]) or rate(http_server_request_duration_seconds_count{http_status_code=~"5.."}[1m]))',
+    "qps": (
+        'sum by (k8s_cluster_name, cloud_provider, service_name) (rate(http_server_request_duration_seconds_count[1m]) or rate(http_server_duration_milliseconds_count[1m]))'
+        ' or sum by (cloud_provider, service_name) (rate(http_server_request_duration_seconds_count[1m]) or rate(http_server_duration_milliseconds_count[1m]))'
+    ),
+    "server_latency_p95": (
+        'histogram_quantile(0.95, sum by (le, k8s_cluster_name, cloud_provider, service_name) (rate(http_server_request_duration_seconds_bucket[1m]) or rate(http_server_duration_milliseconds_bucket[1m])))'
+        ' or histogram_quantile(0.95, sum by (le, cloud_provider, service_name) (rate(http_server_request_duration_seconds_bucket[1m]) or rate(http_server_duration_milliseconds_bucket[1m])))'
+    ),
+    "client_latency_p95": (
+        'histogram_quantile(0.95, sum by (le, k8s_cluster_name, cloud_provider, service_name) (rate(http_client_request_duration_seconds_bucket[1m]) or rate(http_client_duration_milliseconds_bucket[1m])))'
+        ' or histogram_quantile(0.95, sum by (le, cloud_provider, service_name) (rate(http_client_request_duration_seconds_bucket[1m]) or rate(http_client_duration_milliseconds_bucket[1m])))'
+    ),
+    "error_rate_5xx": (
+        'sum by (k8s_cluster_name, cloud_provider, service_name) (rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[1m]) or rate(http_server_request_duration_seconds_count{http_status_code=~"5.."}[1m]))'
+        ' or sum by (cloud_provider, service_name) (rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[1m]) or rate(http_server_request_duration_seconds_count{http_status_code=~"5.."}[1m]))'
+    ),
     "max_pod_cpu_pct": (
-        f'(clamp_max(max by (cloud_provider, service_name) (((jvm_cpu_recent_utilization_ratio or process_runtime_jvm_cpu_utilization_ratio) * (jvm_cpu_count or 1)) and on (cloud_provider, service_name, host_name) ({ACTIVE_JVM_PODS})) * 100, 100))'
+        f'(clamp_max(max by (k8s_cluster_name, cloud_provider, service_name) (((jvm_cpu_recent_utilization_ratio or process_runtime_jvm_cpu_utilization_ratio) * (jvm_cpu_count or 1)) and on (cloud_provider, service_name, host_name) ({ACTIVE_JVM_PODS})) * 100, 100))'
+        ' or (clamp_max(max by (k8s_cluster_name, cloud_provider, service_name) ((jvm_cpu_recent_utilization_ratio or process_runtime_jvm_cpu_utilization_ratio) * (jvm_cpu_count or 1)) * 100, 100))'
         ' or (clamp_max(max by (cloud_provider, service_name) ((jvm_cpu_recent_utilization_ratio or process_runtime_jvm_cpu_utilization_ratio) * (jvm_cpu_count or 1)) * 100, 100))'
     ),
     "max_pod_ram_pct": (
-        f'(max by (cloud_provider, service_name) ((sum by (cloud_provider, service_name, host_name) (jvm_memory_used_bytes{{jvm_memory_type="heap"}} or process_runtime_jvm_memory_usage_bytes{{type="heap"}} or process_runtime_jvm_memory_usage_bytes) / sum by (cloud_provider, service_name, host_name) (jvm_memory_limit_bytes{{jvm_memory_type="heap"}} or process_runtime_jvm_memory_limit_bytes{{type="heap"}} or process_runtime_jvm_memory_limit_bytes)) and on (cloud_provider, service_name, host_name) ({ACTIVE_JVM_PODS})) * 100)'
+        f'(max by (k8s_cluster_name, cloud_provider, service_name) ((sum by (k8s_cluster_name, cloud_provider, service_name, host_name) (jvm_memory_used_bytes{{jvm_memory_type="heap"}} or process_runtime_jvm_memory_usage_bytes{{type="heap"}} or process_runtime_jvm_memory_usage_bytes) / sum by (k8s_cluster_name, cloud_provider, service_name, host_name) (jvm_memory_limit_bytes{{jvm_memory_type="heap"}} or process_runtime_jvm_memory_limit_bytes{{type="heap"}} or process_runtime_jvm_memory_limit_bytes)) and on (cloud_provider, service_name, host_name) ({ACTIVE_JVM_PODS})) * 100)'
+        ' or (max by (k8s_cluster_name, cloud_provider, service_name) ((sum by (k8s_cluster_name, cloud_provider, service_name) (jvm_memory_used_bytes{{jvm_memory_type="heap"}} or process_runtime_jvm_memory_usage_bytes{{type="heap"}} or process_runtime_jvm_memory_usage_bytes) / sum by (k8s_cluster_name, cloud_provider, service_name) (jvm_memory_limit_bytes{{jvm_memory_type="heap"}} or process_runtime_jvm_memory_limit_bytes{{type="heap"}} or process_runtime_jvm_memory_limit_bytes)) * 100))'
         ' or (max by (cloud_provider, service_name) ((sum by (cloud_provider, service_name) (jvm_memory_used_bytes{{jvm_memory_type="heap"}} or process_runtime_jvm_memory_usage_bytes{{type="heap"}} or process_runtime_jvm_memory_usage_bytes) / sum by (cloud_provider, service_name) (jvm_memory_limit_bytes{{jvm_memory_type="heap"}} or process_runtime_jvm_memory_limit_bytes{{type="heap"}} or process_runtime_jvm_memory_limit_bytes)) * 100))'
     ),
-    "gc_pause_rate": 'sum by (cloud_provider, service_name) (rate(jvm_gc_duration_seconds_sum[1m]) or rate(process_runtime_jvm_gc_duration_seconds_sum[1m]))',
+    "gc_pause_rate": (
+        'sum by (k8s_cluster_name, cloud_provider, service_name) (rate(jvm_gc_duration_seconds_sum[1m]) or rate(process_runtime_jvm_gc_duration_seconds_sum[1m]))'
+        ' or sum by (cloud_provider, service_name) (rate(jvm_gc_duration_seconds_sum[1m]) or rate(process_runtime_jvm_gc_duration_seconds_sum[1m]))'
+    ),
 }
 
-CLOUD_VECTOR_QUERIES = {
-    "wan_network_io_kbs": 'sum by (cloud_provider) (rate(system_network_io_bytes_total[1m])) / 1024',
-    "wan_network_errors": 'sum by (cloud_provider) (rate(system_network_errors_total[1m]))',
+# 2. Instance Domain Entity Queries (Compute Nodes & Host OS USE metrics)
+INSTANCE_VECTOR_QUERIES = {
+    "cpu_utilization_pct": (
+        '(1 - sum by (k8s_cluster_name, cloud_provider) (rate(system_cpu_time_seconds_total{state="idle"}[1m])) / sum by (k8s_cluster_name, cloud_provider) (rate(system_cpu_time_seconds_total[1m]))) * 100'
+    ),
+    "memory_usage_pct": (
+        '(sum by (k8s_cluster_name, cloud_provider) (system_memory_usage_bytes{state="used"}) / sum by (k8s_cluster_name, cloud_provider) (system_memory_usage_bytes)) * 100'
+    ),
+    "disk_iops": 'sum by (k8s_cluster_name, cloud_provider) (rate(system_disk_operations_total[1m]))',
+    "network_io_kbs": 'sum by (k8s_cluster_name, cloud_provider) (rate(system_network_io_bytes_total[1m])) / 1024',
+    "paging_faults_rate": 'sum by (k8s_cluster_name, cloud_provider) (rate(system_paging_faults_total[1m]))',
 }
+
+# 3. Database Domain Entity Queries (MariaDB / MySQL Data tier)
+DATABASE_VECTOR_QUERIES = {
+    "db_query_rate": (
+        'sum by (k8s_cluster_name, cloud_provider) (rate(traces_service_graph_request_total{server=~"teadb|teastore-db"}[1m]))'
+        ' or sum by (cloud_provider) (rate(traces_service_graph_request_total{server=~"teadb|teastore-db"}[1m]))'
+    ),
+    "db_latency_p95": (
+        'histogram_quantile(0.95, sum by (le, k8s_cluster_name, cloud_provider) (rate(traces_service_graph_request_server_seconds_bucket{server=~"teadb|teastore-db"}[1m]))) * 1000'
+        ' or histogram_quantile(0.95, sum by (le, cloud_provider) (rate(traces_service_graph_request_server_seconds_bucket{server=~"teadb|teastore-db"}[1m]))) * 1000'
+    ),
+    "db_error_rate": (
+        'sum by (k8s_cluster_name, cloud_provider) (rate(traces_service_graph_request_failed_total{server=~"teadb|teastore-db"}[1m]))'
+        ' or sum by (cloud_provider) (rate(traces_service_graph_request_failed_total{server=~"teadb|teastore-db"}[1m]))'
+    ),
+}
+
+# 4. WAN Domain Entity Queries (Inter-Cloud Transport Network)
+WAN_VECTOR_QUERIES = {
+    "wan_latency_p95": (
+        'histogram_quantile(0.95, sum by (le, client_k8s_cluster_name, server_k8s_cluster_name) (rate(traces_service_graph_request_server_seconds_bucket{client_k8s_cluster_name!=server_k8s_cluster_name}[1m]))) * 1000'
+        ' or histogram_quantile(0.95, sum by (le) (rate(traces_service_graph_request_server_seconds_bucket{server=~"teadb|teastore-registry"}[1m]))) * 1000'
+    ),
+    "wan_network_io_kbs": (
+        'sum by (k8s_cluster_name, cloud_provider) (rate(system_network_io_bytes_total[1m])) / 1024'
+        ' or sum by (cloud_provider) (rate(system_network_io_bytes_total[1m])) / 1024'
+    ),
+    "wan_network_errors": (
+        'sum by (k8s_cluster_name, cloud_provider) (rate(system_network_errors_total[1m]))'
+        ' or sum by (cloud_provider) (rate(system_network_errors_total[1m]))'
+    ),
+    "wan_network_drops": (
+        'sum by (k8s_cluster_name, cloud_provider) (rate(system_network_dropped_total[1m]))'
+        ' or sum by (cloud_provider) (rate(system_network_dropped_total[1m]))'
+    ),
+}
+
+CLOUD_VECTOR_QUERIES = WAN_VECTOR_QUERIES
 
 
 class PrometheusVectorClient:
-    def __init__(self, base_url="http://localhost:9090"):
+    def __init__(self, base_url=None):
+        if not base_url:
+            base_url = (
+                os.environ.get("THANOS_QUERY_URL")
+                or os.environ.get("PROMETHEUS_URL")
+                or "http://localhost:9090"
+            )
         self.base_url = base_url.rstrip("/")
         self.pf_proc = None
         self._ensure_connection()
@@ -174,8 +246,13 @@ class PrometheusVectorClient:
 
 
 def main():
+    default_prom_url = (
+        os.environ.get("THANOS_QUERY_URL")
+        or os.environ.get("PROMETHEUS_URL")
+        or "http://localhost:9090"
+    )
     parser = argparse.ArgumentParser(description="Multi-Cloud Dynamic Entity Metric Collector (V3)")
-    parser.add_argument("--prometheus-url", default="http://localhost:9090", help="Prometheus API URL")
+    parser.add_argument("--prometheus-url", default=default_prom_url, help="Prometheus API URL")
     parser.add_argument("--duration", type=int, default=2400, help="Collection duration in seconds (default 2400s = 40m)")
     parser.add_argument("--interval", type=int, default=10, help="Polling interval in seconds (default 10s)")
     parser.add_argument("--output", default="ai-engine/data/raw/multicloud_entity_baseline.csv", help="Output CSV path")

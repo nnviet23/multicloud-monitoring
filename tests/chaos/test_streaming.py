@@ -21,13 +21,13 @@ class CausalImputationTests(unittest.TestCase):
         def rows(cloud, values, start=0):
             return [{"cloud_provider": cloud, "service_name": "teastore-test",
                      "timestamp": start + i, "qps": value} for i, value in enumerate(values)]
-        train = pd.DataFrame(rows("aws", [np.nan, 10, np.nan]) + rows("gcp", [np.nan, np.nan, np.nan]))
-        val = pd.DataFrame(rows("aws", [np.nan, 99, np.nan], 3) + rows("gcp", [np.nan, 50, np.nan], 3))
+        train = pd.DataFrame(rows("aws", [np.nan, 10, np.nan]) + rows("azure", [np.nan, np.nan, np.nan]))
+        val = pd.DataFrame(rows("aws", [np.nan, 99, np.nan], 3) + rows("azure", [np.nan, 50, np.nan], 3))
         t, v = impute_causally(train, val, ["qps"])
         self.assertEqual(t[t.cloud_provider == "aws"].qps.tolist(), [0, 10, 10])
-        self.assertEqual(t[t.cloud_provider == "gcp"].qps.tolist(), [0, 0, 0])
+        self.assertEqual(t[t.cloud_provider == "azure"].qps.tolist(), [0, 0, 0])
         self.assertEqual(v[v.cloud_provider == "aws"].qps.tolist(), [10, 99, 99])
-        self.assertEqual(v[v.cloud_provider == "gcp"].qps.tolist(), [0, 50, 50])
+        self.assertEqual(v[v.cloud_provider == "azure"].qps.tolist(), [0, 50, 50])
 
 
 class HistogramTests(unittest.TestCase):
@@ -113,10 +113,10 @@ class RecoveryTests(unittest.TestCase):
 
 
 class TraceEvidenceTests(unittest.TestCase):
-    link = "aws->gcp (gcp:teastore-recommender)"
+    link = "aws->azure (azure:teastore-persistence)"
 
     def entities(self):
-        return {"gcp:teastore-recommender": {"raw": {"client_latency_p95": 0.3, "server_latency_p95": 0.01}}}
+        return {"azure:teastore-persistence": {"raw": {"client_latency_p95": 0.3, "server_latency_p95": 0.01}}}
 
     def test_trace_gap_keeps_original_evidence_and_expiry(self):
         cache = TraceEvidence(ttl=30)
@@ -129,7 +129,7 @@ class TraceEvidenceTests(unittest.TestCase):
     def test_recovery_invalidates_trace_and_prevents_old_trace_reintroduction(self):
         cache = TraceEvidence()
         cache.observe({"wan_links": {self.link: 250}}, "trace-1", 100, 100)
-        cache.forget("gcp:teastore-recommender", now=110)
+        cache.forget("azure:teastore-persistence", now=110)
         cache.observe({"wan_links": {self.link: 250}}, "trace-1", 100, 115)
         self.assertEqual(cache.active(self.entities(), 115), {})
         cache.observe({"wan_links": {self.link: 250}}, "new-fault", 120, 120)
@@ -139,7 +139,7 @@ class TraceEvidenceTests(unittest.TestCase):
         cache = TraceEvidence()
         cache.observe({"wan_links": {self.link: 250}}, "trace", 100, 100)
         self.assertEqual(cache.active({}, 110), {})
-        healthy = {"gcp:teastore-recommender": {"raw": {"client_latency_p95": 0.01, "server_latency_p95": 0.01}}}
+        healthy = {"azure:teastore-persistence": {"raw": {"client_latency_p95": 0.01, "server_latency_p95": 0.01}}}
         self.assertEqual(cache.active(healthy, 110), {})
 
     def test_client_cpu_saturation_invalidates_ambiguous_wan_evidence(self):

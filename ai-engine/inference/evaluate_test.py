@@ -2,7 +2,7 @@
 """
 Automated Ground-Truth Evaluator & Multi-Cloud Fault-Injection Benchmark (V3)
 Author: Antigravity AI Pair Programmer
-Project: Multicloud Monitoring (AWS + Azure + GCP + Hub)
+Project: Multicloud Monitoring (AWS + Azure + Hub)
 
 Performs:
   1. Timestamp alignment between Traffic Generator logs and AI Detector V3 summary JSON

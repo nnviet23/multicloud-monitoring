@@ -1,7 +1,7 @@
 #!/usr/bin/env python3.12
 """
 Exploratory Data Analysis (EDA) for Multi-Cloud Per-Entity Telemetry (V3).
-Analyzes per-(cloud_provider, service_name) metrics across AWS, Azure, and GCP,
+Analyzes per-(cloud_provider, service_name) metrics across AWS, Azure, and Central Hub,
 computes Median / IQR / P95 / P99 baselines, and generates visual plots + markdown report.
 """
 
@@ -37,7 +37,7 @@ def main():
     # Plot 4-panel Multi-Cloud Entity Summary
     fig, axes = plt.subplots(2, 2, figsize=(15, 10))
     fig.suptitle(
-        f"Multi-Cloud Per-Entity Telemetry Baseline ({len(df)} Entity Samples across {len(entities)} Services on AWS, Azure, GCP)",
+        f"Multi-Cloud Per-Entity Telemetry Baseline ({len(df)} Entity Samples across {len(entities)} Services on AWS, Azure, Central Hub)",
         fontsize=13,
         fontweight="bold"
     )

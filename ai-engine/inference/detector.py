@@ -2,12 +2,12 @@
 """
 Multi-Cloud Real-Time Anomaly Detector & Cross-Cloud Trace RCA Engine (V3)
 Author: Antigravity AI Pair Programmer
-Project: Multicloud Monitoring (AWS + Azure + GCP + Hub)
+Project: Multicloud Monitoring (AWS + Azure + Central Hub)
 
 Key Architectural Capabilities (V3):
   1. Dynamic Multi-Cloud Entity Auto-Discovery:
      Automatically discovers all active `(cloud_provider, service_name)` entities
-     from Prometheus without hardcoded service lists.
+     from Prometheus / Thanos without hardcoded service lists.
   2. Per-Entity Z-Score Standardization & Online Auto-Calibration:
      Applies entity-specific baseline standardization (and 30-sample online calibration
      for newly added clouds/microservices) before feeding 8-feature entity windows
@@ -16,7 +16,7 @@ Key Architectural Capabilities (V3):
      Uses `max_pod_cpu_pct`, `max_pod_ram_pct`, `ram_floor_2m_pct`, and response-aware
      damping so scaling pods (1 -> N replicas) never causes false alarms.
   4. Tempo Distributed Trace Span Decomposition (`TempoTraceAnalyzer`):
-     Decomposes distributed traces across AWS, Azure, and GCP into:
+     Decomposes distributed traces across AWS, Azure, and Central Hub into:
        - T_WAN(Cloud_A -> Cloud_B) = T_client_span(A -> B) - T_server_span(B)
        - T_self(Cloud:Service)     = T_server_span(S) - sum(T_child_client_spans(S))
        - T_DB(Azure:MariaDB)       = sum(T_mysql_spans)
@@ -91,9 +91,8 @@ def probe_webui_health(url="http://localhost:8080/tools.descartes.teastore.webui
     """
     Active end-to-end synthetic HTTP probe hitting the `/product?id=7` endpoint,
     which exercises the full multi-cloud call graph:
-      AWS (teastore-webui, teastore-image, teastore-registry)
-      -> Azure (teastore-persistence, teastore-auth, MariaDB)
-      -> GCP (teastore-recommender)
+      AWS (teastore-webui, teastore-image, teastore-recommender, teastore-registry)
+      -> Azure (teastore-persistence, MariaDB)
     """
     t0 = time.time()
     try:
@@ -113,7 +112,13 @@ def probe_webui_health(url="http://localhost:8080/tools.descartes.teastore.webui
 
 
 class PrometheusVectorClient:
-    def __init__(self, base_url="http://localhost:9090"):
+    def __init__(self, base_url=None):
+        if not base_url:
+            base_url = (
+                os.environ.get("THANOS_QUERY_URL")
+                or os.environ.get("PROMETHEUS_URL")
+                or "http://localhost:9090"
+            )
         self.base_url = base_url.rstrip("/")
         self.pf_proc = None
         self.ram_history = {}
@@ -304,7 +309,8 @@ class TempoTraceAnalyzer:
       - T_DB(azure:mariadb)           = SQL query span duration
     """
     def __init__(self, base_url="http://localhost:3200"):
-        self.base_url = base_url.rstrip("/")
+        env_url = os.environ.get("TEMPO_URL")
+        self.base_url = (env_url or base_url or "http://localhost:3200").rstrip("/")
         self.pf_proc = None
         self.evidence = TraceEvidence()
         self._ensure_connection()
@@ -594,7 +600,12 @@ class EntityCalibrator:
                     vals = np.array([b[col] for b in buf], dtype=np.float64)
                     med = float(np.median(vals))
                     sc = max(float(np.std(vals)), float(self.scale_floors.get(col, 1.0)))
-                    z = np.clip((raw_feature_dict[col] - med) / sc, -self.clip_z, self.clip_z)
+                    val = raw_feature_dict.get(col, 0.0)
+                    if val is None or math.isnan(val) or math.isinf(val):
+                        val = 0.0
+                    z = np.clip((val - med) / sc, -self.clip_z, self.clip_z)
+                    if math.isnan(z) or math.isinf(z):
+                        z = 0.0
                     z_vec.append(float(z))
                 return np.array(z_vec, dtype=np.float32), False
 
@@ -603,7 +614,12 @@ class EntityCalibrator:
         for col in ENTITY_FEATURE_COLS:
             mu = float(f_meta[col]["median"])
             sc = max(float(f_meta[col]["scale"]), float(self.scale_floors.get(col, 1e-3)))
-            z = np.clip((raw_feature_dict[col] - mu) / sc, -self.clip_z, self.clip_z)
+            val = raw_feature_dict.get(col, 0.0)
+            if val is None or math.isnan(val) or math.isinf(val):
+                val = 0.0
+            z = np.clip((val - mu) / sc, -self.clip_z, self.clip_z)
+            if math.isnan(z) or math.isinf(z):
+                z = 0.0
             z_vec.append(float(z))
         return np.array(z_vec, dtype=np.float32), True
 
@@ -749,29 +765,70 @@ class PrometheusMetricsServer:
                 pass
 
 
+def resolve_entity_type(service_name):
+    sn = (service_name or "").lower()
+    if any(k in sn for k in ("mariadb", "mysql", "db")):
+        return "database"
+    if any(k in sn for k in ("node", "server", "host", "instance")):
+        return "instance"
+    if any(k in sn for k in ("wan", "network", "link")):
+        return "wan"
+    return "web_app"
+
+
+def resolve_cluster_name(cloud_provider):
+    cp = (cloud_provider or "").lower()
+    if cp == "aws":
+        return "aws-k3d"
+    if cp == "azure":
+        return "azure-k3d"
+    if cp == "hub":
+        return "hub-k3d"
+    return f"{cp}-k3d"
+
+
 def format_prometheus_metrics(sample_record, entity_results, trace_summary, probe_ms, probe_ok):
     lines = []
     lines.append("# HELP ai_anomaly_likelihood_percent AI anomaly probability (0-100) per microservice entity")
     lines.append("# TYPE ai_anomaly_likelihood_percent gauge")
-    for (cp, sn), res in entity_results.items():
-        lk = res.get("likelihood_pct", 0.0)
-        lines.append(f'ai_anomaly_likelihood_percent{{cloud_provider="{cp}",service_name="{sn}",model="universal_autoencoder"}} {lk:.2f}')
+    for item_key, res in entity_results.items():
+        if isinstance(item_key, tuple):
+            cp, sn = item_key
+        else:
+            cp, _, sn = item_key.partition(":")
+        cluster = resolve_cluster_name(cp)
+        ent_type = resolve_entity_type(sn)
+        mse = res.get("mse", 0.0)
+        lk = res.get("likelihood_pct", sample_record.get("likelihood_pct", 0.0) or 0.0)
+        lines.append(
+            f'ai_anomaly_likelihood_percent{{k8s_cluster_name="{cluster}",cloud_provider="{cp}",service_name="{sn}",entity_type="{ent_type}",model="ensemble_gru_tcn",anomaly_score="{mse:.4f}"}} {lk:.2f}'
+        )
 
     lines.append("# HELP ai_reconstruction_error Reconstruction MSE of the autoencoder")
     lines.append("# TYPE ai_reconstruction_error gauge")
-    for (cp, sn), res in entity_results.items():
+    for item_key, res in entity_results.items():
+        if isinstance(item_key, tuple):
+            cp, sn = item_key
+        else:
+            cp, _, sn = item_key.partition(":")
+        cluster = resolve_cluster_name(cp)
+        ent_type = resolve_entity_type(sn)
         mse = res.get("mse", 0.0)
-        lines.append(f'ai_reconstruction_error{{cloud_provider="{cp}",service_name="{sn}",model="gru_autoencoder"}} {mse:.6f}')
+        lines.append(
+            f'ai_reconstruction_error{{k8s_cluster_name="{cluster}",cloud_provider="{cp}",service_name="{sn}",entity_type="{ent_type}",model="gru_autoencoder"}} {mse:.6f}'
+        )
 
     lines.append("# HELP ai_rca_component_latency_ms Decomposed latency from Tempo distributed trace spans")
     lines.append("# TYPE ai_rca_component_latency_ms gauge")
     for link, lag in trace_summary.get("wan_links", {}).items():
-        lines.append(f'ai_rca_component_latency_ms{{component="wan",target="{link}"}} {lag:.2f}')
+        lines.append(f'ai_rca_component_latency_ms{{k8s_cluster_name="hub-k3d",cloud_provider="cross-cloud",component="wan",entity_type="wan",target="{link}"}} {lag:.2f}')
     for ent, st in trace_summary.get("self_times", {}).items():
         cp, _, sn = ent.partition(":")
-        lines.append(f'ai_rca_component_latency_ms{{cloud_provider="{cp}",service_name="{sn}",component="self"}} {st:.2f}')
+        cluster = resolve_cluster_name(cp)
+        ent_type = resolve_entity_type(sn)
+        lines.append(f'ai_rca_component_latency_ms{{k8s_cluster_name="{cluster}",cloud_provider="{cp}",service_name="{sn}",entity_type="{ent_type}",component="self"}} {st:.2f}')
     db_ms = trace_summary.get("db_time_ms", 0.0)
-    lines.append(f'ai_rca_component_latency_ms{{cloud_provider="azure",service_name="teastore-persistence",component="db"}} {db_ms:.2f}')
+    lines.append(f'ai_rca_component_latency_ms{{k8s_cluster_name="azure-k3d",cloud_provider="azure",service_name="teastore-persistence",entity_type="database",component="db"}} {db_ms:.2f}')
 
     lines.append("# HELP ai_detector_verdict Current detector verdict (1=active)")
     lines.append("# TYPE ai_detector_verdict gauge")

@@ -52,3 +52,16 @@ data:
               summary: "Bộ đệm OTel Collector chịu áp lực bộ nhớ cao (>400MB)"
               description: "Pod {{ $labels.pod }} đang sử dụng bộ nhớ vượt 400MB RSS, có nguy cơ kích hoạt memory_limiter làm rơi dữ liệu viễn trắc."
 
+          - alert: AIOpsAnomalyDetected
+            expr: ai_anomaly_likelihood_percent > 80
+            for: 30s
+            labels:
+              severity: critical
+              category: aiops
+              strategy: deep-learning-ensemble
+            annotations:
+              summary: "AIOps: Phát hiện bất thường microservice {{ $labels.service_name }} ({{ $labels.cloud_provider }})"
+              description: "Mô hình {{ $labels.model }} phát hiện bất thường xác suất {{ $value }}% (MSE: {{ $labels.anomaly_score }}) trên dịch vụ {{ $labels.service_name }} (Cụm: {{ $labels.k8s_cluster_name }}, Thực thể: {{ $labels.entity_type }})."
+              likelihood: "{{ $value }}"
+              anomaly_score: "{{ $labels.anomaly_score }}"
+

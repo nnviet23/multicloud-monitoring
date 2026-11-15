@@ -38,6 +38,7 @@ secretGenerator:
       disableNameSuffixHash: true
   - name: robusta-secrets
     namespace: monitoring
+    behavior: replace
     envs:
       - .env
     options:

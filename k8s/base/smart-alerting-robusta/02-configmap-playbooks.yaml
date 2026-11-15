@@ -11,9 +11,23 @@ data:
 
     playbook_repos: {}
 
-    sinks_config: []
+    sinks_config:
+      - telegram_sink:
+          name: main_telegram_sink
+          bot_token: "{{ env.TELEGRAM_BOT_TOKEN }}"
+          chat_id: "{{ env.TELEGRAM_CHAT_ID }}"
+          send_files: true
 
     custom_playbooks:
+      - name: "AIOps Anomaly Alert Enrichment"
+        triggers:
+          - on_prometheus_alert:
+              alert_name: AIOpsAnomalyDetected
+        actions:
+          - customize_alert:
+              title: "🚨 [AIOps Anomaly] {{ alert.labels.service_name }} ({{ alert.labels.cloud_provider }} / {{ alert.labels.k8s_cluster_name }})"
+          - logs_enricher: {}
+
       - name: "Pod Crash Loop Enrichment"
         triggers:
           - on_pod_crash_loop: {}

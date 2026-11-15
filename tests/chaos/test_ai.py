@@ -106,14 +106,13 @@ class RootCauseTests(unittest.TestCase):
         return synthesize_multicloud_rca(entities, {}, ENTITY_FEATURE_COLS, trace, False, 700)
 
     def test_trace_attributes_wan_to_exact_cloud(self):
-        causes = self.rca({}, {"wan_links": {"aws->gcp (gcp:teastore-recommender)": 150}})
+        causes = self.rca({}, {"wan_links": {"aws->azure (azure:teastore-persistence)": 150}})
         self.assertEqual(len(causes), 1)
-        self.assertIn("[CROSS_CLOUD_WAN_DELAY] aws->gcp", causes[0])
-        self.assertNotIn("azure", causes[0])
+        self.assertIn("[CROSS_CLOUD_WAN_DELAY] aws->azure", causes[0])
 
     def test_slow_webui_and_downstream_cpu_are_not_proof_of_wan_fault(self):
         entities = {"aws:teastore-webui": self.entity(server_latency_p95=0.7, client_latency_p95=0.2),
-                    "gcp:teastore-recommender": self.entity(server_latency_p95=0.5, max_pod_cpu_pct=98)}
+                    "azure:teastore-persistence": self.entity(server_latency_p95=0.5, max_pod_cpu_pct=98)}
         causes = self.rca(entities, {})
         self.assertFalse(any("CROSS_CLOUD_WAN_DELAY" in c for c in causes), causes)
 
@@ -122,7 +121,7 @@ class RootCauseTests(unittest.TestCase):
         self.assertIn("[DATABASE_BOTTLENECK] azure:teastore-persistence", causes[0])
 
     def test_normal_wan_delay_does_not_alert(self):
-        self.assertEqual(self.rca({}, {"wan_links": {"aws->gcp": 10}}), [])
+        self.assertEqual(self.rca({}, {"wan_links": {"aws->azure": 10}}), [])
 
 
 class TraceDecompositionTests(unittest.TestCase):
@@ -148,10 +147,10 @@ class TraceDecompositionTests(unittest.TestCase):
     def test_client_server_pair_is_attributed_to_destination_cloud(self):
         summary = self.decompose([
             self.batch("aws", "teastore-webui", [self.span("client", "root", "SPAN_KIND_CLIENT", 0, 300)]),
-            self.batch("gcp", "teastore-recommender", [self.span("server", "client", "SPAN_KIND_SERVER", 50, 250)]),
+            self.batch("azure", "teastore-persistence", [self.span("server", "client", "SPAN_KIND_SERVER", 50, 250)]),
         ])
-        self.assertEqual(summary["wan_links"], {"aws->gcp (gcp:teastore-recommender)": 100.0})
-        self.assertEqual(summary["self_times"]["gcp:teastore-recommender"], 200.0)
+        self.assertEqual(summary["wan_links"], {"aws->azure (azure:teastore-persistence)": 100.0})
+        self.assertEqual(summary["self_times"]["azure:teastore-persistence"], 200.0)
 
     def test_mysql_span_duration_is_extracted(self):
         summary = self.decompose([self.batch("azure", "teastore-persistence", [
@@ -169,7 +168,7 @@ class TemporalSplitLeakageTests(unittest.TestCase):
             # Validation tail (idx >= 30) deliberately has much higher values to prove
             # baselines are fit strictly on train_df and not leaked from validation.
             val_shift = 100.0 if idx >= 30 else 10.0
-            for cp, sn in [("aws", "teastore-webui"), ("gcp", "teastore-recommender")]:
+            for cp, sn in [("aws", "teastore-webui"), ("azure", "teastore-persistence")]:
                 row = {"timestamp": ts, "cloud_provider": cp, "service_name": sn}
                 for col in ENTITY_FEATURE_COLS:
                     row[col] = val_shift

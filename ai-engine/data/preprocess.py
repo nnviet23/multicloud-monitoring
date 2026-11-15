@@ -297,6 +297,10 @@ def main():
     print("========================================================================", flush=True)
 
     df = pd.read_csv(raw_csv)
+    # Robust NaN / Inf / String sanitization for all numeric feature columns
+    for f_col in features:
+        if f_col in df.columns:
+            df[f_col] = pd.to_numeric(df[f_col], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0.0)
     df = df.sort_values(["cloud_provider", "service_name", "timestamp"]).reset_index(drop=True)
 
     if "anomaly_label" in df.columns:
