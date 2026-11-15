@@ -155,8 +155,12 @@ class PrometheusVectorClient:
         except Exception as e:
             print(f"[Warning] Failed to start Prometheus port-forward: {e}")
 
-    def query_vector(self, promql):
-        url = f"{self.base_url}/api/v1/query?" + urllib.parse.urlencode({"query": promql})
+    def query_vector(self, promql, timestamp=None):
+        params = {"query": promql}
+        lag_offset = float(os.environ.get("THANOS_QUERY_LAG_OFFSET", "5.0"))
+        query_ts = timestamp if timestamp is not None else (time.time() - lag_offset)
+        params["time"] = f"{query_ts:.3f}"
+        url = f"{self.base_url}/api/v1/query?" + urllib.parse.urlencode(params)
         try:
             req = urllib.request.Request(url)
             with urllib.request.urlopen(req, timeout=4) as resp:
@@ -167,6 +171,45 @@ class PrometheusVectorClient:
         except Exception:
             self.query_failures.append(promql)
         return []
+
+    def query_range(self, promql, start_ts, end_ts=None, step="10s"):
+        lag_offset = float(os.environ.get("THANOS_QUERY_LAG_OFFSET", "5.0"))
+        effective_end = (end_ts if end_ts is not None else time.time()) - lag_offset
+        params = {
+            "query": promql,
+            "start": f"{start_ts:.3f}",
+            "end": f"{effective_end:.3f}",
+            "step": step,
+        }
+        url = f"{self.base_url}/api/v1/query_range?" + urllib.parse.urlencode(params)
+        series_out = []
+        try:
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+                if payload.get("status") == "success":
+                    for item in payload.get("data", {}).get("result", []):
+                        labels = item.get("metric", {})
+                        raw_values = item.get("values", [])
+                        sanitized = []
+                        last_valid = 0.0
+                        for point in raw_values:
+                            try:
+                                t_pt = float(point[0])
+                                v_pt = float(point[1])
+                                if math.isnan(v_pt) or math.isinf(v_pt):
+                                    v_pt = last_valid
+                                else:
+                                    last_valid = v_pt
+                                sanitized.append([t_pt, v_pt])
+                            except (ValueError, TypeError, IndexError):
+                                sanitized.append([float(point[0]) if point else 0.0, last_valid])
+                        if sanitized and (math.isnan(sanitized[-1][1]) or math.isinf(sanitized[-1][1])):
+                            sanitized[-1][1] = last_valid
+                        series_out.append((labels, sanitized))
+        except Exception:
+            pass
+        return series_out
 
     def discover_entities(self):
         results = self.query_vector(ENTITY_VECTOR_QUERIES["discover"])
@@ -421,8 +464,9 @@ class TempoTraceAnalyzer:
                 for a in batch.get("resource", {}).get("attributes", [])
                 if a.get("value")
             }
-            cp = str(res_attrs.get("cloud.provider", "unknown"))
-            sn = str(res_attrs.get("service.name", "unknown"))
+            cp = str(res_attrs.get("cloud.provider") or res_attrs.get("cloud_provider", "unknown"))
+            sn = str(res_attrs.get("service.name") or res_attrs.get("service_name", "unknown"))
+            cluster = str(res_attrs.get("k8s.cluster.name") or res_attrs.get("k8s_cluster_name", "unknown"))
             entity_id = f"{cp}:{sn}"
 
             scope_list = batch.get("scopeSpans") or batch.get("instrumentationLibrarySpans") or []
@@ -849,11 +893,13 @@ class TelegramAlertSink:
     """
     Sends structured AIOps alerts with Root Cause Analysis to Telegram Bot channel.
     Rate-limited per entity to avoid channel spam during sustained outages.
+    Auto-resets cooldown when cluster returns to HEALTHY to never miss sequential chaos runs.
     """
-    def __init__(self, token=None, chat_id=None, cooldown_seconds=60):
+    def __init__(self, token=None, chat_id=None, cooldown_seconds=None):
         self.token = token or os.environ.get("TELEGRAM_BOT_TOKEN")
         self.chat_id = chat_id or os.environ.get("TELEGRAM_CHAT_ID")
-        self.cooldown_seconds = cooldown_seconds
+        env_cooldown = os.environ.get("TELEGRAM_COOLDOWN_SECONDS")
+        self.cooldown_seconds = cooldown_seconds if cooldown_seconds is not None else (int(env_cooldown) if env_cooldown else 30)
         self.last_sent = {}
 
         if not self.token or self.token.startswith("CHANGE_ME"):
@@ -929,6 +975,14 @@ class TelegramAlertSink:
         except Exception as e:
             print(f"[AIOps-Telegram] Failed to send Telegram alert: {e}", flush=True)
 
+    def reset_all(self):
+        """Clears cooldown records when cluster returns to HEALTHY."""
+        if self.last_sent:
+            self.last_sent.clear()
+
+    def reset_entity(self, entity_id):
+        self.last_sent.pop(entity_id, None)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Multi-Cloud Real-Time Anomaly Detector & Trace RCA Engine (V3)")
@@ -939,7 +993,7 @@ def parse_args():
     parser.add_argument("--metrics-port", type=int, default=9108, help="Prometheus metrics exporter port (default 9108, 0 to disable)")
     parser.add_argument("--telegram-token", default="", help="Telegram Bot Token for alerts")
     parser.add_argument("--telegram-chat-id", default="", help="Telegram Chat ID for alerts")
-    parser.add_argument("--telegram-cooldown", type=int, default=60, help="Cooldown in seconds between alerts for same entity")
+    parser.add_argument("--telegram-cooldown", type=int, default=30, help="Cooldown in seconds between alerts for same entity (default 30s)")
     return parser.parse_args()
 
 
@@ -1353,6 +1407,8 @@ def main():
                     causes=top_causes,
                     trace_summary=trace_summary,
                 )
+            elif verdict == "HEALTHY" and alert_sink.configured:
+                alert_sink.reset_all()
 
             if args.max_samples > 0 and sample_idx >= args.max_samples:
                 print(f"\n[Detector] Reached target {args.max_samples} samples. Finishing run...", flush=True)

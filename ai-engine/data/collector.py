@@ -166,9 +166,16 @@ class PrometheusVectorClient:
         except Exception as e:
             print(f"[Warning] Failed to start kubectl port-forward: {e}", flush=True)
 
-    def query_vector(self, promql):
-        """Executes an instant PromQL query and returns a list of (metric_labels_dict, float_value)."""
-        url = f"{self.base_url}/api/v1/query?" + urllib.parse.urlencode({"query": promql})
+    def query_vector(self, promql, timestamp=None):
+        """
+        Executes an instant PromQL query and returns a list of (metric_labels_dict, float_value).
+        Mitigates multi-cloud WAN telemetry ingestion lag (2s-10s) by querying at (now - lag_offset).
+        """
+        params = {"query": promql}
+        lag_offset = float(os.environ.get("THANOS_QUERY_LAG_OFFSET", "5.0"))
+        query_ts = timestamp if timestamp is not None else (time.time() - lag_offset)
+        params["time"] = f"{query_ts:.3f}"
+        url = f"{self.base_url}/api/v1/query?" + urllib.parse.urlencode(params)
         out = []
         try:
             req = urllib.request.Request(url)
@@ -189,6 +196,50 @@ class PrometheusVectorClient:
         except Exception:
             pass
         return out
+
+    def query_range(self, promql, start_ts, end_ts=None, step="10s"):
+        """
+        Executes a range PromQL query with ingestion lag offset and forward-fill (ffill)
+        at the final tick to guarantee zero NaN values at timeline boundaries.
+        """
+        lag_offset = float(os.environ.get("THANOS_QUERY_LAG_OFFSET", "5.0"))
+        effective_end = (end_ts if end_ts is not None else time.time()) - lag_offset
+        params = {
+            "query": promql,
+            "start": f"{start_ts:.3f}",
+            "end": f"{effective_end:.3f}",
+            "step": step,
+        }
+        url = f"{self.base_url}/api/v1/query_range?" + urllib.parse.urlencode(params)
+        series_out = []
+        try:
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+                if payload.get("status") == "success":
+                    for item in payload.get("data", {}).get("result", []):
+                        labels = item.get("metric", {})
+                        raw_values = item.get("values", [])
+                        sanitized = []
+                        last_valid = 0.0
+                        for point in raw_values:
+                            try:
+                                t_pt = float(point[0])
+                                v_pt = float(point[1])
+                                if math.isnan(v_pt) or math.isinf(v_pt):
+                                    v_pt = last_valid
+                                else:
+                                    last_valid = v_pt
+                                sanitized.append([t_pt, v_pt])
+                            except (ValueError, TypeError, IndexError):
+                                sanitized.append([float(point[0]) if point else 0.0, last_valid])
+                        # Forward fill final point if empty
+                        if sanitized and (math.isnan(sanitized[-1][1]) or math.isinf(sanitized[-1][1])):
+                            sanitized[-1][1] = last_valid
+                        series_out.append((labels, sanitized))
+        except Exception:
+            pass
+        return series_out
 
     def fetch_all_entities_snapshot(self):
         """

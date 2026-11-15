@@ -74,6 +74,8 @@ data:
               - set(attributes["cloud.identity.arn"], Concat(["/subscriptions/4b8f3a21-9e6c-4f80-b753-2d9a6e1c84f5/resourceGroups/rg-teastore-southasia/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-", attributes["service.name"]], "")) where attributes["cloud.provider"] == "azure" and attributes["service.name"] != nil
               - set(attributes["cloud.resource_id"], Concat(["arn:aws:eks:us-east-1:851725492014:pod/teastore-cluster/", attributes["k8s.namespace.name"], "/", attributes["k8s.pod.name"]], "")) where attributes["cloud.provider"] == "aws" and attributes["k8s.pod.name"] != nil
               - set(attributes["cloud.resource_id"], Concat(["/subscriptions/4b8f3a21-9e6c-4f80-b753-2d9a6e1c84f5/resourceGroups/rg-teastore-southasia/providers/Microsoft.ContainerService/managedClusters/teastore-aks/pods/", attributes["k8s.pod.name"]], "")) where attributes["cloud.provider"] == "azure" and attributes["k8s.pod.name"] != nil
+              - set(attributes["k8s_cluster_name"], attributes["k8s.cluster.name"])
+              - set(attributes["cloud_provider"], attributes["cloud.provider"])
               - set(attributes["telemetry.hub.received_time"], UnixMilli(Now()))
         trace_statements:
           - context: resource
@@ -98,6 +100,8 @@ data:
               - set(attributes["cloud.identity.arn"], Concat(["/subscriptions/4b8f3a21-9e6c-4f80-b753-2d9a6e1c84f5/resourceGroups/rg-teastore-southasia/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-", attributes["service.name"]], "")) where attributes["cloud.provider"] == "azure" and attributes["service.name"] != nil
               - set(attributes["cloud.resource_id"], Concat(["arn:aws:eks:us-east-1:851725492014:pod/teastore-cluster/", attributes["k8s.namespace.name"], "/", attributes["k8s.pod.name"]], "")) where attributes["cloud.provider"] == "aws" and attributes["k8s.pod.name"] != nil
               - set(attributes["cloud.resource_id"], Concat(["/subscriptions/4b8f3a21-9e6c-4f80-b753-2d9a6e1c84f5/resourceGroups/rg-teastore-southasia/providers/Microsoft.ContainerService/managedClusters/teastore-aks/pods/", attributes["k8s.pod.name"]], "")) where attributes["cloud.provider"] == "azure" and attributes["k8s.pod.name"] != nil
+              - set(attributes["k8s_cluster_name"], attributes["k8s.cluster.name"])
+              - set(attributes["cloud_provider"], attributes["cloud.provider"])
               - set(attributes["telemetry.hub.received_time"], UnixMilli(Now()))
           - context: span
             statements:

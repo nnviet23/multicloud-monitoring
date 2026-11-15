@@ -43,6 +43,14 @@ data:
             from: attributes.log
             to: body
 
+      prometheus/internal:
+        config:
+          scrape_configs:
+            - job_name: 'otel-collector-edge-internal'
+              scrape_interval: 10s
+              static_configs:
+                - targets: ['127.0.0.1:8888']
+
     processors:
       memory_limiter:
         check_interval: 1s
@@ -97,6 +105,8 @@ data:
             statements:
               - set(attributes["k8s.cluster.name"], "${CLUSTER_NAME}")
               - set(attributes["cloud.provider"], "${CLOUD_PROVIDER}")
+              - set(attributes["k8s_cluster_name"], "${CLUSTER_NAME}")
+              - set(attributes["cloud_provider"], "${CLOUD_PROVIDER}")
               - set(attributes["cloud.region"], "${CLOUD_REGION}")
               - set(attributes["deployment.environment.name"], "production")
         trace_statements:
@@ -104,6 +114,8 @@ data:
             statements:
               - set(attributes["k8s.cluster.name"], "${CLUSTER_NAME}")
               - set(attributes["cloud.provider"], "${CLOUD_PROVIDER}")
+              - set(attributes["k8s_cluster_name"], "${CLUSTER_NAME}")
+              - set(attributes["cloud_provider"], "${CLOUD_PROVIDER}")
               - set(attributes["cloud.region"], "${CLOUD_REGION}")
               - set(attributes["deployment.environment.name"], "production")
         metric_statements:
@@ -134,6 +146,9 @@ data:
         verbosity: basic
 
     service:
+      telemetry:
+        metrics:
+          address: 0.0.0.0:8888
       pipelines:
         traces:
           receivers: [otlp]
@@ -144,6 +159,6 @@ data:
           processors: [memory_limiter, filter/logs, filter/drop_noise, resourcedetection, groupbyattrs, transform/logs, transform/cluster_id, batch]
           exporters: [otlp/hub, debug]
         metrics:
-          receivers: [otlp, hostmetrics]
+          receivers: [otlp, hostmetrics, prometheus/internal]
           processors: [memory_limiter, resourcedetection, transform/cluster_id, batch]
           exporters: [otlp/hub, debug]

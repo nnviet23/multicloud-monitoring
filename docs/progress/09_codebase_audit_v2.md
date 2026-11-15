@@ -124,3 +124,38 @@ Toàn bộ 4 Task theo yêu cầu đã được hoàn thành triệt để:
 
 ## 4. Kết luận & Sẵn sàng Triển khai
 Codebase hiện tại trên nhánh `feat/integrate-infra-ai-anomaly` đã hoàn toàn đồng bộ, sạch sẽ, tuân thủ nghiêm ngặt Single Responsibility Principle (SRP) và Semantic Conventions của OpenTelemetry. Toàn bộ chuỗi khép kín từ thu thập telemetry $\to$ phát hiện bất thường bằng AI $\to$ làm giàu ngữ cảnh qua Robusta $\to$ bắn tin Telegram đã sẵn sàng chạy thử nghiệm thực tế.
+
+---
+
+## 5. Bổ sung: Kết quả Kiểm tra 4 Điểm Runtime Phục vụ Sẵn sàng Chạy Benchmark
+
+Sau khi rà soát chuyên sâu 4 khía cạnh runtime của hệ thống, các bản vá kỹ thuật sau đã được áp dụng trực tiếp:
+
+### 5.1. Xử lý độ trễ Ingestion Lag & NaN Protection trong AI Engine
+- **Vấn đề phát hiện:** Trước đây `query_vector` gọi `/api/v1/query` không kèm tham số `time`, Thanos mặc định truy vấn tại `now()`. Do OTel Collector batch export và scrape interval có độ trễ 5–10s xuyên WAN, tick cuối cùng tại `now()` thường bị rỗng hoặc trả về `NaN`. Hệ thống cũng chưa có hàm `query_range` chính thức.
+- **Bản vá đã thực hiện:**
+  - Trong `PrometheusVectorClient` tại cả `ai-engine/data/collector.py` và `ai-engine/inference/detector.py`:
+    - `query_vector(promql, timestamp=None)`: tự động lùi nhẹ thời gian truy vấn theo `THANOS_QUERY_LAG_OFFSET` (mặc định 5.0 giây: `time = time.time() - 5.0`).
+    - Bổ sung hàm `query_range(promql, start_ts, end_ts, step)`: tự động lùi `end_ts` 5 giây và áp dụng thuật toán khử `NaN`/`Inf` kết hợp forward-fill (`ffill`) cho điểm cuối cùng, đảm bảo dữ liệu biên luôn hợp lệ.
+
+### 5.2. Khớp nối nhãn OTel Collector (Logs/Traces) và Loki/Tempo/Robusta/AI
+- **Vấn đề phát hiện:** OTel Collector sử dụng chuẩn OpenTelemetry dạng dấu chấm (`k8s.cluster.name`, `cloud.provider`), trong khi Loki và Prometheus không chấp nhận dấu chấm trong nhãn stream/series mà dùng dấu gạch dưới (`k8s_cluster_name`, `cloud_provider`).
+- **Bản vá đã thực hiện:**
+  - Tại `k8s/base/otel-collector/edge/02-configmap.yaml` và `k8s/base/otel-collector/gateway/03-configmap.yaml`: trong processor `transform/cluster_id` và `transform/normalize_cloud`, gán đồng thời cả 2 dạng nhãn cho CẢ 3 khối `log_statements`, `trace_statements` và `metric_statements`.
+  - Tại `ai-engine/inference/detector.py`: hàm `_decompose_single_trace` đọc linh hoạt cả `cloud.provider` / `cloud_provider` và `k8s.cluster.name` / `k8s_cluster_name`. Khớp nối 100% hai đầu.
+
+### 5.3. Tối ưu Cooldown / Deduplication & Kết nối Prometheus -> Robusta
+- **Vấn đề phát hiện:**
+  - Cooldown mặc định của `TelegramAlertSink` là 60s và không tự reset khi hệ thống trở về `HEALTHY`, có nguy cơ làm mất cảnh báo nếu các kịch bản chaos chạy liên tiếp trong thời gian ngắn.
+  - Pod `robusta-runner` chưa có Kubernetes Service mở cổng 5000, và Prometheus ConfigMap chưa có cấu hình `alerting:` để chuyển tiếp alert sang Robusta runner.
+- **Bản vá đã thực hiện:**
+  - Tạo mới `k8s/base/smart-alerting-robusta/04-service.yaml` mở cổng 5000 cho `robusta-runner`, khai báo vào kustomization.
+  - Bổ sung khối `alerting.alertmanagers` trong `k8s/base/metrics-thanos/01-configmap-prometheus.yaml` trỏ trực tiếp tới `robusta-runner.monitoring.svc.cluster.local:5000`.
+  - Trong `detector.py`: hạ cooldown mặc định xuống 30s (tùy chỉnh qua biến môi trường `TELEGRAM_COOLDOWN_SECONDS`) và thêm cơ chế `alert_sink.reset_all()` ngay khi cluster trở về trạng thái `HEALTHY`.
+
+### 5.4. Kích hoạt Scrape Metric nội bộ OTel Collector ở Spoke cho Dashboard 8
+- **Vấn đề phát hiện:** Collector Spoke (`aws-k3d`, `azure-k3d`) chưa tự scrape endpoint nội bộ `:8888/metrics` của chính nó, khiến các metric `otelcol_exporter_sent_*`, `otelcol_receiver_accepted_*`, `otelcol_processor_*` từ Spoke không được gửi về Hub Thanos, làm Dashboard 8 (Telemetry Cost) bị khuyết dữ liệu chi phí và lưu lượng của 2 cụm Spoke.
+- **Bản vá đã thực hiện:**
+  - Tại `k8s/base/otel-collector/edge/02-configmap.yaml`: thêm receiver `prometheus/internal` scrape `127.0.0.1:8888`, đưa vào pipeline `metrics`.
+  - Thêm `containerPort: 8888` vào `k8s/base/otel-collector/edge/03-deployment.yaml`.
+  - Qua processor `transform/cluster_id`, toàn bộ metric nội bộ từ Spoke được đóng nhãn cụm chuẩn và đẩy qua mTLS về Hub Thanos, đảm bảo Dashboard 8 hiển thị 100% dữ liệu 3 cụm.

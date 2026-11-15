@@ -6,3 +6,4 @@ resources:
   - 01-secret.yaml
   - 02-configmap-playbooks.yaml
   - 03-runner-deployment.yaml
+  - 04-service.yaml
