@@ -111,6 +111,8 @@ data:
             statements:
               - set(attributes["k8s.cluster.name"], "${CLUSTER_NAME}")
               - set(attributes["cloud.provider"], "${CLOUD_PROVIDER}")
+              - set(attributes["k8s_cluster_name"], "${CLUSTER_NAME}")
+              - set(attributes["cloud_provider"], "${CLOUD_PROVIDER}")
               - set(attributes["cloud.region"], "${CLOUD_REGION}")
               - set(attributes["deployment.environment.name"], "production")
 

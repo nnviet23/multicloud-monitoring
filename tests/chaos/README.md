@@ -50,18 +50,17 @@ python3.12 tests/chaos/run_live.py \
   --output tests/benchmarks/results/live-new-run
 ```
 
-Yêu cầu 4 cụm k3d đang chạy, TeaStore ở `localhost:8080`, Docker và kubectl có
+Yêu cầu 3 cụm k3d đang chạy (`hub-k3d`, `aws-k3d`, `azure-k3d`), TeaStore ở `localhost:8080`, Docker và kubectl có
 quyền truy cập lab. Helper image cục bộ mặc định `network-infra-check:ubuntu24.04`
 phải có `tc`, `sh`, `sleep`; có thể chọn image khác bằng `--tc-image`.
 Runner không tải image hay cài gói khi chạy.
 
-Luồng chạy: baseline → GCP delay 250ms → gỡ lỗi và phục hồi → Azure delay 180ms
-→ gỡ lỗi và phục hồi. Tạo tải 6 users và giữ cùng một detector xuyên các pha.
-Chọn một ca bằng `--scenarios gcp_wan_delay` hoặc `azure_wan_delay`.
+Luồng chạy: baseline → Azure delay 180ms (hoặc AWS delay 200ms) → gỡ lỗi và phục hồi. Tạo tải 6 users và giữ cùng một detector xuyên các pha.
+Chọn một ca bằng `--scenarios azure_wan_delay` hoặc `aws_wan_delay`.
 Mỗi pha phải dài ít nhất `settle + 3 × interval` giây. Lần chạy mới cần thư mục
 output mới để giữ lại bằng chứng lần trước.
 
-Runner chỉ thay qdisc của `eth0` trên node GCP/Azure được chỉ định. Nếu đã có
+Runner chỉ thay qdisc của `eth0` trên node AWS/Azure được chỉ định. Nếu đã có
 WAN shaping, runner dừng trước khi thay đổi. Helper chỉ được cấp `NET_ADMIN`;
 watchdog tự gỡ qdisc sau thời gian giới hạn ngay cả khi runner bị kill.
 Khối `finally` gỡ lỗi khi kết thúc hoặc nhận SIGINT/SIGTERM và kiểm tra qdisc
@@ -112,7 +111,7 @@ Runner chạy tuần tự, giữ một detector xuyên các pha và lưu log/JSO
   Watchdog độc lập tự khôi phục nếu runner bị dừng bất thường.
 
 Mặc định mỗi lỗi 60 giây, recovery 120 giây, settle 30 giây. CPU cần model alert
-và RCA CPU tại GCP; DB cần ALERT và bằng chứng SQL bottleneck (có thể tới sau
+và RCA CPU tại AWS (`aws:teastore-recommender`); DB cần ALERT và bằng chứng SQL bottleneck (có thể tới sau
 khi lock được nhả vì span chỉ kết thúc lúc đó). Outage kiểm tra ALERT và probe
 HTTP lỗi; báo cáo tách cảnh báo mô hình khỏi SLO guard. Memory leak hiện vẫn
 được replay tổng hợp; các ca trên không được coi là tiêm memory leak thật.

@@ -13,11 +13,20 @@ import urllib.error
 import urllib.request
 import ipaddress
 
-from run_live import ROOT, command, utc_now
+from run_live import ROOT, command, utc_now, resolve_context
+
+_CONTEXT_CACHE = {}
+
+
+def get_context(cloud: str) -> str:
+    if cloud not in _CONTEXT_CACHE:
+        _CONTEXT_CACHE[cloud] = resolve_context(cloud)
+    return _CONTEXT_CACHE[cloud]
 
 
 def kubectl(cloud, *args):
-    return ["kubectl", "--context", f"k3d-{cloud}-k3d", "--request-timeout=10s", "-n", "teastore", *args]
+    ctx = get_context(cloud)
+    return ["kubectl", "--context", ctx, "--request-timeout=10s", "-n", "teastore", *args]
 
 
 def sql_command(sql, timeout=150):
@@ -171,7 +180,18 @@ def main():
     parser.add_argument("--recovery", type=int, default=120)
     parser.add_argument("--users", type=int, default=6)
     parser.add_argument("--output", required=True)
+    parser.add_argument("--aws-context", default=None, help="Kubectl context for AWS cluster")
+    parser.add_argument("--azure-context", default=None, help="Kubectl context for Azure cluster")
+    parser.add_argument("--context", default=None, help="Default kubectl context override")
     args = parser.parse_args()
+    if args.aws_context:
+        _CONTEXT_CACHE["aws"] = args.aws_context
+    elif args.context:
+        _CONTEXT_CACHE["aws"] = args.context
+    if args.azure_context:
+        _CONTEXT_CACHE["azure"] = args.azure_context
+    elif args.context:
+        _CONTEXT_CACHE["azure"] = args.context
     if not 30 <= args.fault <= 120 or args.recovery < 90 or not 1 <= args.users <= 20:
         parser.error("fault must be 30..120s, recovery >=90s, users 1..20")
     output = (ROOT / args.output).resolve()
@@ -264,7 +284,7 @@ def main():
         causes = list(dict.fromkeys(cause for r in alerts for cause in r.get("rca_causes", [])))
         if event["id"] == "cpu":
             passed = passed and any(r.get("model_alert") for r in selected) and any(
-                ("aws:teastore-recommender" in cause or "gcp:teastore-recommender" in cause) and ("cpu" in cause.lower()) for cause in causes)
+                "aws:teastore-recommender" in cause and "cpu" in cause.lower() for cause in causes)
         if event["id"] == "db_lock":
             incident = [r for r in records if epoch(event["start"]) <= epoch(r["timestamp"]) < epoch(event["end"]) + 30]
             passed = passed and any(r.get("model_alert") for r in selected) and any(

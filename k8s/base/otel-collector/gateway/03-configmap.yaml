@@ -137,6 +137,8 @@ data:
               - set(attributes["cluster"], attributes["k8s.cluster.name"])
               - set(attributes["cloud"], attributes["cloud.provider"])
               - set(attributes["region"], attributes["cloud.region"])
+              - set(attributes["k8s_cluster_name"], attributes["k8s.cluster.name"])
+              - set(attributes["cloud_provider"], attributes["cloud.provider"])
               - set(attributes["deployment.environment.name"], "production")
               - set(attributes["telemetry.hub.received_time"], UnixMilli(Now()))
 

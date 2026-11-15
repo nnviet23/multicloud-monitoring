@@ -9,7 +9,7 @@ data:
       - name: multicloud-signoz-alerts
         rules:
           - alert: SpokeClusterHeartbeatAbsent
-            expr: absent(up{cluster="aws-k3d"} == 1) or absent(up{cluster="azure-k3d"} == 1)
+            expr: absent(up{k8s_cluster_name="aws-k3d"} == 1) or absent(up{k8s_cluster_name="azure-k3d"} == 1)
             for: 2m
             labels:
               severity: critical

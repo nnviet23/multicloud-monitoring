@@ -511,7 +511,32 @@
             "lineWidth": 2
           },
           "unit": "ops"
-        }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "faults/s"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -687,7 +712,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "(sum by (k8s_cluster_name, mountpoint) (system_filesystem_usage_bytes{k8s_cluster_name=~\"$cluster\", state=\"used\"}) / sum by (k8s_cluster_name, mountpoint) (system_filesystem_usage_bytes{k8s_cluster_name=~\"$cluster\"})) * 100",
+          "expr": "(sum by (k8s_cluster_name, cloud_provider, mountpoint) (system_filesystem_usage_bytes{k8s_cluster_name=~\"$cluster\", state=\"used\"}) / sum by (k8s_cluster_name, cloud_provider, mountpoint) (system_filesystem_usage_bytes{k8s_cluster_name=~\"$cluster\"})) * 100",
           "format": "table",
           "instant": true,
           "refId": "A"
@@ -698,7 +723,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "(sum by (k8s_cluster_name, mountpoint) (system_filesystem_inodes_usage{k8s_cluster_name=~\"$cluster\", state=\"used\"}) / (sum by (k8s_cluster_name, mountpoint) (system_filesystem_inodes_usage{k8s_cluster_name=~\"$cluster\"}) + 0.0001)) * 100",
+          "expr": "(sum by (k8s_cluster_name, cloud_provider, mountpoint) (system_filesystem_inodes_usage{k8s_cluster_name=~\"$cluster\", state=\"used\"}) / (sum by (k8s_cluster_name, cloud_provider, mountpoint) (system_filesystem_inodes_usage{k8s_cluster_name=~\"$cluster\"}) + 0.0001)) * 100",
           "format": "table",
           "instant": true,
           "refId": "B"
@@ -738,6 +763,18 @@
               {
                 "id": "displayName",
                 "value": "Disk Space Used (%)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cloud_provider"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Cloud Provider"
               }
             ]
           },
