@@ -1,0 +1,13 @@
+# HELP otelcol_exporter_sent_metric_points Number of metric points sent.
+# TYPE otelcol_exporter_sent_metric_points counter
+otelcol_exporter_sent_metric_points{exporter="debug",service_instance_id="2325a40e-29a3-4a0d-987f-9f6698745a9e",service_name="otelcol-contrib",service_version="0.114.0"} 23915
+otelcol_exporter_sent_metric_points{exporter="otlp/hub",service_instance_id="2325a40e-29a3-4a0d-987f-9f6698745a9e",service_name="otelcol-contrib",service_version="0.114.0"} 0
+otelcol_exporter_send_failed_metric_points{exporter="otlp/hub",service_instance_id="2325a40e-29a3-4a0d-987f-9f6698745a9e",service_name="otelcol-contrib",service_version="0.114.0"} 8469
+otelcol_exporter_queue_size{data_type="metrics",exporter="otlp/hub",service_instance_id="2325a40e-29a3-4a0d-987f-9f6698745a9e",service_name="otelcol-contrib",service_version="0.114.0"} 102
+otelcol_process_cpu_seconds{service_instance_id="2325a40e-29a3-4a0d-987f-9f6698745a9e",service_name="otelcol-contrib",service_version="0.114.0"} 19.1
+otelcol_process_memory_rss{service_instance_id="2325a40e-29a3-4a0d-987f-9f6698745a9e",service_name="otelcol-contrib",service_version="0.114.0"} 1.54406912e+08
+otelcol_process_uptime{service_instance_id="2325a40e-29a3-4a0d-987f-9f6698745a9e",service_name="otelcol-contrib",service_version="0.114.0"} 928.999589389
+otelcol_receiver_accepted_metric_points{receiver="hostmetrics",service_instance_id="2325a40e-29a3-4a0d-987f-9f6698745a9e",service_name="otelcol-contrib",service_version="0.114.0",transport=""} 20079
+otelcol_receiver_accepted_metric_points{receiver="otlp",service_instance_id="2325a40e-29a3-4a0d-987f-9f6698745a9e",service_name="otelcol-contrib",service_version="0.114.0",transport="grpc"} 3836
+otelcol_receiver_accepted_metric_points{receiver="otlp",service_instance_id="2325a40e-29a3-4a0d-987f-9f6698745a9e",service_name="otelcol-contrib",service_version="0.114.0",transport="http"} 100
+otelcol_receiver_accepted_spans{receiver="otlp",service_instance_id="2325a40e-29a3-4a0d-987f-9f6698745a9e",service_name="otelcol-contrib",service_version="0.114.0",transport="grpc"} 13591

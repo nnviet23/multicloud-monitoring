@@ -1,0 +1,105 @@
+{
+  "repeat": 1,
+  "total_repeats": 1,
+  "experiment_id": "performance_20261114T121919Z_9d0ca798",
+  "duration_seconds": 10.0,
+  "sampling_interval_seconds": 5.0,
+  "warmup_seconds": 3.0,
+  "idle_seconds": 0.0,
+  "target_rate": 5.0,
+  "kubectl_timeout_seconds": 15,
+  "sources": [
+    "aws",
+    "azure"
+  ],
+  "targets": [
+    "spoke_aws",
+    "spoke_azure"
+  ],
+  "target_config": {
+    "spoke_aws": {
+      "context": "spoke-aws",
+      "namespace": "monitoring",
+      "deployment": "otelcol-contrib",
+      "node": "REPLACE_WITH_NODE",
+      "exporter": "otlp/hub",
+      "cadvisor": {
+        "scope": "pod",
+        "network_interface": "all",
+        "pod_container_exclude": "POD"
+      }
+    },
+    "spoke_azure": {
+      "context": "spoke-azure",
+      "namespace": "monitoring",
+      "deployment": "otelcol-contrib",
+      "node": "REPLACE_WITH_NODE",
+      "exporter": "otlp/hub",
+      "cadvisor": {
+        "scope": "pod",
+        "network_interface": "all",
+        "pod_container_exclude": "POD"
+      }
+    }
+  },
+  "generator_summary": {
+    "warmup": {
+      "aws": {
+        "experiment_id": "performance_20261114T121919Z_9d0ca798_warmup",
+        "source_id": "aws",
+        "mode": "continuous",
+        "target_rate": 5.0,
+        "duration_seconds": 3.0,
+        "elapsed_seconds": 2.838093,
+        "generated": 15,
+        "sent_ok": 15,
+        "sent_fail": 0,
+        "observed_send_rate": 5.285,
+        "send": true
+      },
+      "azure": {
+        "experiment_id": "performance_20261114T121919Z_9d0ca798_warmup",
+        "source_id": "azure",
+        "mode": "continuous",
+        "target_rate": 5.0,
+        "duration_seconds": 3.0,
+        "elapsed_seconds": 2.838225,
+        "generated": 15,
+        "sent_ok": 15,
+        "sent_fail": 0,
+        "observed_send_rate": 5.285,
+        "send": true
+      }
+    },
+    "aws": {
+      "experiment_id": "performance_20261114T121919Z_9d0ca798",
+      "source_id": "aws",
+      "mode": "continuous",
+      "target_rate": 5.0,
+      "duration_seconds": 10.0,
+      "elapsed_seconds": 9.841014,
+      "generated": 50,
+      "sent_ok": 50,
+      "sent_fail": 0,
+      "observed_send_rate": 5.081,
+      "send": true
+    },
+    "azure": {
+      "experiment_id": "performance_20261114T121919Z_9d0ca798",
+      "source_id": "azure",
+      "mode": "continuous",
+      "target_rate": 5.0,
+      "duration_seconds": 10.0,
+      "elapsed_seconds": 9.838162,
+      "generated": 50,
+      "sent_ok": 50,
+      "sent_fail": 0,
+      "observed_send_rate": 5.082,
+      "send": true
+    }
+  },
+  "run_id": "performance_20261114T121931Z_230a742e",
+  "experiment_type": "performance",
+  "created_at": "2026-11-14T12:19:31.974710+00:00",
+  "sample_count": 4
+}

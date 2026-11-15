@@ -1,0 +1,18 @@
+schema_version: 1
+metric_name: measurement_datapoints_total
+test_label: measurement_framework
+sources:
+  aws:
+    source_id: aws
+    cluster: k3d-aws-k3d
+    otlp_http_url: http://localhost:14318/v1/metrics
+    otlp_grpc_url: null
+    status: verified
+    reason: "HTTP OTLP POST (resourceMetrics rỗng) trả 200 qua kubectl port-forward svc/otel-collector-spoke 4318:4318. URL chỉ hợp lệ khi port-forward đang chạy."
+  azure:
+    source_id: azure
+    cluster: k3d-azure-k3d
+    otlp_http_url: http://localhost:14319/v1/metrics
+    otlp_grpc_url: null
+    status: verified
+    reason: "HTTP OTLP POST (resourceMetrics rỗng) trả 200 qua kubectl port-forward svc/otel-collector-spoke 14319:4318. URL chỉ hợp lệ khi port-forward đang chạy."

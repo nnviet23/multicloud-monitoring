@@ -1,0 +1,23 @@
+# Multi-Cloud Monitoring Platform - Local Active Environment Variables
+# --- MinIO Object Storage Credentials ---
+MINIO_ROOT_USER=admin
+MINIO_ROOT_PASSWORD=MultiCloudSecurePassword2026!
+
+# --- Grafana UI Administration Credentials ---
+admin-user=admin
+admin-password=MultiCloudSecurePassword2026!
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=MultiCloudSecurePassword2026!
+
+# --- S3 Telemetry Access Keys (Used by Loki, Tempo, Thanos & OTel Hub Exporter) ---
+AWS_ACCESS_KEY_ID=admin
+AWS_SECRET_ACCESS_KEY=MultiCloudSecurePassword2026!
+
+# --- Smart Alerting: Robusta Telegram Integration ---
+telegram_bot_token=CHANGE_ME_TELEGRAM_BOT_TOKEN
+telegram_chat_id=CHANGE_ME_TELEGRAM_CHAT_ID
+TELEGRAM_BOT_TOKEN=CHANGE_ME_TELEGRAM_BOT_TOKEN
+TELEGRAM_CHAT_ID=CHANGE_ME_TELEGRAM_CHAT_ID
+
+# --- Docker Host Gateway IP ---
+DOCKER_HOST_GATEWAY_IP=192.168.65.254

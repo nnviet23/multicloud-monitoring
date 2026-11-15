@@ -1,0 +1,21 @@
+{
+  "experiment_id": "20261115T114533Z_small_97f34917",
+  "scenario": "small",
+  "sources": [
+    "aws",
+    "azure"
+  ],
+  "seed": 0,
+  "expected_datapoints_per_source": 1000,
+  "metric_name": "measurement_datapoints_total",
+  "created_at": "2026-11-15T11:45:33.454278+00:00",
+  "image": "measurement:small",
+  "generator_endpoint": "http://otel-collector-spoke.monitoring.svc:4318",
+  "contexts": {
+    "aws": "k3d-aws-k3d",
+    "azure": "k3d-azure-k3d"
+  },
+  "status": "SUCCESS",
+  "provenance": "measured",
+  "completed_at": "2026-11-15T11:45:51.461355+00:00"
+}

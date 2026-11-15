@@ -1,0 +1,8 @@
+schema_version: 1
+currency: null
+pricing:
+  network_egress_per_gb: null
+  object_storage_per_gb_month: null
+  query_per_hour: null
+status: unavailable
+reason: "No cloud prices are supplied; cost measurement is deferred."

@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${JOB_NAME}
+  namespace: monitoring
+  labels:
+    app: measurement-generator
+    experiment_id: ${EXPERIMENT_ID}
+    source_id: ${SOURCE_ID}
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 600
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: measurement-generator
+        experiment_id: ${EXPERIMENT_ID}
+        source_id: ${SOURCE_ID}
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: generator
+          image: ${IMAGE}
+          imagePullPolicy: IfNotPresent
+          workingDir: /app
+          command: ["python", "-m", "workloads.generator"]
+          args:
+            - "--scenario"
+            - "${SCENARIO}"
+            - "--experiment-id"
+            - "${EXPERIMENT_ID}"
+            - "--source-id"
+            - "${SOURCE_ID}"
+            - "--seed"
+            - "${SEED}"
+            - "--endpoint"
+            - "${ENDPOINT}"
+            - "--send"

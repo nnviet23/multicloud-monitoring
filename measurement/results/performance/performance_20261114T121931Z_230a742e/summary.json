@@ -1,0 +1,56 @@
+{
+  "sample_count": 4,
+  "target_count": 2,
+  "targets": {
+    "spoke_aws": {
+      "sample_count": 2,
+      "start_time": "2026-11-14T12:19:22.881054+00:00",
+      "end_time": "2026-11-14T12:19:27.454264+00:00",
+      "gauges": {},
+      "rates": {},
+      "counters": {},
+      "missing_counts": {
+        "pod_name": 2,
+        "service_instance_id": 2,
+        "otelcol_process_cpu_seconds": 2,
+        "otelcol_process_memory_rss": 2,
+        "otelcol_process_uptime": 2,
+        "otelcol_receiver_accepted_metric_points": 2,
+        "accepted_log_records": 2,
+        "accepted_spans": 2,
+        "otelcol_exporter_sent_metric_points": 2,
+        "otelcol_exporter_send_failed_metric_points": 2,
+        "otelcol_exporter_queue_size": 2,
+        "container_cpu_usage_seconds_total": 2,
+        "container_memory_working_set_bytes": 2,
+        "container_network_transmit_bytes_total": 2,
+        "container_network_receive_bytes_total": 2
+      }
+    },
+    "spoke_azure": {
+      "sample_count": 2,
+      "start_time": "2026-11-14T12:19:22.881095+00:00",
+      "end_time": "2026-11-14T12:19:27.454291+00:00",
+      "gauges": {},
+      "rates": {},
+      "counters": {},
+      "missing_counts": {
+        "pod_name": 2,
+        "service_instance_id": 2,
+        "otelcol_process_cpu_seconds": 2,
+        "otelcol_process_memory_rss": 2,
+        "otelcol_process_uptime": 2,
+        "otelcol_receiver_accepted_metric_points": 2,
+        "accepted_log_records": 2,
+        "accepted_spans": 2,
+        "otelcol_exporter_sent_metric_points": 2,
+        "otelcol_exporter_send_failed_metric_points": 2,
+        "otelcol_exporter_queue_size": 2,
+        "container_cpu_usage_seconds_total": 2,
+        "container_memory_working_set_bytes": 2,
+        "container_network_transmit_bytes_total": 2,
+        "container_network_receive_bytes_total": 2
+      }
+    }
+  }
+}

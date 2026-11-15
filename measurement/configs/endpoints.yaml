@@ -1,0 +1,81 @@
+# Discovery snapshot. Null means not verified; do not replace with a guessed endpoint.
+schema_version: 1
+observed_at: "2026-11-08"
+contexts:
+  expected:
+    hub: k3d-hub-k3d
+    aws: k3d-aws-k3d
+    azure: k3d-azure-k3d
+  observed_in_wsl:
+    distro: "Ubuntu-24.04"
+    os_release: "Ubuntu 24.04.1 LTS"
+    contexts:
+      - k3d-aws-k3d
+      - k3d-azure-k3d
+      - k3d-hub-k3d
+  status: verified
+  verification: "kubectl config get-contexts and kubectl get nodes/pods -A/svc -A succeeded in WSL Ubuntu-24.04."
+  windows_powershell_observation:
+    observed:
+      - k3d-cloud-a
+      - k3d-cloud-b
+      - k3d-hub
+    status: separate_kubeconfig
+    reason: "PowerShell and WSL use different kubeconfig/context sets; do not merge these observations."
+
+endpoints:
+  grafana:
+    base_url: "http://127.0.0.1:3000"
+    health_path: "/api/health"
+    metrics_path: "/metrics"
+    verified: true
+    verification: "HTTP GET returned 200 for /api/health and /metrics."
+  minio:
+    api_base_url: "http://127.0.0.1:9000"
+    health_live_path: "/minio/health/live"
+    metrics_path: "/minio/v2/metrics/cluster"
+    console_url: "http://127.0.0.1:9001"
+    verified: true
+    verification: "HTTP GET returned 200 for live health and cluster metrics; console returned HTML."
+  prometheus:
+    base_url: "http://127.0.0.1:9091"
+    query_api_path: "/api/v1/query"
+    verified: true
+    verification: "HTTP GET to /api/v1/query?query=up returned status success via WSL port-forward"
+  thanos_query:
+    base_url: "http://127.0.0.1:9092"
+    query_api_path: "/api/v1/query"
+    verified: true
+    verification: "HTTP GET to /api/v1/query?query=up returned status success via WSL port-forward"
+  otel_gateway:
+    otlp_grpc_url: null
+    otlp_http_url: null
+    prometheus_metrics_url: "http://127.0.0.1:18889/metrics"
+    internal_metrics_url: null
+    verified: true
+    endpoint_scope: "temporary kubectl port-forward from WSL Ubuntu-24.04; not a stable service address"
+    verification: "GET returned HTTP 200 and a non-empty Prometheus exposition response from Hub service port 8889."
+
+manifest_endpoints:
+  otel_gateway_service:
+    address: null
+    ports:
+      otlp_grpc: null
+      otlp_http: null
+      prometheus_metrics: null
+    status: runtime_verified_in_cluster
+    manifest_reference: "otel-collector-hub.monitoring.svc.cluster.local:4317, :4318, :8889"
+    runtime_context: "k3d-hub-k3d"
+    runtime_service_ports: [4317, 4318, 8889]
+  thanos_query_service:
+    address: null
+    port: null
+    status: runtime_declared
+    manifest_reference: "thanos-query.monitoring.svc.cluster.local:9090"
+    runtime_context: "k3d-hub-k3d"
+  minio_service:
+    address: null
+    port: null
+    status: runtime_declared
+    manifest_reference: "minio.storage.svc.cluster.local:9000"
+    runtime_context: "k3d-hub-k3d"

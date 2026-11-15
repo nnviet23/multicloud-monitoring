@@ -1,0 +1,13 @@
+schema_version: 1
+metric_name: measurement_datapoints_total
+test_label: measurement_framework
+default_scenario: small
+scenarios:
+  small: 1000
+  medium: 10000
+  large: 50000
+  stress: 100000
+sample_mode:
+  max_datapoints_per_series_per_scrape_interval: 1
+  fixed_stream_count: 4
+  scrape_model: true

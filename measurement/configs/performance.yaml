@@ -1,0 +1,33 @@
+# Runtime settings used by performance.sources. Replace values for each cluster.
+schema_version: 1
+targets:
+  spoke_aws:
+    context: spoke-aws
+    namespace: monitoring
+    deployment: otelcol-contrib
+    node: REPLACE_WITH_NODE
+    exporter: otlp/hub
+    cadvisor:
+      scope: pod
+      network_interface: all
+      pod_container_exclude: POD
+  spoke_azure:
+    context: spoke-azure
+    namespace: monitoring
+    deployment: otelcol-contrib
+    node: REPLACE_WITH_NODE
+    exporter: otlp/hub
+    cadvisor:
+      scope: pod
+      network_interface: all
+      pod_container_exclude: POD
+  hub:
+    context: hub
+    namespace: monitoring
+    deployment: otelcol-contrib
+    node: REPLACE_WITH_NODE
+    exporter: otlp/hub
+    cadvisor:
+      scope: pod
+      network_interface: all
+      pod_container_exclude: POD

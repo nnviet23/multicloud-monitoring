@@ -19,7 +19,7 @@ spec:
       initContainers:
         - name: init-buckets
           image: minio/minio:RELEASE.2025-10-15T17-29-55Z
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           command:
             - /bin/sh
             - -ce
@@ -31,7 +31,7 @@ spec:
       containers:
         - name: minio
           image: minio/minio:RELEASE.2025-10-15T17-29-55Z
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           command:
             - /bin/sh
             - -ce

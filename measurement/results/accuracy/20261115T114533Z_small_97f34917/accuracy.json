@@ -1,0 +1,46 @@
+{
+  "experiment_id": "20261115T114533Z_small_97f34917",
+  "computed_at_utc": "2026-11-15T11:45:51.456386+00:00",
+  "sources": [
+    {
+      "source_id": "aws",
+      "expected": 1000.0,
+      "planned_expected": 1000,
+      "counter_final": 1000.0,
+      "completeness_percent": 100.0,
+      "loss_percent": 0.0,
+      "correctness": "PASS",
+      "duplication_percent": 0.0,
+      "counter_extra": 0.0,
+      "raw_duplicate_samples": 0,
+      "counter_reset": false,
+      "limitation": "Prometheus stores scrape snapshots, not individual datapoints; sequence correctness is checked only through last_sequence_id/last_value, and duplicate detection is bounded to counter excess and exact raw samples."
+    },
+    {
+      "source_id": "azure",
+      "expected": 1000.0,
+      "planned_expected": 1000,
+      "counter_final": 1000.0,
+      "completeness_percent": 100.0,
+      "loss_percent": 0.0,
+      "correctness": "PASS",
+      "duplication_percent": 0.0,
+      "counter_extra": 0.0,
+      "raw_duplicate_samples": 0,
+      "counter_reset": false,
+      "limitation": "Prometheus stores scrape snapshots, not individual datapoints; sequence correctness is checked only through last_sequence_id/last_value, and duplicate detection is bounded to counter excess and exact raw samples."
+    },
+    {
+      "source_id": "combined",
+      "expected": 2000,
+      "counter_final": 2000,
+      "completeness_percent": 100.0,
+      "loss_percent": 0.0,
+      "correctness": "PASS",
+      "duplication_percent": 0.0,
+      "counter_reset": false,
+      "limitation": "Combined result sums independent source counters; it does not reconstruct per-sequence history."
+    }
+  ],
+  "collection_errors": []
+}
