@@ -7,9 +7,13 @@ data:
   active_playbooks.yaml: |
     global_config:
       cluster_name: hub-k3d
+      account_id: "multicloud-aiops-local-account"
+      signing_key: "multicloud-aiops-local-signing-key"
       prometheus_url: "http://thanos-query.monitoring.svc.cluster.local:9090"
 
-    playbook_repos: {}
+    playbook_repos:
+      robusta_default_playbooks:
+        url: "file:///etc/robusta/playbooks/defaults"
 
     sinks_config:
       - telegram_sink:
@@ -19,24 +23,21 @@ data:
           send_files: true
 
     custom_playbooks:
-      - name: "AIOps Anomaly Alert Enrichment"
-        triggers:
+      - triggers:
           - on_prometheus_alert:
               alert_name: AIOpsAnomalyDetected
         actions:
-          - customize_alert:
-              title: "🚨 [AIOps Anomaly] {{ alert.labels.service_name }} ({{ alert.labels.cloud_provider }} / {{ alert.labels.k8s_cluster_name }})"
-          - logs_enricher: {}
+          - logs_enricher:
+              warn_on_missing_label: false
+          - pod_events_enricher: {}
 
-      - name: "Pod Crash Loop Enrichment"
-        triggers:
+      - triggers:
           - on_pod_crash_loop: {}
         actions:
           - report_crash_loop: {}
           - pod_events_enricher: {}
 
-      - name: "Pod OOM Killed Investigation"
-        triggers:
+      - triggers:
           - on_pod_oom_killed: {}
         actions:
           - node_allocatable_resources_enricher: {}

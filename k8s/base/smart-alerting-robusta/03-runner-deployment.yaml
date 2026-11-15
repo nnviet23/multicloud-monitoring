@@ -31,8 +31,8 @@ spec:
                   fieldPath: metadata.namespace
             - name: PLAYBOOKS_CONFIG_FILE_PATH
               value: "/etc/robusta/config/active_playbooks.yaml"
-            - name: ROBUSTA_CONFIG_PATH
-              value: "/etc/robusta/config/active_playbooks.yaml"
+            - name: INTERNAL_PLAYBOOKS_ROOT
+              value: "/etc/robusta/playbooks/defaults"
             - name: ENABLE_TELEMETRY
               value: "false"
             - name: TELEGRAM_BOT_TOKEN
@@ -51,9 +51,9 @@ spec:
           resources:
             requests:
               cpu: 50m
-              memory: 128Mi
+              memory: 256Mi
             limits:
-              memory: 384Mi
+              memory: 768Mi
       volumes:
         - name: config
           configMap:
