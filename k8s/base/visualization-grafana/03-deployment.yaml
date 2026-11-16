@@ -24,12 +24,12 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: grafana-admin-creds
-                  key: admin-user
+                  key: GRAFANA_ADMIN_USER
             - name: GF_SECURITY_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: grafana-admin-creds
-                  key: admin-password
+                  key: GRAFANA_ADMIN_PASSWORD
             - name: GF_USERS_ALLOW_SIGN_UP
               value: "false"
           ports:

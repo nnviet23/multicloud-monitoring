@@ -26,15 +26,16 @@ Trong đồ án, toàn bộ 6 vi dịch vụ nghiệp vụ của TeaStore (`teas
 | `jvm.memory.type` | `jvm_memory_type` / `type` | Stable | Required [1] | string | Phân loại vùng nhớ máy ảo Java. | `heap`, `non_heap` |
 | `jvm.memory.pool.name` | `pool` | Stable | Recommended | string | Tên phân vùng quản lý bộ nhớ thế hệ của JVM. | `G1 Eden Space`, `G1 Old Gen`, `Metaspace` |
 | `jvm.gc.action` | `action` | Stable | Required [2] | string | Loại hành động thu gom rác của Garbage Collector. | `end of major GC`, `end of minor GC` |
-| `jvm.gc.name` | `gc` | Stable | Required [2] | string | Tên của thuật toán / bộ thu gom rác JVM đang kích hoạt. | `G1 Young Generation`, `G1 Old Generation` |
+| `jvm.gc.name` | `gc` | Stable | Required [2] | string | Tên của thuật toán / bộ thu gom rác JVM đang kích hoạt. | `Copy`, `MarkSweepCompact` (SerialGC), hoặc `G1 Young Generation` (G1GC) |
 | `jvm.thread.daemon` | `daemon` | Stable | Recommended | boolean | Cờ đánh dấu luồng nền Daemon của JVM. | `true`, `false` |
 | `process.pid` | `process_pid` | Stable | Recommended | int | Mã định danh tiến trình hệ điều hành của JVM. | `1` |
 | `process.runtime.name` | `runtime_name` | Stable | Recommended | string | Tên môi trường thực thi runtime. | `OpenJDK Runtime Environment` |
-| `process.runtime.version` | `runtime_version` | Stable | Recommended | string | Phiên bản chi tiết của máy ảo Java. | `17.0.12+7-Ubuntu` |
+| `process.runtime.version` | `runtime_version` | Stable | Recommended | string | Phiên bản chi tiết của máy ảo Java. | `11.0.22+7` (TeaStore OpenJDK 11) hoặc `17.0.12+7-Ubuntu` |
 
 **Ghi chú quy chuẩn thu thập:**
 - **[1]:** Bắt buộc có trên mọi metric đo bộ nhớ JVM để phân biệt rõ rệt giữa vùng nhớ đối tượng (`heap`) và vùng nhớ mã bytecode/metaspace (`non_heap`).
 - **[2]:** Bắt buộc có trên metric `jvm.gc.duration` để tách biệt Major GC (dừng toàn bộ ứng dụng) và Minor GC.
+- **[3]:** Trong cấu hình thực tế của TeaStore microservices (`k8s/base/teastore/*/00-deployment.yaml`), container chạy trên OpenJDK 11 với cấu hình tối ưu bộ đệm nhỏ: `-Xms96m -Xmx256m -XX:+UseSerialGC`. Tên bộ thu gom rác tương ứng là `Copy` (Minor GC) và `MarkSweepCompact` (Major GC). Schema đồng thời hỗ trợ đầy đủ các môi trường OpenJDK 17 chạy bộ thu gom rác song song `G1GC`.
 
 ---
 

@@ -29,6 +29,11 @@ spec:
               memory: 256Mi
             limits:
               memory: 768Mi
+          startupProbe:
+            tcpSocket:
+              port: 3306
+            failureThreshold: 30
+            periodSeconds: 10
           readinessProbe:
             tcpSocket:
               port: 3306

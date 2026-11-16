@@ -36,6 +36,18 @@ secretGenerator:
       - .env
     options:
       disableNameSuffixHash: true
+  - name: thanos-s3-creds
+    namespace: monitoring
+    envs:
+      - .env
+    options:
+      disableNameSuffixHash: true
+  - name: otel-s3-creds
+    namespace: monitoring
+    envs:
+      - .env
+    options:
+      disableNameSuffixHash: true
   - name: robusta-secrets
     namespace: monitoring
     behavior: replace

@@ -195,39 +195,10 @@
     {
       "collapsed": false,
       "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
-        "y": 22
-      },
-      "id": 6,
-      "title": "Tempo Distributed TraceQL Explorer (Cross-Cloud Slow & Error Traces)",
-      "description": "Truy vấn TraceQL thời gian thực từ Tempo backend: Lọc toàn bộ các Trace spans có lỗi (status=error) hoặc thời gian phản hồi vượt ngưỡng WAN/DB (> 1.5s). Click vào từng Trace ID để xem Waterfall Spans chi tiết.",
-      "type": "traces",
-      "datasource": {
-        "type": "tempo",
-        "uid": "tempo-ds"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "tempo",
-            "uid": "tempo-ds"
-          },
-          "queryType": "traceql",
-          "query": "{ status = error || duration > 1.5s }",
-          "limit": 25,
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 32
+        "y": 22
       },
       "id": 7,
       "title": "Trace Spans Latency Distribution & Service Bottlenecks (P99, P90, P50)",
@@ -244,7 +215,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket{server=~\"$service\"}[5m]))) * 1000",
+          "expr": "(histogram_quantile(0.99, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket{server=~\"$service\"}[5m]))) * 1000) or (sum by (server) (rate(traces_service_graph_request_total{server=~\"$service\"}[5m])) * 0)",
           "legendFormat": "P99 - {{server}} (ms)",
           "range": true,
           "refId": "A"
@@ -255,7 +226,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket{server=~\"$service\"}[5m]))) * 1000",
+          "expr": "(histogram_quantile(0.90, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket{server=~\"$service\"}[5m]))) * 1000) or (sum by (server) (rate(traces_service_graph_request_total{server=~\"$service\"}[5m])) * 0)",
           "legendFormat": "P90 - {{server}} (ms)",
           "range": true,
           "refId": "B"
@@ -266,7 +237,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket{server=~\"$service\"}[5m]))) * 1000",
+          "expr": "(histogram_quantile(0.50, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket{server=~\"$service\"}[5m]))) * 1000) or (sum by (server) (rate(traces_service_graph_request_total{server=~\"$service\"}[5m])) * 0)",
           "legendFormat": "P50 - {{server}} (ms)",
           "range": true,
           "refId": "C"

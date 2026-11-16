@@ -20,7 +20,7 @@
             "mode": "thresholds"
           },
           "mappings": [],
-          "max": 400,
+          "max": 100,
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -31,11 +31,11 @@
               },
               {
                 "color": "yellow",
-                "value": 250
+                "value": 60
               },
               {
                 "color": "red",
-                "value": 350
+                "value": 85
               }
             ]
           },
@@ -70,14 +70,14 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "clamp_max(sum(rate(system_cpu_time_seconds_total{k8s_cluster_name=~\"$cluster\", state!=\"idle\"}[1m])) * 100, 400)",
+          "expr": "(sum(rate(system_cpu_time_seconds_total{k8s_cluster_name=~\"$cluster\", state!=\"idle\"}[1m])) / sum(count by (cpu, k8s_cluster_name) (system_cpu_time_seconds_total{k8s_cluster_name=~\"$cluster\"}))) * 100",
           "instant": true,
-          "legendFormat": "CPU Used",
+          "legendFormat": "CPU % Used",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "CPU Usage (400%)",
+      "title": "CPU Utilization (% of Total Cluster Cores)",
       "type": "gauge"
     },
     {
@@ -91,7 +91,7 @@
             "mode": "thresholds"
           },
           "mappings": [],
-          "max": 9.59,
+          "max": 100,
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -102,15 +102,15 @@
               },
               {
                 "color": "yellow",
-                "value": 6.5
+                "value": 75
               },
               {
                 "color": "red",
-                "value": 8.5
+                "value": 90
               }
             ]
           },
-          "unit": "decgbytes"
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -141,14 +141,14 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "avg(system_memory_usage_bytes{k8s_cluster_name=~\"$cluster\", state=\"used\"}) / (1024*1024*1024)",
+          "expr": "(sum(system_memory_usage_bytes{k8s_cluster_name=~\"$cluster\", state=\"used\"}) / sum(system_memory_usage_bytes{k8s_cluster_name=~\"$cluster\"})) * 100",
           "instant": true,
-          "legendFormat": "RAM Used",
+          "legendFormat": "RAM % Used",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "Memory Usage (9.59 GB)",
+      "title": "Memory Utilization (% Used)",
       "type": "gauge"
     },
     {
@@ -162,7 +162,7 @@
             "mode": "thresholds"
           },
           "mappings": [],
-          "max": 1007,
+          "max": 100,
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -173,15 +173,15 @@
               },
               {
                 "color": "yellow",
-                "value": 700
+                "value": 75
               },
               {
                 "color": "red",
-                "value": 900
+                "value": 90
               }
             ]
           },
-          "unit": "decgbytes"
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -212,14 +212,14 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "avg(system_filesystem_usage_bytes{k8s_cluster_name=~\"$cluster\", state=\"used\", device=\"/dev/sde\"}) / (1024*1024*1024)",
+          "expr": "(max by (k8s_cluster_name) (system_filesystem_usage_bytes{k8s_cluster_name=~\"$cluster\", state=\"used\", device=~\"/dev/sd.*\"}) / max by (k8s_cluster_name) (system_filesystem_usage_bytes{k8s_cluster_name=~\"$cluster\", device=~\"/dev/sd.*\"})) * 100",
           "instant": true,
-          "legendFormat": "Disk Used",
+          "legendFormat": "Disk % Used",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "Disk Space Usage (1007 GB WSL2 VHDX)",
+      "title": "Node Storage Utilization (% VHDX Capacity)",
       "type": "gauge",
       "description": "Dung lượng ổ đĩa ảo VHDX tự động co giãn tối đa 1007 GB (1 TB) được Docker Desktop/WSL2 cấp phát mặc định cho Linux ext4."
     },

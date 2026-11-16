@@ -80,7 +80,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "clamp_max(100 - (sum(rate(traces_service_graph_request_failed_total[5m])) / (sum(rate(traces_service_graph_request_total[5m])) + 0.0001) * 100), 100)",
+          "expr": "clamp_max(100 - (((sum(rate(traces_service_graph_request_failed_total[5m])) or vector(0)) / (sum(rate(traces_service_graph_request_total[5m])) + 0.0001)) * 100), 100)",
           "instant": true,
           "refId": "A"
         }
@@ -171,7 +171,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "(sum(rate(traces_service_graph_request_total{client_cloud_provider!=server_cloud_provider}[1m])) / (sum(rate(traces_service_graph_request_total[1m])) + 0.0001)) * 100",
+          "expr": "(sum(rate(traces_service_graph_request_total{client_cloud_provider=\"aws\", server_cloud_provider=\"azure\"}[1m])) or sum(rate(traces_service_graph_request_total{client_cloud_provider=\"azure\", server_cloud_provider=\"aws\"}[1m])) or vector(0)) / (sum(rate(traces_service_graph_request_total[1m])) + 0.0001) * 100",
           "instant": true,
           "refId": "A"
         }
@@ -246,7 +246,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le, client, server) (rate(traces_service_graph_request_server_seconds_bucket{client_cloud_provider!=server_cloud_provider}[1m]))) * 1000",
+          "expr": "histogram_quantile(0.95, sum by (le, client, server) (rate(traces_service_graph_request_server_seconds_bucket{client_cloud_provider=\"aws\", server_cloud_provider=\"azure\"}[1m]) or rate(traces_service_graph_request_server_seconds_bucket{client_cloud_provider=\"azure\", server_cloud_provider=\"aws\"}[1m]))) * 1000",
           "legendFormat": "WAN: {{client}} -> {{server}}",
           "range": true,
           "refId": "A"

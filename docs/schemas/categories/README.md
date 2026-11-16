@@ -21,10 +21,10 @@ Tài liệu này đóng vai trò là **Mục Lục & Bảng Ánh Xạ Tổng Th�
                              │
                              ▼  (Lắp ghép theo ma trận thành phần)
 [TẦNG 2: ENTITY PROFILES] (docs/schemas/profiles/)
-  ├── webapp-monitoring-schema.yaml         (CAT-04 + CAT-05 + CAT-06 + CAT-07)
+  ├── webapp-monitoring-schema.yaml         (CAT-07 + CAT-06 + CAT-05 + CAT-08 + CAT-03 + CAT-04)
   ├── instance-monitoring-schema.yaml       (CAT-01 + CAT-02 + CAT-03 + CAT-04 + CAT-05)
-  ├── database-monitoring-schema.yaml       (CAT-01 + CAT-02 + CAT-04 + CAT-05 + CAT-08)
-  └── wan-network-monitoring-schema.yaml    (CAT-03 + CAT-04 + CAT-05 + CAT-07)
+  ├── database-monitoring-schema.yaml       (CAT-08 + CAT-02 + CAT-01 + CAT-03 + CAT-05 + CAT-04)
+  └── wan-network-monitoring-schema.yaml    (CAT-03 + CAT-02 + CAT-04 + CAT-01 + CAT-05)
 ```
 
 ---

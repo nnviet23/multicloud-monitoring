@@ -69,7 +69,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "clamp_max(100 - (sum(rate(traces_service_graph_request_failed_total{server=~\"$service\"}[5m])) / (sum(rate(traces_service_graph_request_total{server=~\"$service\"}[5m])) + 0.0001) * 100), 100)",
+          "expr": "clamp_max(100 - (((sum(rate(traces_service_graph_request_failed_total{server=~\"$service\"}[5m])) or vector(0)) / (sum(rate(traces_service_graph_request_total{server=~\"$service\"}[5m])) + 0.0001)) * 100), 100)",
           "instant": true,
           "refId": "A"
         }
@@ -230,7 +230,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "(sum(rate(traces_service_graph_request_failed_total{server=~\"$service\"}[5m])) / (sum(rate(traces_service_graph_request_total{server=~\"$service\"}[5m])) + 0.0001)) / 0.005",
+          "expr": "((sum(rate(traces_service_graph_request_failed_total{server=~\"$service\"}[5m])) or vector(0)) / (sum(rate(traces_service_graph_request_total{server=~\"$service\"}[5m])) + 0.0001)) / 0.005",
           "legendFormat": "Burn Rate (5m short window)",
           "range": true,
           "refId": "A"
@@ -241,7 +241,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "(sum(rate(traces_service_graph_request_failed_total{server=~\"$service\"}[30m])) / (sum(rate(traces_service_graph_request_total{server=~\"$service\"}[30m])) + 0.0001)) / 0.005",
+          "expr": "((sum(rate(traces_service_graph_request_failed_total{server=~\"$service\"}[30m])) or vector(0)) / (sum(rate(traces_service_graph_request_total{server=~\"$service\"}[30m])) + 0.0001)) / 0.005",
           "legendFormat": "Burn Rate (30m medium window)",
           "range": true,
           "refId": "B"
@@ -278,7 +278,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "sum by (server) (rate(traces_service_graph_request_failed_total{server=~\"$service\"}[5m]))",
+          "expr": "sum by (server) (rate(traces_service_graph_request_failed_total{server=~\"$service\"}[5m])) or (sum by (server) (rate(traces_service_graph_request_total{server=~\"$service\"}[5m])) * 0)",
           "legendFormat": "{{server}} Errors/sec",
           "range": true,
           "refId": "A"

@@ -39,6 +39,9 @@ docs/research/**/*.pdf
 docs/decisions/
 docs/decisions/**
 
+docs/refactoring/
+docs/refactoring/**
+
 # Distribution / Packaging
 build/
 develop-eggs/

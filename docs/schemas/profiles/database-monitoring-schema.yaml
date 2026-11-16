@@ -4,12 +4,12 @@ target_system: "teastore-db (MySQL 8.0 Community Server on Azure Spoke)"
 methodology: "NON_INVASIVE_MULTI_LAYER_DB_OBSERVABILITY"
 
 included_categories:
-  - "CAT-08: Data Stores & Relational Databases"
+  - "CAT-08: Database Client & Storage"
   - "CAT-02: Storage & Filesystem"
   - "CAT-01: OS & System Kernel"
-  - "CAT-03: Network & Transport (L3/L4 & WAN)"
-  - "CAT-05: Containers & Kubernetes Orchestration"
-  - "CAT-04: Cloud Infrastructure & Perimeter Context"
+  - "CAT-03: Network & Transport"
+  - "CAT-05: Kubernetes & Containers"
+  - "CAT-04: Cloud Context & Perimeter"
 
 identity_attributes:
   database_system:
@@ -25,10 +25,12 @@ identity_attributes:
     type: "string"
     default: "teastore-db"
   orchestration:
-    cluster_name: "k8s_cluster_name"
-    default: "azure-k3d"
+    cluster_name:
+      canonical_name: "k8s.cluster.name"
+      prometheus_label: "k8s_cluster_name"
+      default: "azure-k3d"
     namespace: "k8s.namespace.name"
-    default_namespace: "default"
+    default_namespace: "teastore"
     pod_name: "k8s.pod.name"
     default_pod: "teastore-db-0"
     node_name: "k8s.node.name"
@@ -75,22 +77,22 @@ telemetry_signals:
       type: "counter"
       unit: "reqps"
       orientation: 0
-      promql: "sum by (client) (rate(traces_service_graph_request_total{server=~\"teadb|teastore-db\"}[1m]))"
+      promql: "sum by (k8s_cluster_name, client) (rate(traces_service_graph_request_total{server=~\"teadb|teastore-db\"}[1m]))"
     service_graph_db_latency:
       category_ref: "CAT-08"
       metric_name: "traces_service_graph_request_server_seconds_bucket"
       type: "histogram"
       unit: "ms"
       orientation: -1
-      promql_p95: "histogram_quantile(0.95, sum by (le) (rate(traces_service_graph_request_server_seconds_bucket{server=~\"teadb|teastore-db\"}[1m]))) * 1000"
-      promql_p99: "histogram_quantile(0.99, sum by (le) (rate(traces_service_graph_request_server_seconds_bucket{server=~\"teadb|teastore-db\"}[1m]))) * 1000"
+      promql_p95: "histogram_quantile(0.95, sum by (le, k8s_cluster_name) (rate(traces_service_graph_request_server_seconds_bucket{server=~\"teadb|teastore-db\"}[1m]))) * 1000"
+      promql_p99: "histogram_quantile(0.99, sum by (le, k8s_cluster_name) (rate(traces_service_graph_request_server_seconds_bucket{server=~\"teadb|teastore-db\"}[1m]))) * 1000"
     service_graph_db_failures:
       category_ref: "CAT-08"
       metric_name: "traces_service_graph_request_failed_total"
       type: "counter"
       unit: "reqps"
       orientation: -1
-      promql: "sum by (client) (rate(traces_service_graph_request_failed_total{server=~\"teadb|teastore-db\"}[1m]))"
+      promql: "sum by (k8s_cluster_name, client) (rate(traces_service_graph_request_failed_total{server=~\"teadb|teastore-db\"}[1m]))"
     disk_write_io:
       category_ref: "CAT-02"
       metric_name: "system_disk_io_bytes_total"
@@ -155,10 +157,10 @@ telemetry_signals:
     format: "OpenTelemetry JDBC Span"
     required_span_attributes:
       - "db.system: mysql"
-      - "db.name: teadb"
-      - "db.statement: <sanitized SQL>"
-      - "net.peer.name: teastore-db"
-      - "net.peer.port: 3306"
+      - "db.namespace / db.name: teadb"
+      - "db.query.text / db.statement: <sanitized SQL>"
+      - "network.peer.address / net.peer.name: teastore-db"
+      - "network.peer.port / net.peer.port: 3306"
     exporter: "OTLP gRPC :4317 -> Tempo"
 
 slo_targets:

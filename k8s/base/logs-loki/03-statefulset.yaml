@@ -50,6 +50,12 @@ spec:
               mountPath: /etc/loki
             - name: storage
               mountPath: /var/loki
+          startupProbe:
+            httpGet:
+              path: /ready
+              port: 3100
+            failureThreshold: 30
+            periodSeconds: 5
           readinessProbe:
             httpGet:
               path: /ready

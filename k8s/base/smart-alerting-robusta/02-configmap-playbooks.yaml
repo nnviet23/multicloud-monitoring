@@ -22,7 +22,7 @@ data:
           chat_id: "{{ env.TELEGRAM_CHAT_ID }}"
           send_files: true
 
-    custom_playbooks:
+    active_playbooks:
       - triggers:
           - on_prometheus_alert:
               alert_name: AIOpsAnomalyDetected
@@ -40,5 +40,4 @@ data:
       - triggers:
           - on_pod_oom_killed: {}
         actions:
-          - node_allocatable_resources_enricher: {}
           - pod_events_enricher: {}

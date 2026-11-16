@@ -138,11 +138,6 @@ data:
               - set(attributes["microsoft.entra.tenant_id"], "72f988bf-86f1-41af-91ab-2d7cd011db47") where attributes["cloud.provider"] == "azure"
               - set(attributes["cloud.platform"], "aws_eks") where attributes["cloud.provider"] == "aws"
               - set(attributes["cloud.platform"], "azure_aks") where attributes["cloud.provider"] == "azure"
-              - set(attributes["cluster"], attributes["k8s.cluster.name"])
-              - set(attributes["cloud"], attributes["cloud.provider"])
-              - set(attributes["region"], attributes["cloud.region"])
-              - set(attributes["k8s_cluster_name"], attributes["k8s.cluster.name"])
-              - set(attributes["cloud_provider"], attributes["cloud.provider"])
               - set(attributes["deployment.environment.name"], "production")
               - set(attributes["telemetry.hub.received_time"], UnixMilli(Now()))
 
@@ -191,6 +186,9 @@ data:
         marshaler: otlp_json
 
     service:
+      telemetry:
+        metrics:
+          address: 0.0.0.0:8888
       pipelines:
         traces:
           receivers: [otlp]
