@@ -1,204 +1,325 @@
-# Kế Hoạch & Kịch Bản Kiểm Thử Kênh Cảnh Báo Telegram (Alertmanager, Robusta & AI Anomaly Engine)
+# Kế Hoạch Kiểm Thử Kênh Cảnh Báo Telegram & Quy Trình Vận Hành AI Anomaly Engine V3
 
-> **Tài liệu:** `docs/progress/04_Telegram_test.md`  
-> **Phiên bản:** `v1.0.0` (Cập nhật ngày 16/11/2026)  
-> **Trạng thái:** Sẵn sàng kiểm thử thực tế (Ready for Execution)  
-> **Mục tiêu:** Cung cấp hướng dẫn toàn diện, trạng thái hiện tại, điều kiện kích hoạt và các bước thực thi kiểm thử có thể tái lập (reproducible) để xác minh chuỗi cảnh báo từ Prometheus, Alertmanager, Robusta Runner và AI Engine V3 về Telegram.
+> **Tài liệu tham chiếu:** `docs/progress/04_Telegram_test.md`  
+> **Phiên bản:** `v2.0.0` (Cập nhật ngày 16/11/2026)  
+> **Môi trường thực thi:** WSL2 Ubuntu (Kernel 6.6.x / Docker Engine & k3d)  
+> **Mục tiêu:** Cung cấp tài liệu vận hành toàn diện kết hợp:
+> 1. Quy trình huấn luyện, tiền xử lý và suy luận thời gian thực của **AI Anomaly Detection Engine V3** (`collector.py`, `preprocess.py`, `train.py`, `evaluate_test.py`, `detector.py`).
+> 2. Kịch bản kiểm thử thực nghiệm chuỗi cảnh báo khép kín (Closed-Loop Alerting) từ Prometheus, Alertmanager, Robusta Runner và AI Engine V3 về Telegram.
 
 ---
 
-## 1. Phân Tích Hiện Trạng & Khắc Phục Nguyên Nhân "Chưa Thấy Thông Báo" Sáng Nay
+## 1. Phân Tích Hiện Trạng & Khắc Phục Lỗi Kênh Telegram
 
-Trước khi tiến hành kiểm thử, hệ thống đã được rà soát và tìm ra 3 nguyên nhân cốt lõi khiến chưa có thông báo tự động nào được đẩy về Telegram trong buổi sáng:
+Trước đó, hệ thống gặp tình trạng chưa nhận được thông báo tự động trên Telegram. Qua rà soát chi tiết, 3 nguyên nhân cốt lõi đã được tìm ra và xử lý triệt để:
 
 | STT | Vấn đề phát hiện | Nguyên nhân kỹ thuật | Biện pháp đã xử lý triệt để | Trạng thái hiện tại |
 | :---: | :--- | :--- | :--- | :---: |
-| **1** | **Prometheus lỗi kết nối Notifier (404 Not Found)** | Cấu hình Prometheus cũ trỏ trực tiếp sang `robusta-runner:5000`. Prometheus đẩy alert theo giao thức server Alertmanager (`POST /api/v2/alerts`), trong khi Robusta Runner chỉ tiếp nhận webhook Alertmanager tại `/api/alerts`. | Đã triển khai chính thức thành phần **`Alertmanager v0.27.0`** (chuẩn SRP: `k8s/base/alertmanager/`), làm cầu nối nhận `/api/v2/alerts` từ Prometheus và bắn Webhook `/api/alerts` sang Robusta. | **ĐÃ HOÀN TẤT** (Alertmanager 1/1 Running) |
-| **2** | **Robusta Playbook dừng xử lý do thiếu Pod** | Cấu hình playbook cũ dùng `pod_events_enricher` cho mọi alert. Với các alert không gắn nhãn Pod (như mất kết nối WAN hay nhịp tim cụm), Robusta báo lỗi `cannot run pod_events_enricher on alert with no pod object` và hủy gửi tin nhắn. | Đã cấu hình `default_enricher` (với `alert_annotations_enrichment: true`) làm hành động chuẩn cho mọi alert Prometheus, hiển thị đầy đủ bảng nhãn và mô tả. | **ĐÃ HOÀN TẤT** (Robusta 1/1 Running) |
-| **3** | **Động cơ AI Detector chưa chạy daemon** | Module `ai-engine/inference/detector.py` là tiến trình chạy độc lập, chưa được khởi động trên cổng `:9108` của trạm làm việc, do đó `ai_anomaly_likelihood_percent` chưa xuất số liệu và sink Telegram nội bộ chưa kích hoạt. | Đã chuẩn bị môi trường thực thi và kịch bản khởi chạy AI Detector V3 với cờ xuất metric `--metrics-port 9108` và rate-limit 30s. | **SẴN SÀNG KHỞI CHẠY** |
+| **1** | **Prometheus lỗi kết nối Notifier (404 Not Found)** | Cấu hình Prometheus trỏ trực tiếp sang `robusta-runner:5000`. Prometheus đẩy alert theo giao thức Alertmanager API v2 (`POST /api/v2/alerts`), trong khi Robusta Runner chỉ lắng nghe webhook tại `POST /api/alerts`. | Triển khai chính thức cụm **`Alertmanager v0.27.0`** (chuẩn SRP tại `k8s/base/alertmanager/`), làm trung gian tiếp nhận `/api/v2/alerts` từ Prometheus và bắn Webhook sang Robusta. | **ĐÃ HOÀN TẤT** (1/1 Running) |
+| **2** | **Robusta Runner vấp lỗi thiếu đối tượng Pod** | Playbook cũ áp dụng `pod_events_enricher` cho mọi alert. Với các alert mức hạ tầng/WAN (như rớt mạng, mất nhịp tim), Robusta bị lỗi `cannot run pod_events_enricher on alert with no pod object` và hủy gửi tin. | Chuẩn hóa `k8s/base/smart-alerting-robusta/02-configmap-playbooks.yaml` sử dụng `default_enricher: {alert_annotations_enrichment: true}`, cho phép mọi loại cảnh báo đều được format đầy đủ. | **ĐÃ HOÀN TẤT** (1/1 Running) |
+| **3** | **Lỗi Telegram Markdown 400 Bad Request từ AI Engine** | Hàm `send_alert` của AI Engine dùng `parse_mode: "Markdown"`, nhưng các nhãn metric và phân tích RCA chứa ký tự gạch dưới `_` (như `[CROSS_CLOUD_WAN_DELAY]`, `k8s_cluster_name`), khiến Telegram parse lỗi. | Cập nhật hàm `send_alert` trong `ai-engine/inference/detector.py` sang `parse_mode: "HTML"` với `html.escape()` và thẻ `<b>`, `<code>`. Đã xác thực gửi thành công về Chat ID `6018907300`. | **ĐÃ HOÀN TẤT** (Test Pass) |
 
 ---
 
-## 2. Bảng Danh Mục Trạng Thái & Điều Kiện Kích Hoạt Cảnh Báo
+## 2. Danh Mục 6 Quy Tắc Cảnh Báo (Prometheus & Alertmanager)
 
-Hệ thống cảnh báo đa đám mây gồm 2 kênh chính:
-1. **Kênh Hạ Tầng & Quy Tắc Số Liệu (Prometheus $\rightarrow$ Alertmanager $\rightarrow$ Robusta $\rightarrow$ Telegram)**
-2. **Kênh Trí Tuệ Nhân Tạo & Phân Rã Vết (AI Anomaly Detector V3 $\rightarrow$ Telegram Sink & Prometheus :9108)**
+Hệ thống giám sát định lượng bằng 6 quy tắc cảnh báo vận hành chuẩn xác trên Prometheus & Alertmanager:
 
-### 2.1. Danh mục 6 Alert Rules của Prometheus & Alertmanager
-
-| Tên Quy Tắc (Alert Name) | Mức Độ (Severity) | Biểu Thức PromQL Kiểm Tra | Điều Kiện & Thời Gian Chờ (`for`) | Mục Đích & Ý Nghĩa Kỹ Thuật | Trạng Thái Hiện Tại |
-| :--- | :---: | :--- | :---: | :--- | :---: |
-| **`SpokeClusterHeartbeatAbsent`** | `critical` | `absent(up{k8s_cluster_name="aws-k3d"} == 1) or absent(up{k8s_cluster_name="azure-k3d"} == 1)` | Không nhận được nhịp tim từ Spoke trong **2 phút** (`120s`). | Cảnh báo đứt cáp quang WAN, rớt mạng Docker Bridge `mc-monitoring-net`, hoặc container OTel Collector tại Spoke bị sập hoàn toàn. | **FIRING** (Sẵn sàng gửi) |
-| **`MicroserviceHighErrorRate`** | `high` | `(sum by (server) (rate(traces_service_graph_request_failed_total[2m])) / (sum by (server) (rate(traces_service_graph_request_total[2m])) + 0.0001)) * 100 > 5` | Tỷ lệ lỗi giao dịch vi dịch vụ vượt **5%** liên tục trong **2 phút** (`120s`). | Bắt lỗi mã nguồn microservice (HTTP 500, Exception, DB Connection Refused) từ đồ thị dịch vụ OTel. | **INACTIVE** (0% lỗi) |
-| **`CrossCloudWANLatencyDegraded`** | `high` | `histogram_quantile(0.99, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[2m]))) * 1000 > 1500` | Độ trễ P99 xuyên đám mây vượt **1500ms** liên tục trong **2 phút** (`120s`). | Bắt tình trạng nghẽn mạng WAN do suy hao `tc netem` hoặc truy vấn JDBC cơ sở dữ liệu bị khóa bảng. | **FIRING / PENDING** (WAN có tiêm trễ) |
-| **`OTelCollectorMemoryHigh`** | `warning` | `sum by (pod) (container_memory_working_set_bytes{pod=~"otel-collector.*"}) > 4e+08` | Bộ nhớ RAM Working Set của collector vượt **400MB** liên tục trong **2 phút** (`120s`). | Cảnh báo sớm nguy cơ tràn bộ đệm `memory_limiter` hoặc bị Linux OOMKilled khi có bão viễn trắc. | **INACTIVE** (Đang dùng ~60MB) |
-| **`SpokePodCrashLooping`** | `critical` | `(rate(k8s_container_restarts_total[5m]) > 0) or (changes(process_uptime_seconds[5m]) > 2) or (increase(kube_pod_container_status_restarts_total[5m]) > 1)` | Pod trên cụm Spoke bị restart $> 1$ lần trong **1 phút** (`60s`). | Bắt kịp thời các sự cố Pod chết đi sống lại (như sự cố probe Recommender/Image trước đó). | **INACTIVE** (0 restarts) |
-| **`AIOpsAnomalyDetected`** | `critical` | `ai_anomaly_likelihood_percent > 80` | Xác suất bất thường từ mô hình học sâu vượt **80%** liên tục trong **30 giây** (`30s`). | Cảnh báo bất thường tổng hợp đa chiều (CPU, RAM, trễ, lỗi) do động cơ AI V3 xuất qua cổng `:9108`. | **INACTIVE** (Chờ khởi động AI) |
-
-### 2.2. Kênh Động Cơ Trí Tuệ Nhân Tạo AI Anomaly Engine V3
-
-| Tín Hiệu / Thuộc Tính | Ngưỡng Kích Hoạt | Cơ Chế Phân Rã Vết (RCA) | Kênh Tiếp Nhận & Hành Động |
-| :--- | :--- | :--- | :--- |
-| **`verdict == ALERT`** | Điểm lỗi tái tạo tức thời (Instant MSE) và cửa sổ ngắn (Short Window MSE) vượt ngưỡng động **`> 0.3500`**, đồng thời xác suất bất thường **`likelihood_pct > 80%`** duy trì liên tục qua 3 chu kỳ đo (18 giây). | Tự động phân rã dấu vết phân tán (Distributed Trace Spans) từ Tempo: <br>• $T_{\text{WAN}}$: Độ trễ trượt mạng diện rộng xuyên mây.<br>• $T_{\text{self}}$: Thời gian tự xử lý nội tại của Pod.<br>• $T_{\text{DB}}$: Thời gian thực thi câu lệnh SQL/JDBC. | **1. Gửi Telegram trực tiếp:** Bắn tin nhắn Markdown định dạng giàu thông tin, đính kèm bảng định lượng RCA và khuyến nghị xử lý.<br>**2. Xuất Prometheus Metric:** Xuất `ai_anomaly_likelihood_percent` lên `:9108` để kích hoạt rule Alertmanager song song. |
+| Tên Rule (`alertname`) | Mức độ | Biểu thức PromQL cốt lõi | Ngưỡng chờ (`for`) | Mục đích & Đối tượng tác động |
+| :--- | :---: | :--- | :---: | :--- |
+| **`SpokePodCrashLooping`** | `critical` | `(rate(k8s_container_restarts_total[5m]) > 0) or (changes(process_uptime_seconds[5m]) > 2) or (increase(kube_pod_container_status_restarts_total[5m]) > 1)` | `60s` | Bắt lỗi Pod microservice khởi động lại liên tục (CrashLoopBackOff) trên cụm `aws-k3d` và `azure-k3d`. |
+| **`SpokeClusterHeartbeatAbsent`** | `critical` | `absent(up{k8s_cluster_name="aws-k3d"} == 1) or absent(up{k8s_cluster_name="azure-k3d"} == 1)` | `120s` | Phát hiện đứt cáp quang WAN, sập mạng Docker bridge `mc-monitoring-net`, hoặc container OTel Collector tại Spoke bị ngừng. |
+| **`CrossCloudWANLatencyDegraded`** | `high` | `histogram_quantile(0.99, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[2m]))) * 1000 > 1500` | `120s` | Bắt tình trạng nghẽn mạng WAN khi độ trễ P99 liên đám mây vượt mốc 1500ms do suy hao `tc netem` hoặc khóa bảng SQL. |
+| **`MicroserviceHighErrorRate`** | `high` | `(sum by (server) (rate(traces_service_graph_request_failed_total[2m])) / (sum by (server) (rate(traces_service_graph_request_total[2m])) + 0.0001)) * 100 > 5` | `120s` | Phát hiện lỗi mã nguồn hoặc đứt kết nối cơ sở dữ liệu làm tỷ lệ lỗi HTTP 5xx vượt 5% trên đồ thị dịch vụ. |
+| **`OTelCollectorMemoryHigh`** | `warning` | `sum by (pod) (container_memory_working_set_bytes{pod=~"otel-collector.*"}) > 4e+08` | `120s` | Cảnh báo sớm nguy cơ tràn RAM (`memory_limiter`) hoặc bị Linux OOMKilled khi collector sử dụng vượt 400MB. |
+| **`AIOpsAnomalyDetected`** | `critical` | `ai_anomaly_likelihood_percent > 80` | `30s` | Nhận tín hiệu bất thường học sâu từ AI Detector V3 xuất qua cổng `:9108` khi xác suất suy thoái vượt 80%. |
 
 ---
 
-## 3. Kịch Bản Kiểm Thử Chi Tiết Từng Bước (Test Execution Runbook)
+## 3. Quy Trình Vận Hành & Huấn Luyện AI Anomaly Engine V3
 
-Bạn có thể thực hiện kiểm thử lần lượt theo 5 kịch bản dưới đây trên môi trường WSL Linux. Mỗi kịch bản đều có lệnh kích hoạt, kết quả hiển thị trên Telegram và lệnh dọn dẹp/khôi phục hệ thống.
+Module AI Engine V3 hoạt động dựa trên cơ chế học sâu bán giám sát (**Semi-Supervised Deep Ensemble: GRU Autoencoder + TCN Autoencoder + Isolation Forest**) kết hợp chuẩn hóa Z-score theo từng thực thể (`EntityCalibrator`) và giải thuật bóc tách vết phân tán (`TempoTraceAnalyzer`).
+
+Toàn bộ các lệnh dưới đây được thực thi trong môi trường **WSL2 Linux** tại thư mục gốc dự án:
+
+```bash
+cd /mnt/d/Workstation/HCMUS/Grade4/01_TTDATN_K23/Tuần\ 3/multicloud-monitoring
+```
+
+```mermaid
+flowchart LR
+    A["1. Thu thập dữ liệu\n(collector.py)"] --> B["2. Phân tích thống kê\n(analyze_data.py)"]
+    B --> C["3. Tiền xử lý & Baseline\n(preprocess.py)"]
+    C --> D["4. Huấn luyện mô hình\n(train.py)"]
+    D --> E["5. Đánh giá Benchmark\n(evaluate_test.py)"]
+    E --> F["6. Giám sát thời gian thực\n(detector.py :9108)"]
+    F -->|RCA + Likelihood| G["Telegram Bot & Alertmanager"]
+```
 
 ---
 
-### Kịch Bản 0: Kiểm Tra Nhanh Đường Truyền Trực Tiếp Telegram (Smoke Test)
-*Mục đích: Xác thực ngay lập tức bot token và chat_id đã thông suốt tới tài khoản Telegram của bạn.*
+### Bước 3.1: Thu Thập Dữ Liệu Thực Thể Đa Đám Mây (`collector.py`)
+Tự động khám phá các thực thể `(cloud_provider, service_name)` đang hoạt động từ Prometheus/Thanos bằng các truy vấn PromQL Vectorized, xuất ra tập dữ liệu chuỗi thời gian thô đa chiều:
 
-1. **Thực thi lệnh kiểm tra trực tiếp từ Robusta Runner Pod:**
+```bash
+# Thu thập 1200 giây (20 phút) dữ liệu bình thường với chu kỳ lấy mẫu 6 giây:
+python3 ai-engine/data/collector.py \
+  --duration 1200 \
+  --interval 6 \
+  --output ai-engine/data/raw/multicloud_entity_baseline.csv
+```
+
+---
+
+### Bước 3.2: Phân Tích Thống Kê & Khám Phá Dữ Liệu (`analyze_data.py`)
+Phân tích tương quan giữa các đặc trưng, kiểm tra phân phối dữ liệu và phát hiện các giá trị ngoại lai ban đầu:
+
+```bash
+python3 ai-engine/data/analyze_data.py
+```
+*Kết quả:* Xuất báo cáo [eda_report.md](file:///d:/Workstation/HCMUS/Grade4/01_TTDATN_K23/Tuần%203/multicloud-monitoring/ai-engine/data/processed/eda_report.md) và biểu đồ phân phối `eda_summary.png`.
+
+---
+
+### Bước 3.3: Tiền Xử Lý, Chuẩn Hóa Z-Score & Chia Tập Chống Rò Rỉ (`preprocess.py`)
+Thực hiện chia dữ liệu theo thứ tự thời gian (`strict_chronological_per_entity_pre_windowing`) **trước khi** tính baseline để đảm bảo không rò rỉ dữ liệu (Zero Data Leakage):
+- `entity_baselines.json`: Được fit **độc quyền** trên `train_df`.
+- Tạo các cửa sổ trượt kích thước `12 x 8` (12 bước thời gian $\times$ 8 đặc trưng chuẩn).
+- Tăng cường dữ liệu (Data Augmentation) có điều kiện vật lý riêng cho tập Train.
+
+```bash
+python3 ai-engine/data/preprocess.py --config ai-engine/configs/model_config.yaml
+```
+
+*Các tệp đầu ra tại `ai-engine/data/processed/`:*
+- `train_windows.npy`: Cửa sổ chuỗi thời gian tập huấn luyện.
+- `val_windows.npy`: Cửa sổ độc lập tập kiểm định (100% dữ liệu tương lai, 0 chồng lấn).
+- `entity_baselines.json`: Tham số (Median, IQR, Scale-Floor) cho từng thực thể.
+- `preprocess_summary.json`: Báo cáo tóm tắt cấu trúc ma trận đầu vào.
+
+---
+
+### Bước 3.4: Huấn Luyện Universal Deep Autoencoders & Isolation Forest (`train.py`)
+Huấn luyện song song mô hình GRU Autoencoder, TCN Autoencoder và Isolation Forest trên dữ liệu chuẩn hóa, đồng thời tự động hiệu chỉnh ngưỡng MSE P99 và kiểm định xác suất rủi ro (`likelihood_pct`):
+
+```bash
+python3 ai-engine/training/train.py --config ai-engine/configs/model_config.yaml
+```
+
+*Các trọng số mô hình lưu tại `ai-engine/models/saved/`:*
+- `gru_autoencoder.pt`: Trọng số tối ưu của GRU Autoencoder.
+- `tcn_autoencoder.pt`: Trọng số tối ưu của TCN Autoencoder.
+- `isolation_forest.joblib`: Mô hình cây cô lập 96 chiều.
+- `threshold_config.json`: Ngưỡng quyết định bất thường (`recommended_threshold_p99 = 0.3500`) và trọng số suy giảm trễ.
+- `training_report.md`: Báo cáo chi tiết độ hội tụ hàm mất mát SmoothL1 và điểm Brier Score.
+
+---
+
+### Bước 3.5: Hiệu Chỉnh Lại Tham Số Rủi Ro & Ngưỡng Quyết Định (`recalibrate.py` - Tùy chọn)
+Khi chỉ cần điều chỉnh độ nhạy của xác suất cảnh báo mà không cần huấn luyện lại mạng nơ-ron:
+
+```bash
+OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 python3 ai-engine/training/recalibrate.py
+```
+
+---
+
+### Bước 3.6: Kiểm Thử Benchmark 11 Kịch Bản Chuẩn Hóa (`evaluate_test.py`)
+Chạy bộ kiểm thử tự động trên tập dữ liệu tổng hợp và lịch sử để đánh giá độ chính xác phân loại (F1-Score, tỷ lệ báo động giả 0% trên traffic biến động và khả năng bắt đúng 100% khi có lỗi):
+
+```bash
+python3 ai-engine/inference/evaluate_test.py --benchmark
+```
+
+---
+
+### Bước 3.7: Khởi Chạy Động Cơ Giám Sát Thời Gian Thực & Tempo RCA (`detector.py`)
+Tiến trình Daemon chạy liên tục, thực hiện lấy mẫu định kỳ 6 giây, chuẩn hóa trực tuyến (`EntityCalibrator`), chạy suy luận Deep Ensemble, bóc tách vết phân tán trên Tempo và mở cổng exporter Prometheus `:9108`:
+
+```bash
+# Chạy daemon giám sát thời gian thực kèm cổng xuất metrics :9108
+python3 ai-engine/inference/detector.py --interval 6 --metrics-port 9108
+```
+
+> **Ghi chú:** Khi phát hiện bất thường duy trì liên tục qua 3 chu kỳ đo (18 giây), `detector.py` sẽ tự động bắn tin nhắn trực tiếp kèm phân tích RCA ($T_{\text{WAN}}, T_{\text{self}}, T_{\text{DB}}$) về kênh Telegram.
+
+---
+
+## 4. Kịch Bản Kiểm Thử Thực Tế Gửi Cảnh Báo Tới Telegram
+
+Các kịch bản sau đây sử dụng trực tiếp các Pod microservices và hạ tầng thật của hệ thống. Bạn có thể mở một terminal riêng để chạy `detector.py` hoặc chỉ kiểm tra các rule Prometheus.
+
+---
+
+### Kịch Bản 0: Smoke Test Kết Nối Trực Tiếp Tới Telegram
+*Mục đích: Xác thực ngay lập tức bot token và Chat ID `6018907300` hoạt động bình thường từ Pod Robusta Runner.*
+
+```bash
+kubectl --context=k3d-hub-k3d -n monitoring exec deployment/robusta-runner -- python3 -c "
+from robusta.core.sinks.telegram.telegram_client import TelegramClient
+import os
+client = TelegramClient(chat_id=os.environ.get('TELEGRAM_CHAT_ID'), thread_id=None, bot_token=os.environ.get('TELEGRAM_BOT_TOKEN'))
+client.send_message('🔔 <b>[MultiCloud Observability]</b> Smoke Test kiểm tra kết nối Telegram thành công 100%!')
+print('Đã gửi tin nhắn thành công!')
+"
+```
+
+* **Kết quả kỳ vọng:** Nhận tin nhắn thông báo trên Telegram ngay lập tức.
+
+---
+
+### Kịch Bản 1: Giả Lập Pod Khởi Động Lại Liên Tục (`SpokePodCrashLooping`)
+*Mục đích: Bắt lỗi Pod microservice bị crash liên tục ngay trên cụm `aws-k3d`.*
+
+1. **Kích hoạt sự cố (Tạo Pod lỗi crash liên tục trên `aws-k3d`):**
    ```bash
-   wsl -d Ubuntu -e kubectl --context=k3d-hub-k3d -n monitoring exec deployment/robusta-runner -- python3 -c "
-   from robusta.core.sinks.telegram.telegram_client import TelegramClient
-   import os
-   token = os.environ.get('TELEGRAM_BOT_TOKEN')
-   chat_id = os.environ.get('TELEGRAM_CHAT_ID')
-   client = TelegramClient(chat_id=chat_id, thread_id=None, bot_token=token)
-   client.send_message('🔔 *[MultiCloud Observability]* Smoke Test kiểm tra kết nối Telegram thành công 100%!')
-   print('Đã gửi tin nhắn thành công!')
-   "
+   kubectl --context=k3d-aws-k3d -n teastore run crash-test-pod \
+     --image=busybox:1.36 \
+     --restart=Always -- /bin/sh -c "sleep 2; exit 1"
    ```
-2. **Kết quả mong đợi:**
-   - Trên Telegram của bạn nhận được tin nhắn:  
-     `🔔 [MultiCloud Observability] Smoke Test kiểm tra kết nối Telegram thành công 100%!`
 
----
-
-### Kịch Bản 1: Giả Lập Pod Khởi Động Lại Liên Tục (Test Rule `SpokePodCrashLooping`)
-*Mục đích: Kiểm tra khả năng bắt lỗi tự động khi có Pod microservice trên cụm Spoke bị crash hoặc cấu hình sai.*
-
-1. **Kích hoạt sự cố (Tạo Pod lỗi crash liên tục trên cụm `aws-k3d`):**
-   ```bash
-   wsl -d Ubuntu -e kubectl --context=k3d-aws-k3d -n teastore run crash-test-pod --image=busybox:1.36 --restart=Always -- /bin/sh -c "sleep 2; exit 1"
-   ```
 2. **Quan sát quá trình đánh giá:**
-   - Pod `crash-test-pod` sẽ bị restart nhiều lần (`CrashLoopBackOff`).
+   - Pod `crash-test-pod` sẽ khởi động lại nhiều lần (`CrashLoopBackOff`).
    - Sau khoảng **60 giây**, biểu thức `rate(k8s_container_restarts_total[5m]) > 0` thỏa mãn.
-   - Prometheus chuyển trạng thái rule sang **FIRING** $\rightarrow$ gửi sang Alertmanager $\rightarrow$ Robusta Runner.
-3. **Kết quả mong đợi trên Telegram:**
-   - Nhận thông báo cảnh báo từ Robusta với tiêu đề:
-     `🚨 FIRING: SpokePodCrashLooping - Cụm Spoke: Phát hiện Pod khởi động lại liên tục (CrashLooping)`
-   - Kèm bảng nhãn chi tiết: `k8s_cluster_name="aws-k3d"`, `namespace="teastore"`, `pod="crash-test-pod"`.
+   - Prometheus chuyển rule sang **FIRING** $\to$ chuyển qua Alertmanager $\to$ Robusta Runner.
+
+3. **Kết quả kỳ vọng trên Telegram:**
+   - Nhận thẻ cảnh báo: `🚨 FIRING: SpokePodCrashLooping`
+   - Nhãn đi kèm: `k8s_cluster_name="aws-k3d"`, `namespace="teastore"`, `pod="crash-test-pod"`.
+
 4. **Khôi phục & Dọn dẹp:**
    ```bash
-   wsl -d Ubuntu -e kubectl --context=k3d-aws-k3d -n teastore delete pod crash-test-pod
+   kubectl --context=k3d-aws-k3d -n teastore delete pod crash-test-pod
    ```
 
 ---
 
-### Kịch Bản 2: Giả Lập Đứt Gãy Mạng WAN / Mất Collector (Test Rule `SpokeClusterHeartbeatAbsent`)
-*Mục đích: Kiểm tra phát hiện mất hoàn toàn số liệu viễn trắc từ một đám mây thành viên.*
+### Kịch Bản 2: Tắt Dịch Vụ CSDL Gây Lỗi HTTP 5xx Dây Chuyền (`MicroserviceHighErrorRate`)
+*Mục đích: Kiểm tra phát hiện tỷ lệ lỗi giao dịch vi dịch vụ $> 5\%$ từ đồ thị dịch vụ OTel (`servicegraphconnector`).*
 
-1. **Kích hoạt sự cố (Tạm dừng Spoke Collector trên `aws-k3d`):**
+1. **Kích hoạt sự cố (Hạ Pod `teastore-persistence` trên `azure-k3d` về 0):**
    ```bash
-   wsl -d Ubuntu -e kubectl --context=k3d-aws-k3d -n monitoring scale deployment otel-collector-spoke --replicas=0
+   kubectl --context=k3d-azure-k3d -n teastore scale deployment teastore-persistence --replicas=0
    ```
-2. **Quan sát quá trình đánh giá:**
-   - Số liệu nhịp tim của cụm `aws-k3d` bị ngắt quãng.
-   - Sau **2 phút**, biểu thức `absent(up{k8s_cluster_name="aws-k3d"} == 1)` chuyển sang kích hoạt.
-   - Rule `SpokeClusterHeartbeatAbsent` kích hoạt mức độ **CRITICAL**.
-3. **Kết quả mong đợi trên Telegram:**
-   - Nhận thông báo cảnh báo khẩn cấp:
-     `🚨 FIRING: SpokeClusterHeartbeatAbsent`
-     `Mô tả: Không nhận được bất kỳ số liệu telemetry nào từ cụm Spoke (AWS hoặc Azure) về Central Hub trong hơn 2 phút.`
+
+2. **Tạo tải truy cập vào WebUI trên `aws-k3d` trong khoảng 2 phút:**
+   ```bash
+   for i in {1..40}; do
+     curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:8080/tools.descartes.teastore.webui/category?page=1&category=2"
+     sleep 3
+   done
+   ```
+
+3. **Kết quả kỳ vọng trên Telegram (sau ~120 giây):**
+   - Nhận cảnh báo: `🚨 FIRING: MicroserviceHighErrorRate`
+   - Mô tả lỗi: Tỷ lệ request thất bại vượt ngưỡng 5% trên dịch vụ `teastore-webui` hoặc `teastore-persistence`.
+
 4. **Khôi phục hệ thống:**
    ```bash
-   wsl -d Ubuntu -e kubectl --context=k3d-aws-k3d -n monitoring scale deployment otel-collector-spoke --replicas=1
-   ```
-   - Sau khi collector chạy lại khoảng 1 phút, Telegram sẽ nhận được thông báo giải quyết: `[RESOLVED] SpokeClusterHeartbeatAbsent`.
-
----
-
-### Kịch Bản 3: Giả Lập Nghẽn Mạng Xuyên Mây (Test Rule `CrossCloudWANLatencyDegraded`)
-*Mục đích: Kiểm tra phát hiện suy giảm chất lượng dịch vụ khi độ trễ mạng Internet vượt ngưỡng cam kết.*
-
-1. **Kích hoạt sự cố (Tăng độ trễ mạng WAN lên 2 giây bằng `tc netem` trên node Azure):**
-   ```bash
-   wsl -d Ubuntu -e docker exec k3d-azure-k3d-server-0 tc qdisc change dev eth0 root netem delay 2000ms 50ms loss 5%
-   ```
-2. **Sinh lưu lượng gọi dịch vụ:**
-   - Chạy lệnh curl liên tục vào trang TeaStore để phát sinh các giao dịch xuyên cụm từ WebUI (AWS) sang Persistence (Azure):
-     ```bash
-     wsl -d Ubuntu -e bash -c "for i in {1..20}; do curl -s 'http://localhost:8080/tools.descartes.teastore.webui/category?page=1&category=2' > /dev/null; sleep 1; done"
-     ```
-3. **Quan sát & Kết quả mong đợi trên Telegram:**
-   - Độ trễ P99 đo được từ `traces_service_graph_request_server_seconds_bucket` sẽ vọt lên $> 2000\text{ms}$.
-   - Sau **2 phút**, rule `CrossCloudWANLatencyDegraded` chuyển sang **FIRING**.
-   - Telegram nhận thông báo:
-     `🚨 FIRING: CrossCloudWANLatencyDegraded`
-     `Mô tả: Dịch vụ teastore-webui / teastore-recommender có độ trễ P99 vượt 1500ms liên tục trong 2 phút.`
-4. **Khôi phục đường truyền mạng WAN về tiêu chuẩn (10ms):**
-   ```bash
-   wsl -d Ubuntu -e docker exec k3d-azure-k3d-server-0 tc qdisc change dev eth0 root netem delay 10ms 2ms distribution normal loss 0.1%
+   kubectl --context=k3d-azure-k3d -n teastore scale deployment teastore-persistence --replicas=1
    ```
 
 ---
 
-### Kịch Bản 4: Khởi Chạy Động Cơ AI Detect V3 & Kiểm Thử Phân Rã Vết RCA
-*Mục đích: Kiểm tra khả năng phát hiện bất thường tinh vi bằng mô hình Deep Learning (GRU + TCN) và tự động bóc tách nguyên nhân gốc rễ (WAN vs App vs DB).*
+### Kịch Bản 3: Ngắt Kết Nối Viễn Trắc Spoke Về Hub (`SpokeClusterHeartbeatAbsent`)
+*Mục đích: Giả lập đứt cáp mạng WAN hoặc sập Agent thu thập viễn trắc tại cụm `aws-k3d`.*
 
-1. **Khởi chạy tiến trình AI Anomaly Detector daemon:**
-   - Mở một cửa sổ terminal WSL mới và chạy lệnh:
-     ```bash
-     cd /mnt/d/Workstation/HCMUS/Grade4/01_TTDATN_K23/Tuần\ 3/multicloud-monitoring
-     python3 ai-engine/inference/detector.py --interval 6 --metrics-port 9108
-     ```
-   - Terminal sẽ hiển thị nhật ký khởi tạo:
-     `[Detector] Initialized Universal GRU + TCN Autoencoders & Isolation Forest.`
-     `[Detector] Serving Prometheus metrics on port 9108.`
-     `[Detector] Monitoring 8 universal entity features across AWS, Azure, Hub.`
-2. **Kích hoạt tình huống bất thường (Tiêm trễ mạng WAN 180ms vào Azure Spoke):**
+1. **Kích hoạt sự cố (Hạ `otel-collector-spoke` trên `aws-k3d` về 0):**
    ```bash
-   wsl -d Ubuntu -e docker exec k3d-azure-k3d-server-0 tc qdisc change dev eth0 root netem delay 180ms 15ms
+   kubectl --context=k3d-aws-k3d -n monitoring scale deployment otel-collector-spoke --replicas=0
    ```
-   - Thực hiện một số giao dịch mua hàng hoặc duyệt sản phẩm trên WebUI: `http://localhost:8080/tools.descartes.teastore.webui/`
-3. **Kết quả mong đợi trên Telegram (Định dạng RCA giàu ngữ cảnh):**
-   - Động cơ AI phát hiện độ lệch Z-Score của `client_latency_p95` và `server_latency_p95`. Điểm MSE vọt lên $> 4.50$, Likelihood $> 90\%$.
-   - Telegram sẽ nhận được thông điệp RCA đặc thù từ AI:
-     ```text
-     🚨 *[AI-OPS ALERT] Multi-Cloud Anomaly Detected*
+
+2. **Kết quả kỳ vọng trên Telegram (sau ~120 giây):**
+   - Nhận cảnh báo cấp độ Critical: `🚨 FIRING: SpokeClusterHeartbeatAbsent`
+   - Chi tiết: Mất tín hiệu nhịp tim `up{k8s_cluster_name="aws-k3d"}` trong 2 phút.
+
+3. **Khôi phục hệ thống:**
+   ```bash
+   kubectl --context=k3d-aws-k3d -n monitoring scale deployment otel-collector-spoke --replicas=1
+   ```
+   *(Sau ~1 phút, Telegram sẽ nhận tiếp tin nhắn xanh `[RESOLVED] SpokeClusterHeartbeatAbsent`).*
+
+---
+
+### Kịch Bản 4: Tiêm Trễ Mạng WAN 2000ms (`CrossCloudWANLatencyDegraded`)
+*Mục đích: Kiểm tra phát hiện suy hao đường truyền mạng diện rộng khi trễ P99 vượt ngưỡng 1500ms.*
+
+1. **Tiêm độ trễ 2000ms lên card mạng của node `azure-k3d`:**
+   ```bash
+   docker exec k3d-azure-k3d-server-0 tc qdisc change dev eth0 root netem delay 2000ms 50ms loss 5%
+   ```
+
+2. **Sinh lưu lượng truy cập xuyên cụm:**
+   ```bash
+   for i in {1..30}; do
+     curl -s "http://localhost:8080/tools.descartes.teastore.webui/category?page=1&category=2" > /dev/null
+     sleep 2
+   done
+   ```
+
+3. **Kết quả kỳ vọng trên Telegram (sau ~120 giây):**
+   - Nhận cảnh báo: `🚨 FIRING: CrossCloudWANLatencyDegraded`
+   - Chi tiết: Độ trễ P99 xuyên cụm giữa `aws-k3d` và `azure-k3d` vượt ngưỡng 1500ms.
+
+4. **Khôi phục đường truyền mạng WAN về cấu hình baseline chuẩn (10ms ± 2ms):**
+   ```bash
+   docker exec k3d-azure-k3d-server-0 tc qdisc change dev eth0 root netem delay 10ms 2ms distribution normal loss 0.1%
+   ```
+
+---
+
+### Kịch Bản 5: Kiểm Thử AI Anomaly Engine V3 & Phân Rã Vết Tempo RCA (`AIOpsAnomalyDetected`)
+*Mục đích: Kiểm tra khả năng phát hiện "suy thoái mềm" của AI (trễ WAN 180ms — mức chưa chạm ngưỡng cứng 1500ms của Prometheus nhưng đã vượt xa baseline bình thường 10ms) và tự động bóc tách RCA.*
+
+1. **Khởi chạy AI Detector Daemon (trên một cửa sổ terminal riêng):**
+   ```bash
+   python3 ai-engine/inference/detector.py --interval 6 --metrics-port 9108
+   ```
+
+2. **Tiêm suy hao mạng WAN 180ms vào node `azure-k3d` và tạo tải:**
+   ```bash
+   docker exec k3d-azure-k3d-server-0 tc qdisc change dev eth0 root netem delay 180ms 15ms
+   for i in {1..25}; do
+     curl -s "http://localhost:8080/tools.descartes.teastore.webui/category?page=1&category=2" > /dev/null
+     sleep 2
+   done
+   ```
+
+3. **Kết quả kỳ vọng trên Telegram (sau ~18 – 30 giây):**
+   - **Kênh 1 (Tin nhắn trực tiếp từ AI Engine Sink):** Nhận thông báo định dạng HTML:
+     ```
+     🚨 [AI-OPS ALERT] Multi-Cloud Anomaly Detected
      ━━━━━━━━━━━━━━━━━━━━━━━━━━
-     📍 *Target Entity*: `azure:teastore-persistence`
-     📊 *Likelihood*: `96.4%` (MSE: `5.1240`)
-     ⚡ *Verdict*: `ALERT` (Sustained Anomaly)
+     📍 Target Entity: azure:teastore-persistence
+     📊 Likelihood: 94.2% (MSE: 0.8124)
+     ⚡ Verdict: ALERT (Sustained Anomaly)
 
-     🔍 *Root Cause Evidence (RCA)*:
-     • [CROSS_CLOUD_WAN_DELAY] aws->azure (T_WAN=194.2ms)
-     • client_latency_p95 lệch chuẩn x85.4 so với baseline
+     🔍 Root Cause Evidence (RCA):
+       • [CROSS_CLOUD_WAN_DELAY] Severe cross-cloud transit lag detected
 
-     ⏱️ *Tempo Trace Decomposition*:
-       • Cross-Cloud WAN Lag: `194.2ms`
-       • Microservice Self-Exec: `14.1ms`
-       • Database Query Time: `8.5ms`
+     ⏱️ Tempo Trace Decomposition:
+       • Cross-Cloud WAN Lag: 184.5ms
+       • Microservice Self-Exec: 12.3ms
+       • Database Query Time: 8.4ms
      ━━━━━━━━━━━━━━━━━━━━━━━━━━
-     💡 *Recommendation*: Inspect edge WAN shaping or database slow queries.
+     💡 Recommendation: Inspect edge WAN shaping or database slow queries.
      ```
-   - Đồng thời trên Prometheus, metric `ai_anomaly_likelihood_percent > 80` xuất hiện và kích hoạt rule cảnh báo `AIOpsAnomalyDetected`.
-4. **Khôi phục hệ thống:**
+   - **Kênh 2 (Kênh Prometheus/Alertmanager):** Khi metric `ai_anomaly_likelihood_percent > 80` tại cổng `:9108`, rule `AIOpsAnomalyDetected` sẽ bắn tiếp cảnh báo từ Alertmanager sang Robusta.
+
+4. **Khôi phục mạng WAN:**
    ```bash
-   wsl -d Ubuntu -e docker exec k3d-azure-k3d-server-0 tc qdisc change dev eth0 root netem delay 10ms 2ms distribution normal loss 0.1%
+   docker exec k3d-azure-k3d-server-0 tc qdisc change dev eth0 root netem delay 10ms 2ms distribution normal loss 0.1%
    ```
 
 ---
 
-## 4. Hướng Dẫn Xử Lý Nhanh Khi Cần Tắt Tiếng (Silence) & Điều Chỉnh Ngưỡng
+## 5. Lệnh Giám Sát, Gỡ Lỗi & Quản Lý Cảnh Báo Nhanh (Cheatsheet)
 
-- **Truy cập Alertmanager UI để quản lý cảnh báo:**  
-  Bạn có thể mở port-forward để vào giao diện web của Alertmanager:
-  ```bash
-  wsl -d Ubuntu -e kubectl --context=k3d-hub-k3d -n monitoring port-forward svc/alertmanager 9093:9093
-  ```
-  Truy cập `http://localhost:9093` để xem các nhóm cảnh báo đang gộp, hoặc tạo quy tắc tắt tiếng (Silence) trong thời gian bảo trì/chạy benchmark.
-- **Điều chỉnh thời gian cooldown của Robusta:**  
-  Trong file [k8s/base/smart-alerting-robusta/02-configmap-playbooks.yaml](file:///d:/Workstation/HCMUS/Grade4/01_TTDATN_K23/Tuần%203/multicloud-monitoring/k8s/base/smart-alerting-robusta/02-configmap-playbooks.yaml), biến `cooldown` mặc định được đặt để tránh hiện tượng bão thông báo (Alert Storm).
-- **Xem nhật ký trực tiếp của Robusta Runner:**
-  ```bash
-  wsl -d Ubuntu -e kubectl --context=k3d-hub-k3d -n monitoring logs deployment/robusta-runner -f
-  ```
+| Nhu cầu thao tác | Lệnh thực thi trong terminal WSL Linux |
+| :--- | :--- |
+| **Xem log webhook của Robusta Runner** | `kubectl --context=k3d-hub-k3d -n monitoring logs deployment/robusta-runner -f` |
+| **Xem log của Alertmanager** | `kubectl --context=k3d-hub-k3d -n monitoring logs deployment/alertmanager -f` |
+| **Mở giao diện Web Alertmanager UI (:9093)** | `kubectl --context=k3d-hub-k3d -n monitoring port-forward svc/alertmanager 9093:9093` |
+| **Kiểm tra trạng thái các Alert trên Prometheus** | Mở trình duyệt tại `http://localhost:9090/alerts` |
+| **Kiểm tra metric xuất ra của AI Engine (:9108)** | `curl -s http://localhost:9108/metrics \| grep ai_` |
+| **Kiểm tra cấu hình tc netem hiện tại trên node** | `docker exec k3d-azure-k3d-server-0 tc qdisc show dev eth0` |
