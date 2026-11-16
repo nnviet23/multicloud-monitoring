@@ -46,85 +46,26 @@ Tuy nhiên, kiến trúc đa đám mây đặt ra **3 thách thức viễn trắ
 3. **Bảo mật đường truyền qua mạng công cộng (Perimeter Security):** Dữ liệu viễn trắc di chuyển giữa các đám mây qua mạng Internet công cộng rất dễ bị nghe lén, giả mạo hoặc tấn công man-in-the-middle (MITM).
 
 Để giải quyết bài toán trên, đồ án xây dựng hệ thống giám sát trên mô hình ứng dụng mẫu **TeaStore** (được chứng nhận bởi SPEC Research Group). Ứng dụng TeaStore gồm 6 vi dịch vụ viết bằng Java và 1 cơ sở dữ liệu quan hệ MySQL, được chia tách theo mô hình kiến trúc phân tầng:
-- **Cụm Vệ tinh 1 - `aws-k3d` (Tầng Điện Toán & Giao Diện - Compute Tier):** Mô phỏng cụm AWS EKS, lưu trữ các dịch vụ tiếp nhận lưu lượng người dùng và tính toán phi trạng thái:
+- **Cụm Spoke 1 - `aws-k3d` (Tầng Điện Toán & Giao Diện - Compute Tier):** Mô phỏng cụm AWS EKS, lưu trữ các dịch vụ tiếp nhận lưu lượng người dùng và tính toán phi trạng thái:
   - `teastore-webui`: Cổng giao diện người dùng web.
   - `teastore-auth`: Dịch vụ xác thực và cấp phiên đăng nhập.
   - `teastore-image`: Dịch vụ xử lý và lưu trữ bộ nhớ đệm hình ảnh sản phẩm.
   - `teastore-recommender`: Dịch vụ gợi ý sản phẩm dựa trên học máy nhẹ.
   - `teastore-registry`: Dịch vụ định danh đăng ký vi dịch vụ qua giao thức **RMI (Remote Method Invocation - Gọi phương thức từ xa của Java)**.
   - `locust-loadgen`: Máy sinh tải người dùng thực nghiệm.
-- **Cụm Vệ tinh 2 - `azure-k3d` (Tầng Lưu Trữ Trạng Thái - Data Tier):** Mô phỏng cụm Azure AKS, lưu trữ các dịch vụ nghiệp vụ cốt lõi và dữ liệu trạng thái:
+- **Cụm Spoke 2 - `azure-k3d` (Tầng Lưu Trữ Trạng Thái - Data Tier):** Mô phỏng cụm Azure AKS, lưu trữ các dịch vụ nghiệp vụ cốt lõi và dữ liệu trạng thái:
   - `teastore-persistence`: Dịch vụ trừu tượng hóa tầng dữ liệu, cung cấp REST API cho các dịch vụ trên `aws-k3d`.
   - `teastore-db`: Cơ sở dữ liệu quan hệ MySQL 8.0 lưu trữ thông tin tài khoản, danh mục sản phẩm và lịch sử đặt hàng.
 - **Cụm Trung Tâm - `hub-k3d` (Tầng Giám Sát Tập Trung - Central Observability Hub):** Cụm tiếp nhận tập trung toàn bộ dữ liệu viễn trắc từ cả hai Spoke, xử lý, chuẩn hóa, phân tầng lưu trữ và vận hành động cơ trí tuệ nhân tạo AIOps.
 
-> [!TIP]
+
 > **Sơ Đồ 1 — Tổng Quan Kiến Trúc Nền Tảng Giám Sát Đa Đám Mây (Hub-Spoke Native mTLS 1.3):**
-> *(Bản vẽ kỹ thuật chi tiết chuẩn mực vẽ bằng skill `stack-diagram`)*
+
 > 
 > ![Sơ đồ 1: Tổng quan Kiến trúc Hệ thống Multi-Cloud Hub-Spoke](../diagram/01_system_architecture_overview.png)
-> *(Xem bản vẽ tương tác chất lượng cao tại: [01_system_architecture_overview.html](../diagram/01_system_architecture_overview.html))*
 
-```mermaid
-flowchart TB
-  subgraph AWS_Spoke ["CỤM VỆ TINH 1: aws-k3d (AWS EKS Compute Tier - 172.28.0.2)"]
-    direction TB
-    Locust["Locust Load Generator"] -->|HTTP/REST| WebUI["teastore-webui"]
-    WebUI -->|HTTP| Auth["teastore-auth"]
-    WebUI -->|HTTP| Image["teastore-image"]
-    WebUI -->|HTTP| Rec["teastore-recommender"]
-    WebUI -.->|RMI :1099| Reg["teastore-registry"]
-    
-    subgraph Spoke1_Collector ["OTel Edge Collector (aws-k3d)"]
-      S1_Recv["Receivers (OTLP, Host, Kubelet)"] --> S1_Proc["Processors (Memory, Drop-Noise, 20% Sample, k8s, Transform, Batch)"]
-      S1_Proc --> S1_Exp["mTLS 1.3 Client Exporter"]
-    end
-    WebUI & Auth & Image & Rec -.->|OTLP gRPC| S1_Recv
-  end
 
-  subgraph Azure_Spoke ["CỤM VỆ TINH 2: azure-k3d (Azure AKS Data Tier - 172.28.0.3)"]
-    direction TB
-    Persist["teastore-persistence"] -->|JDBC :3306| MySQL[("teastore-db (MySQL 8.0)")]
-    
-    subgraph Spoke2_Collector ["OTel Edge Collector (azure-k3d)"]
-      S2_Recv["Receivers (OTLP, Host, Kubelet, Filelog)"] --> S2_Proc["Processors (Memory, Drop-Noise, 20% Sample, k8s, Transform, Batch)"]
-      S2_Proc --> S2_Exp["mTLS 1.3 Client Exporter"]
-    end
-    Persist & MySQL -.->|OTLP & Filelog| S2_Recv
-  end
-
-  WebUI ==>|"Giao tiếp Xuyên Đám Mây (REST API over WAN)"| Persist
-
-  subgraph WAN_Overlay ["MẠNG DIỆN RỘNG GIẢ LẬP: mc-monitoring-net (172.28.0.0/16)"]
-    WAN_TC["Linux Kernel tc netem (RTT: 10ms +-2ms, Loss: 0.1%)"]
-  end
-
-  S1_Exp ==>|"OTLP gRPC over mTLS 1.3 (:4317)"| Hub_Gateway
-  S2_Exp ==>|"OTLP gRPC over mTLS 1.3 (:4317)"| Hub_Gateway
-
-  subgraph Hub_Cluster ["CỤM TRUNG TÂM: hub-k3d (Central Observability Hub - 172.28.0.4)"]
-    direction TB
-    Hub_Gateway["Hub OTel Gateway (:4317 Native mTLS)\nOTTL Normalizer + Tail Sampling + ServiceGraph"]
-    
-    Hub_Gateway -->|Metrics OTLP| ThanosRecv["Thanos Receive (:10901)"]
-    Hub_Gateway -->|Logs OTLP/HTTP| Loki["Grafana Loki (:3100)"]
-    Hub_Gateway -->|Traces OTLP| Tempo["Grafana Tempo (:4317)"]
-    
-    ThanosRecv & Loki & Tempo -->|Cold Storage Egress| MinIO[("MinIO S3 Object Storage")]
-    
-    AIOps["AI Anomaly Engine V3\n(GRU + TCN + IsoForest)"] <-->|PromQL Query| ThanosRecv
-    AIOps -->|Trace RCA| Tempo
-    AIOps -->|Exporter :9108| Prom["Prometheus (Hub)"]
-    
-    Prom --> Alertmanager["Alertmanager"]
-    Alertmanager --> Robusta["Robusta Runner"]
-    Robusta -->|Telegram Bot| Admin["Kỹ sư Vận hành (SRE)"]
-    
-    Grafana["Grafana Enterprise (8 Dashboards / 61 Panels)"] --> ThanosRecv & Loki & Tempo & Prom
-  end
-```
-
----
+![](../diagram/00_SystemArchitecture.png)
 
 ### 1.2. 5 Chiến Lược Kỹ Thuật Cốt Lõi
 
@@ -157,12 +98,12 @@ flowchart TB
 
 Toàn bộ hệ thống được tự động hóa 100% thông qua công cụ quản lý tác vụ `make` kết hợp cùng các Playbook Ansible và công cụ quản trị khai báo Kustomize tuân thủ nghiêm ngặt **Nguyên Tắc Đơn Nhiệm (SRP - Single Responsibility Principle)**: mỗi tệp manifest chỉ đảm nhận đúng một đối tượng Kubernetes, được đánh số theo thứ tự phụ thuộc (`00-namespace.yaml`, `01-secret.yaml`, `02-configmap.yaml`, `03-pvc.yaml`, `04-deployment.yaml`, `05-service.yaml`).
 
-> [!TIP]
+
 > **Sơ Đồ 2 — Vòng Đời Cấp Phát Hạ Tầng & Tự Động Hóa Vận Hành (Makefile & Ansible Lifecycle):**
-> *(Bản vẽ kỹ thuật chi tiết chuẩn mực vẽ bằng skill `stack-diagram`)*
+
 > 
 > ![Sơ đồ 2: Vòng đời Cấp phát Hạ tầng và Tự động hóa qua Makefile & Ansible](../diagram/02_infrastructure_provisioning_lifecycle.png)
-> *(Xem bản vẽ tương tác chất lượng cao tại: [02_infrastructure_provisioning_lifecycle.html](../diagram/02_infrastructure_provisioning_lifecycle.html))*
+
 
 ```mermaid
 flowchart TD
@@ -215,6 +156,11 @@ flowchart TD
   Step6 --> EndNode(["Hệ thống Sẵn sàng Hoạt động 100%"])
 ```
 
+#### Minh chứng Khởi tạo & Kiểm thử Toàn diện Cụm (`make verify`)
+Dưới đây là hình ảnh thực thi lệnh `make verify`, xác nhận trạng thái toàn bộ các Node, Pod và tài nguyên trên cả 3 cụm `hub-k3d`, `aws-k3d`, `azure-k3d` đạt 100% Running và Ready:
+
+![Minh chứng lệnh make verify toàn bộ 3 cụm](../pics/C0_make_verify.png)
+
 ---
 
 ## PHẦN 2: TẦNG MẠNG DIỆN RỘNG (WAN) & HẠ TẦNG KHÓA CÔNG KHAI (PKI / mTLS 1.3)
@@ -237,12 +183,12 @@ flowchart TD
 
 **mTLS (Mutual Transport Layer Security - Bảo mật tầng giao vận hai chiều):** Cơ chế bảo mật mạng mà ở đó **cả máy khách (Spoke Collector) và máy chủ (Hub Gateway) đều phải xuất trình chứng chỉ số X.509 hợp lệ** được ký bởi cùng một cơ quan cấp phát chứng chỉ chung (Root CA) thì kênh truyền mới được thiết lập.
 
-> [!TIP]
+
 > **Sơ Đồ 3 — Khởi Tạo Khóa PKI & Cơ Chế Bắt Tay Bảo Mật mTLS 1.3 Native:**
-> *(Bản vẽ kỹ thuật chi tiết chuẩn mực vẽ bằng skill `stack-diagram`)*
+
 > 
 > ![Sơ đồ 3: Quy trình Cấp phát Khóa PKI và Bắt tay mTLS 1.3 Native](../diagram/03_pki_mtls_initialization_handshake.png)
-> *(Xem bản vẽ tương tác chất lượng cao tại: [03_pki_mtls_initialization_handshake.html](../diagram/03_pki_mtls_initialization_handshake.html))*
+
 
 ```mermaid
 sequenceDiagram
@@ -299,12 +245,12 @@ Nhờ cơ chế `RequireAndVerifyClientCert` và `min_version: "1.3"`, bất k�
 
 Toàn bộ luồng dữ liệu từ khi sinh ra tại các vi dịch vụ đến khi lưu trữ an toàn trong các cơ sở dữ liệu viễn trắc chuyên dụng được mô tả chi tiết trong sơ đồ hợp nhất dưới đây:
 
-> [!TIP]
+
 > **Sơ Đồ 4 — Đường Ống Xử Lý Viễn Trắc Xuyên Suốt Hợp Nhất (Spoke Edge to Central Hub):**
-> *(Bản vẽ kỹ thuật chi tiết chuẩn mực vẽ bằng skill `stack-diagram`)*
+
 > 
 > ![Sơ đồ 4: Đường ống Xử lý Viễn trắc Xuyên suốt Hợp nhất](../diagram/04_end_to_end_telemetry_pipeline.png)
-> *(Xem bản vẽ tương tác chất lượng cao tại: [04_end_to_end_telemetry_pipeline.html](../diagram/04_end_to_end_telemetry_pipeline.html))*
+
 
 ```mermaid
 flowchart LR
@@ -380,9 +326,9 @@ flowchart LR
 
 ---
 
-### 3.1. Luồng Thu Thập & Tiền Xử Lý Tại Cụm Vệ Tinh (`aws-k3d`, `azure-k3d`)
+### 3.1. Luồng Thu Thập & Tiền Xử Lý Tại Cụm Spoke (`aws-k3d`, `azure-k3d`)
 
-Tại các cụm vệ tinh, tiến trình **OpenTelemetry Edge Collector** hoạt động như một trạm thanh lọc và đóng gói dữ liệu:
+Tại các cụm Spoke, tiến trình **OpenTelemetry Edge Collector** hoạt động như một trạm thanh lọc và đóng gói dữ liệu:
 1. **4 Bộ Thu Nhận (Receivers):**
    - `otlp`: Lắng nghe trên cổng `:4317` (gRPC) và `:4318` (HTTP) để tiếp nhận spans và metrics tự động đẩy ra từ OTel Java Agent tích hợp trong các container TeaStore.
    - `hostmetrics`: Thu thập thông số phần cứng của máy chủ Linux thông qua 7 trình cạo (scrapers): `cpu`, `memory`, `disk`, `filesystem`, `network`, `load`, và `paging`.
@@ -464,42 +410,13 @@ Tại cụm Hub, OTel Gateway đảm nhận vai trò bộ não điều phối d�
 
 ## PHẦN 4: KIẾN TRÚC LƯỢC ĐỒ NGỮ NGHĨA 2 TẦNG (TWO-TIER SEMANTIC SCHEMA ARCHITECTURE)
 
-> [!TIP]
+
 > **Sơ Đồ 5 — Kiến Trúc Lược Đồ Ngữ Nghĩa 2 Tầng (8 Atomic Categories to 4 Entity Profiles):**
-> *(Bản vẽ kỹ thuật chi tiết chuẩn mực vẽ bằng skill `stack-diagram`)*
+
 > 
 > ![Sơ đồ 5: Kiến trúc Lược đồ Ngữ nghĩa 2 Tầng](../diagram/05_two_tier_semantic_schema_architecture.png)
-> *(Xem bản vẽ tương tác chất lượng cao tại: [05_two_tier_semantic_schema_architecture.html](../diagram/05_two_tier_semantic_schema_architecture.html))*
 
-```mermaid
-classDiagram
-  class Tier1_AtomicCategories {
-    <<Tầng 1: 8 Danh mục Ngữ nghĩa Nguyên tử>>
-    CAT_01: OS & System Kernel (CPU, Mem, Paging)
-    CAT_02: Storage & Filesystem (Disk I/O, MinIO S3)
-    CAT_03: Network & Transport (WAN tc, mTLS 1.3)
-    CAT_04: Cloud Context (AWS EKS, Azure AKS)
-    CAT_05: Kubernetes & Containers (Pod, Node, NS)
-    CAT_06: JVM & Process Runtime (Heap, GC, Threads)
-    CAT_07: HTTP & RPC APM (RED Metrics, Traces)
-    CAT_08: Database Client & Storage (MySQL JDBC)
-  }
 
-  class Tier2_EntityProfiles {
-    <<Tầng 2: 4 Hồ sơ Giám sát Thực thể>>
-    webapp_monitoring_schema_yaml
-    instance_monitoring_schema_yaml
-    database_monitoring_schema_yaml
-    wan_network_monitoring_schema_yaml
-  }
-
-  Tier1_AtomicCategories --> Tier2_EntityProfiles : "Lắp ghép theo Ma Trận Thành Phần (Composition Matrix)"
-  
-  Tier2_EntityProfiles ..> webapp_monitoring_schema_yaml : "Entity 1: Java Microservices (CAT-07+06+05+08+03+04)"
-  Tier2_EntityProfiles ..> instance_monitoring_schema_yaml : "Entity 2: Worker Nodes (CAT-01+02+03+04+05)"
-  Tier2_EntityProfiles ..> database_monitoring_schema_yaml : "Entity 3: MySQL DB (CAT-08+02+01+03+05+04)"
-  Tier2_EntityProfiles ..> wan_network_monitoring_schema_yaml : "Entity 4: WAN Bridge & Hub (CAT-03+02+04+01+05)"
-```
 
 ### 4.1. Bản Chất của OTel SemConv & Bài Toán Tiến Hóa Lược Đồ (`v1.21` $\rightarrow$ `v1.45`)
 
@@ -558,12 +475,12 @@ Các tệp hồ sơ thực thể (nằm tại `docs/schemas/profiles/`) được
 
 ## PHẦN 5: ĐỘNG CƠ AI PHÁT HIỆN BẤT THƯỜNG V3, PHÂN RÃ RCA & HỆ SINH THÁI CẢNH BÁO ĐA LUỒNG
 
-> [!TIP]
+
 > **Sơ Đồ 6 — Động Cơ AI Anomaly Engine V3, Phân Rã Vết RCA & Hệ Sinh Thái Cảnh Báo:**
-> *(Bản vẽ kỹ thuật chi tiết chuẩn mực vẽ bằng skill `stack-diagram`)*
+
 > 
 > ![Sơ đồ 6: AI Anomaly Engine V3, Phân rã Vết RCA và Hệ sinh thái Cảnh báo](../diagram/06_ai_anomaly_rca_alerting_ecosystem.png)
-> *(Xem bản vẽ tương tác chất lượng cao tại: [06_ai_anomaly_rca_alerting_ecosystem.html](../diagram/06_ai_anomaly_rca_alerting_ecosystem.html))*
+
 
 ```mermaid
 flowchart TD
@@ -660,28 +577,37 @@ Kết quả phân rã được đẩy ra Prometheus Exporter (`:9108`) dưới d
 
 ### 5.4. Hệ Thống Quy Tắc Cảnh Báo Đa Tầng
 
-#### A. 5 Quy Tắc Cảnh Báo Prometheus Chuẩn Mực (`multicloud-signoz-alerts`)
-Trong cấu hình Alertmanager của Prometheus tại Hub (`03-statefulset-prometheus.yaml`), 5 quy tắc cảnh báo được cấu hình chính xác:
+#### A. 6 Quy Tắc Cảnh Báo Prometheus Chuẩn Mực (`multicloud-signoz-alerts`)
+Trong cấu hình của Prometheus và Alertmanager tại Hub (`01-configmap-prometheus-rules.yaml` và `00-configmap.yaml`), 6 quy tắc cảnh báo được cấu hình chính xác và định tuyến tự động sang Robusta Runner qua Webhook:
 1. **`SpokeClusterHeartbeatAbsent` (Mất nhịp tim cụm Spoke):**
-   - *Biểu thức PromQL:* `absent(up{job="otel-collector-spoke"}) == 1`
-   - *Ngưỡng & Thời gian:* Kích hoạt sau `1m`.
+   - *Biểu thức PromQL:* `absent(up{k8s_cluster_name="aws-k3d"} == 1) or absent(up{k8s_cluster_name="azure-k3d"} == 1)`
+   - *Ngưỡng & Thời gian:* Kích hoạt sau `2m` (`for: 120s`).
    - *Mục đích:* Phát hiện sự cố đứt gãy kết nối mạng WAN toàn phần, chứng chỉ mTLS hết hạn hoặc container Spoke Collector bị sập hoàn toàn.
 2. **`MicroserviceHighErrorRate` (Tỷ lệ lỗi vi dịch vụ vượt ngưỡng):**
-   - *Biểu thức PromQL:* `sum by (server) (rate(traces_service_graph_request_failed_total[1m])) / (sum by (server) (rate(traces_service_graph_request_total[1m])) + 1e-4) > 0.05`
+   - *Biểu thức PromQL:* `(sum by (server) (rate(traces_service_graph_request_failed_total[2m])) / (sum by (server) (rate(traces_service_graph_request_total[2m])) + 0.0001)) * 100 > 5`
    - *Ngưỡng & Thời gian:* Tỷ lệ lỗi $> 5\%$ kéo dài trong `2m`.
    - *Mục đích:* Bắt lỗi mã nguồn ứng dụng (NullPointerException, lỗi HTTP 500) trên các dịch vụ TeaStore.
 3. **`CrossCloudWANLatencyDegraded` (Suy thoái mạng diện rộng liên đám mây):**
-   - *Biểu thức PromQL:* `histogram_quantile(0.95, sum by (le) (rate(traces_service_graph_request_server_seconds_bucket{server="teastore-persistence"}[1m]))) > 0.15`
-   - *Ngưỡng & Thời gian:* Độ trễ P95 gọi sang `azure-k3d` $> 150\text{ms}$ kéo dài `2m`.
-   - *Mục đích:* Phát hiện tắc nghẽn đường truyền WAN, mất gói dữ liệu cao do nhà mạng Internet hoặc cấu hình mạng bị suy thoái.
+   - *Biểu thức PromQL:* `histogram_quantile(0.99, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[2m]))) * 1000 > 1500`
+   - *Ngưỡng & Thời gian:* Độ trễ P99 vượt $1500\text{ms}$ kéo dài `2m`.
+   - *Mục đích:* Phát hiện tắc nghẽn đường truyền WAN, mất gói dữ liệu cao do nhà mạng Internet hoặc cấu hình mạng bị suy thoái bởi `tc netem`.
 4. **`OTelCollectorMemoryHigh` (Bộ nhớ OTel Collector chạm trần an toàn):**
-   - *Biểu thức PromQL:* `container_memory_working_set_bytes{container="otel-collector"} / container_spec_memory_limit_bytes > 0.85`
-   - *Ngưỡng & Thời gian:* Tiêu thụ RAM $> 85\%$ kéo dài `3m`.
+   - *Biểu thức PromQL:* `sum by (pod) (container_memory_working_set_bytes{pod=~"otel-collector.*"}) > 4e+08`
+   - *Ngưỡng & Thời gian:* Tiêu thụ RAM $> 400\text{MB}$ kéo dài `2m`.
    - *Mục đích:* Cảnh báo sớm trước khi collector bị nhân Linux hạ sát bằng OOMKilled do bão dữ liệu viễn trắc.
 5. **`AIOpsAnomalyDetected` (Trí tuệ nhân tạo phát hiện bất thường toàn hệ thống):**
-   - *Biểu thức PromQL:* `ai_anomaly_detected == 1`
-   - *Ngưỡng & Thời gian:* Tín hiệu bằng `1` liên tục trong `30s`.
+   - *Biểu thức PromQL:* `ai_anomaly_likelihood_percent > 80`
+   - *Ngưỡng & Thời gian:* Xác suất bất thường $> 80\%$ kéo dài trong `30s`.
    - *Mục đích:* Cảnh báo đa chiều khi các mô hình học sâu phát hiện sự kết hợp bất thường tinh vi giữa CPU, RAM, độ trễ và tỷ lệ lỗi mà các ngưỡng tĩnh truyền thống không thể bắt được.
+6. **`SpokePodCrashLooping` (Phát hiện Pod khởi động lại liên tục trên cụm Spoke):**
+   - *Biểu thức PromQL:* `(rate(k8s_container_restarts_total[5m]) > 0) or (changes(process_uptime_seconds[5m]) > 2) or (increase(kube_pod_container_status_restarts_total[5m]) > 1)`
+   - *Ngưỡng & Thời gian:* Kích hoạt sau `1m`.
+   - *Mục đích:* Cảnh báo sớm khi Pod microservice trên cụm Spoke (như Recommender, Image) gặp lỗi livenessProbe, startupProbe thất bại hoặc crash liên tục.
+
+#### Minh chứng Trạng thái Các Quy Tắc Cảnh Báo Trên Prometheus & Alertmanager
+Dưới đây là hình ảnh thực tế danh mục các Alert Rules đang được nạp và đánh giá liên tục trong hệ thống:
+
+![Minh chứng Danh mục Alert Rules trên Prometheus và Alertmanager](../pics/0_Alert_rules.png)
 
 #### B. Cảnh Báo Đốt Ngân Sách Lỗi Pyrra SLO (Multi-Window Multi-Burn-Rate)
 Tuân thủ chuẩn Google SRE Workbook, Pyrra theo dõi mục tiêu **Tính sẵn sàng $99.5\%$ trong 30 ngày** (cho phép ngân sách lỗi là $0.5\%$):
@@ -713,6 +639,8 @@ Toàn bộ 61 Panels trên 8 Dashboards được thiết kế theo chuẩn JSON 
 | **Multi-Cloud Node Memory Usage** | `(1 - (sum by (k8s_cluster_name) (node_memory_MemAvailable_bytes) / sum by (k8s_cluster_name) (node_memory_MemTotal_bytes))) * 100` | Tỷ lệ chiếm dụng RAM thực tế trên các Worker Node theo từng cụm. |
 | **Active Firing Alerts** | `sum by (severity) (ALERTS{alertstate="firing"})` | Tổng hợp số lượng cảnh báo đang kích hoạt phân theo mức độ (Critical, Warning, Info). |
 
+![Minh chứng Dashboard 01 - Executive Overview](../pics/1.1.%20Executive%20Overview.png)
+
 #### Dashboard 2: `02. Multi-Cloud Topology & Service Map` (Mã UID: `mc-topology`)
 | Tên Panel | Thuộc Tính OTel SemConv & Biểu Thức PromQL | Ý Nghĩa Vận Hành & Mục Đích Chính |
 | :--- | :--- | :--- |
@@ -720,6 +648,9 @@ Toàn bộ 61 Panels trên 8 Dashboards được thiết kế theo chuẩn JSON 
 | **Inter-Cloud Edge Traffic Breakdown** | `sum by (client, server) (rate(traces_service_graph_request_total[1m]))` | Bảng phân tích chi tiết lưu lượng gọi qua lại giữa từng cặp vi dịch vụ. |
 | **Edge Error Rate Heatmap** | `sum by (client, server) (rate(traces_service_graph_request_failed_total[1m]))` | Biểu đồ nhiệt phát hiện ngay đường truyền kết nối vi dịch vụ nào đang phát sinh lỗi. |
 | **Cross-Cluster Link Latency Matrix** | `histogram_quantile(0.95, sum by (le, client, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000` | Ma trận độ trễ P95 giữa các dịch vụ, khoanh vùng thắt cổ chai liên cụm. |
+
+![Minh chứng Dashboard 02 - Multi-Cloud Topology Service Graph](../pics/2.1%20Topology.png)
+![Minh chứng Dashboard 02 - Inter-Cloud Traffic Breakdown & Latency Heatmap](../pics/2.2%20Topology.png)
 
 #### Dashboard 3: `03. Application & JVM (RED Metrics)` (Mã UID: `mc-application-red`)
 | Tên Panel | Thuộc Tính OTel SemConv & Biểu Thức PromQL | Ý Nghĩa Vận Hành & Mục Đích Chính |
@@ -731,6 +662,9 @@ Toàn bộ 61 Panels trên 8 Dashboards được thiết kế theo chuẩn JSON 
 | **JVM Thread Pool Saturation** | `sum by (service_name) (jvm_thread_count or process_runtime_jvm_threads_count)` | Số lượng luồng thực thi trong JVM, phát hiện cạn kiệt Thread Pool của Tomcat. |
 | **JVM Garbage Collection Time** | `sum by (service_name) (rate(jvm_gc_duration_seconds_sum[1m])) * 1000` | Tổng thời gian tạm dừng ứng dụng do GC dọn rác mỗi giây (ms/s). |
 
+![Minh chứng Dashboard 03 - Application RED Metrics](../pics/3.1.%20Application%20&%20JVM%20(RED).png)
+![Minh chứng Dashboard 03 - JVM Memory & Garbage Collection](../pics/3.2.%20Application%20&%20JVM%20(RED).png)
+
 #### Dashboard 4: `04. Compute & OS Kernel (USE Metrics)` (Mã UID: `mc-infra-use`)
 | Tên Panel | Thuộc Tính OTel SemConv & Biểu Thức PromQL | Ý Nghĩa Vận Hành & Mục Đích Chính |
 | :--- | :--- | :--- |
@@ -741,6 +675,9 @@ Toàn bộ 61 Panels trên 8 Dashboards được thiết kế theo chuẩn JSON 
 | **Linux CPU Load Average 1m/5m/15m**| `node_load1`, `node_load5`, `node_load15` | Độ dài hàng đợi tiến trình chờ CPU của nhân Linux OS. |
 | **Memory Paging Faults Rate** | `sum by (k8s_cluster_name, type) (rate(system_paging_faults_total[1m]))` | Tần suất phát sinh lỗi trang nhớ (Page Faults/sec), phát hiện thiếu hụt RAM vật lý. |
 
+![Minh chứng Dashboard 04 - Compute & OS Kernel USE Metrics](../pics/4.1.%20Compute%20&%20OS%20Kernel%20(USE).png)
+![Minh chứng Dashboard 04 - Container Resources & Memory Working Set](../pics/4.2.png)
+
 #### Dashboard 5: `05. Network & WAN Transport` (Mã UID: `mc-wan-telemetry`)
 | Tên Panel | Thuộc Tính OTel SemConv & Biểu Thức PromQL | Ý Nghĩa Vận Hành & Mục Đích Chính |
 | :--- | :--- | :--- |
@@ -748,6 +685,8 @@ Toàn bộ 61 Panels trên 8 Dashboards được thiết kế theo chuẩn JSON 
 | **Simulated WAN Packet Drop Rate** | `sum by (k8s_cluster_name) (rate(system_network_dropped_total{device="eth0"}[1m]))` | Số lượng gói tin IP bị rụng mỗi giây do luật tiêm suy hao `tc netem`. |
 | **Active TCP Connection States** | `sum by (k8s_cluster_name, state) (system_network_connections)` | Phân bố trạng thái kết nối TCP (`ESTABLISHED`, `TIME_WAIT`, `CLOSE_WAIT`). |
 | **mTLS 1.3 Handshake Errors** | `sum(rate(otelcol_receiver_refused_spans_total[1m]))` | Số lượng span bị Hub Gateway từ chối tiếp nhận do lỗi chứng chỉ hoặc bắt tay mTLS. |
+
+![Minh chứng Dashboard 05 - Network & WAN Transport Telemetry](../pics/5.%20Network%20&%20WAN%20Transport.png)
 
 #### Dashboard 6: `06. Logs, Traces & Database Deepdive` (Mã UID: `mc-logs-traces-deepdive`)
 *(Đã loại bỏ hoàn toàn panel lỗi TraceQL Explorer, tập trung vào phân tích tương quan sâu)*
@@ -759,6 +698,10 @@ Toàn bộ 61 Panels trên 8 Dashboards được thiết kế theo chuẩn JSON 
 | **MySQL Engine Log Stream** | `{service_name="teastore-db"} \|~ "(?i)(error\|aborted\|lock)"` | Luồng nhật ký lỗi động cơ MySQL thu thập từ `filelog` receiver. |
 | **Trace Spans Latency Bottlenecks**| `histogram_quantile(0.99, sum by (le, service_name) (rate(traces_spanmetrics_latency_bucket[1m]))) * 1000` | Điểm thắt cổ chai độ trễ P99 phân rã chi tiết theo từng vi dịch vụ. |
 
+![Minh chứng Dashboard 06 - Error Log Stream](../pics/6.1.%20Logs,%20Traces%20&%20Database.png)
+![Minh chứng Dashboard 06 - MySQL Storage & JDBC Latency Deepdive](../pics/6.2.png)
+![Minh chứng Dashboard 06 - Distributed Tracing & Spanmetrics Bottlenecks](../pics/6.3.png)
+
 #### Dashboard 7: `07. Pyrra SLO & AIOps Closed-Loop` (Mã UID: `mc-slo-aiops`)
 | Tên Panel | Thuộc Tính OTel SemConv & Biểu Thức PromQL | Ý Nghĩa Vận Hành & Mục Đích Chính |
 | :--- | :--- | :--- |
@@ -769,11 +712,15 @@ Toàn bộ 61 Panels trên 8 Dashboards được thiết kế theo chuẩn JSON 
 | **AI Binary Anomaly Indicator** | `ai_anomaly_detected` | Trạng thái nhị phân báo động đỏ (1 là bất thường, 0 là bình thường). |
 | **Tempo Trace RCA Waterfall** | `ai_rca_component_latency_ms{component=~"wan\|self\|db"}` | Biểu đồ Dual Y-Axis phân rã nguyên nhân gốc rễ: độ trễ WAN, tự xử lý và cơ sở dữ liệu. |
 
+![Minh chứng Dashboard 07 - Pyrra SLO & Error Budget Governance](../pics/7.%20SLO%20&%20Error%20Budget.png)
+
 ---
 
 ### 6.2. Dashboard 8 (`08. Telemetry & Cost Governance`) & Cơ Sở Tính Chi Phí FinOps
 
 Dashboard 8 được thiết kế chuyên biệt cho việc quản trị tài chính đám mây (**FinOps**), chứng minh hiệu quả kinh tế rõ rệt của phương án kiến trúc đồ án đã chọn.
+
+![Minh chứng Dashboard 08 - Telemetry & FinOps Cost Governance](../pics/8.%20Telemetry%20&%20Cost%20Governance.png)
 
 #### A. Các Panel Giám Sát Chi Phí Viễn Trắc
 1. **Raw Telemetry Generation Rate:** Đo lường tổng dung lượng viễn trắc thô sinh ra tại nguồn trước khi lọc ($B_{\text{raw}}$).
@@ -855,8 +802,6 @@ Dashboard 8 được thiết kế chuyên biệt cho việc quản trị tài ch
 
 ---
 
-## TỔNG KẾT VÀ HƯỚNG PHÁT TRIỂN TIẾP THEO
-
-Bản tài liệu kiến trúc này đặc tả trọn vẹn và nhất quán 100% hệ thống quan sát đa đám mây đã được hiện thực hóa trong đồ án. Bằng việc kết hợp hài hòa giữa **chuẩn mực công nghiệp OpenTelemetry Semantic Conventions v1.45**, **kiến trúc bảo mật mTLS 1.3 Native không proxy**, **chiến lược tối ưu hóa chi phí FinOps tại biên**, cùng **động cơ trí tuệ nhân tạo AIOps V3**, hệ thống đã giải quyết triệt để các thách thức viễn trắc đa đám mây phức tạp.
+## TỔNG KẾT 
 
 Hệ thống sẵn sàng được mở rộng và triển khai trực tiếp lên các cụm đám mây công cộng thực tế (AWS EKS, Azure AKS, Google Cloud GKE) thông qua bộ mã nguồn Terraform đã được chuẩn bị trong dự án.

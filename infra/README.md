@@ -22,6 +22,7 @@
 | **Network & Ingress** | Traefik | `v2.11.0` | `traefik:v2.11.0` | Ingress Controller hỗ trợ mTLS 1.3 |
 | **Metrics Collector** | Prometheus | `v2.50.0` | `prom/prometheus:v2.50.0` | Local scraping & Remote Write engine |
 | **Metrics Long-Term** | Thanos | `v0.36.1` | `quay.io/thanos/thanos:v0.36.1` | Receive, Query, Store, Compact, Ruler |
+| **Alert Routing** | Alertmanager | `v0.27.0` | `prom/alertmanager:v0.27.0` | Tiếp nhận alert từ Prometheus, khử trùng lặp và định tuyến webhook sang Robusta |
 | **Logs Backend** | Grafana Loki | `v2.9.4` | `grafana/loki:2.9.4` | Chunk-based Log TSDB không index full-text |
 | **Traces Backend** | Grafana Tempo | `v2.4.0` | `grafana/tempo:2.4.0` | Parquet block Trace TSDB & TraceQL |
 | **Object Storage** | MinIO Server | `RELEASE.2025-10-15T17-29-55Z` | `minio/minio:RELEASE.2025-10-15T17-29-55Z` | S3-compatible storage (bản mới nhất được hỗ trợ) |

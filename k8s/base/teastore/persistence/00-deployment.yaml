@@ -74,7 +74,7 @@ spec:
               path: /tools.descartes.teastore.persistence/rest/categories
               port: 8080
             failureThreshold: 30
-            periodSeconds: 5
+            periodSeconds: 10
           readinessProbe:
             httpGet:
               path: /tools.descartes.teastore.persistence/rest/categories

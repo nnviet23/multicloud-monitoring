@@ -139,7 +139,6 @@ data:
               - set(attributes["cloud.platform"], "aws_eks") where attributes["cloud.provider"] == "aws"
               - set(attributes["cloud.platform"], "azure_aks") where attributes["cloud.provider"] == "azure"
               - set(attributes["deployment.environment.name"], "production")
-              - set(attributes["telemetry.hub.received_time"], UnixMilli(Now()))
 
       tail_sampling:
         decision_wait: 10s

@@ -65,3 +65,14 @@ data:
               likelihood: "{{ $value }}"
               anomaly_score: "{{ $labels.anomaly_score }}"
 
+          - alert: SpokePodCrashLooping
+            expr: (rate(k8s_container_restarts_total[5m]) > 0) or (changes(process_uptime_seconds[5m]) > 2) or (increase(kube_pod_container_status_restarts_total[5m]) > 1)
+            for: 1m
+            labels:
+              severity: critical
+              category: infrastructure
+              strategy: robusta-pod-crashloop
+            annotations:
+              summary: "Cụm Spoke: Phát hiện Pod khởi động lại liên tục (CrashLooping)"
+              description: "Pod {{ $labels.pod }} trên cụm {{ $labels.k8s_cluster_name }} đã bị restart nhiều lần trong 5 phút qua. Cần kiểm tra startupProbe, livenessProbe hoặc lỗi JVM OutOfMemory/Exception."
+

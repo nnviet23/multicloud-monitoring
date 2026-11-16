@@ -24,12 +24,10 @@ data:
 
     active_playbooks:
       - triggers:
-          - on_prometheus_alert:
-              alert_name: AIOpsAnomalyDetected
+          - on_prometheus_alert: {}
         actions:
-          - logs_enricher:
-              warn_on_missing_label: false
-          - pod_events_enricher: {}
+          - default_enricher:
+              alert_annotations_enrichment: true
 
       - triggers:
           - on_pod_crash_loop: {}

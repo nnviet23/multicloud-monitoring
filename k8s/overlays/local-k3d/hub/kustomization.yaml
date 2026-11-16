@@ -9,6 +9,7 @@ resources:
   - ../../../base/visualization-grafana
   - ../../../base/slo-pyrra
   - ../../../base/smart-alerting-robusta
+  - ../../../base/alertmanager
   - ../../../base/otel-collector/gateway
 
 secretGenerator:

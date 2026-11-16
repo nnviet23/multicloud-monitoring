@@ -70,7 +70,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "(sum(rate(system_cpu_time_seconds_total{k8s_cluster_name=~\"$cluster\", state!=\"idle\"}[1m])) / sum(count by (cpu, k8s_cluster_name) (system_cpu_time_seconds_total{k8s_cluster_name=~\"$cluster\"}))) * 100",
+          "expr": "(sum(rate(system_cpu_time_seconds_total{k8s_cluster_name=~\"$cluster\", state!=\"idle\"}[1m])) / sum(rate(system_cpu_time_seconds_total{k8s_cluster_name=~\"$cluster\"}[1m]))) * 100",
           "instant": true,
           "legendFormat": "CPU % Used",
           "range": false,
