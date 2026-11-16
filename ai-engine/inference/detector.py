@@ -28,6 +28,7 @@ import math
 import time
 import json
 import yaml
+import html
 import signal
 import threading
 import http.server
@@ -935,26 +936,30 @@ class TelegramAlertSink:
         if now - last < self.cooldown_seconds:
             return
 
-        causes_text = "\n".join(f"  • {c}" for c in causes) if causes else "  • Soft degradation / Uncorrelated deviation"
+        causes_items = [f"  • {html.escape(c)}" for c in causes] if causes else ["  • Soft degradation / Uncorrelated deviation"]
+        causes_text = "\n".join(causes_items)
         wan_links = trace_summary.get("wan_links", {})
         top_wan = max(wan_links.values()) if wan_links else 0.0
         self_times = trace_summary.get("self_times", {})
         top_self = self_times.get(entity_id, 0.0)
         db_ms = trace_summary.get("db_time_ms", 0.0)
 
+        safe_entity = html.escape(str(entity_id))
+        safe_verdict = html.escape(str(verdict))
+
         msg = (
-            "🚨 *[AI-OPS ALERT] Multi-Cloud Anomaly Detected*\n"
+            "🚨 <b>[AI-OPS ALERT] Multi-Cloud Anomaly Detected</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📍 *Target Entity*: `{entity_id}`\n"
-            f"📊 *Likelihood*: `{likelihood_pct:.1f}%` (MSE: `{mse:.4f}`)\n"
-            f"⚡ *Verdict*: `{verdict}` (Sustained Anomaly)\n\n"
-            f"🔍 *Root Cause Evidence (RCA)*:\n{causes_text}\n\n"
-            "⏱️ *Tempo Trace Decomposition*:\n"
-            f"  • Cross-Cloud WAN Lag: `{top_wan:.1f}ms`\n"
-            f"  • Microservice Self-Exec: `{top_self:.1f}ms`\n"
-            f"  • Database Query Time: `{db_ms:.1f}ms`\n"
+            f"📍 <b>Target Entity</b>: <code>{safe_entity}</code>\n"
+            f"📊 <b>Likelihood</b>: <code>{likelihood_pct:.1f}%</code> (MSE: <code>{mse:.4f}</code>)\n"
+            f"⚡ <b>Verdict</b>: <code>{safe_verdict}</code> (Sustained Anomaly)\n\n"
+            f"🔍 <b>Root Cause Evidence (RCA)</b>:\n{causes_text}\n\n"
+            "⏱️ <b>Tempo Trace Decomposition</b>:\n"
+            f"  • Cross-Cloud WAN Lag: <code>{top_wan:.1f}ms</code>\n"
+            f"  • Microservice Self-Exec: <code>{top_self:.1f}ms</code>\n"
+            f"  • Database Query Time: <code>{db_ms:.1f}ms</code>\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "💡 *Recommendation*: Inspect edge WAN shaping or database slow queries."
+            "💡 <i>Recommendation</i>: Inspect edge WAN shaping or database slow queries."
         )
 
         try:
@@ -962,7 +967,7 @@ class TelegramAlertSink:
             payload = json.dumps({
                 "chat_id": self.chat_id,
                 "text": msg,
-                "parse_mode": "Markdown",
+                "parse_mode": "HTML",
             }).encode("utf-8")
             req = urllib.request.Request(
                 url, data=payload,

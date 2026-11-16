@@ -35,6 +35,12 @@ spec:
               value: "/etc/robusta/playbooks/defaults"
             - name: ENABLE_TELEMETRY
               value: "false"
+            - name: TRACE_INCOMING_ALERTS
+              value: "true"
+            - name: TRACE_INCOMING_REQUESTS
+              value: "true"
+            - name: LOG_LEVEL
+              value: "DEBUG"
             - name: TELEGRAM_BOT_TOKEN
               valueFrom:
                 secretKeyRef:
