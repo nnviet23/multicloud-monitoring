@@ -430,7 +430,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "sum by (k8s_cluster_name) (system_cpu_load_average_1m)",
+          "expr": "sum by (k8s_cluster_name, cloud_provider) (system_cpu_load_average_1m)",
           "format": "table",
           "instant": true,
           "refId": "A"
@@ -441,7 +441,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "(sum by (k8s_cluster_name) (system_memory_usage_bytes{state=\"used\"}) / sum by (k8s_cluster_name) (system_memory_usage_bytes)) * 100",
+          "expr": "(sum by (k8s_cluster_name, cloud_provider) (system_memory_usage_bytes{state=\"used\"}) / sum by (k8s_cluster_name, cloud_provider) (system_memory_usage_bytes)) * 100",
           "format": "table",
           "instant": true,
           "refId": "B"
@@ -452,7 +452,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "sum by (k8s_cluster_name) (rate(system_network_dropped_total[1m]))",
+          "expr": "sum by (k8s_cluster_name, cloud_provider) (rate(system_network_dropped_total[1m]))",
           "format": "table",
           "instant": true,
           "refId": "C"
@@ -463,7 +463,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "sum by (k8s_cluster_name) (system_network_connections{state=\"ESTABLISHED\"})",
+          "expr": "sum by (k8s_cluster_name, cloud_provider) (system_network_connections{state=\"ESTABLISHED\"})",
           "format": "table",
           "instant": true,
           "refId": "D"
@@ -485,6 +485,18 @@
               {
                 "id": "displayName",
                 "value": "Kubernetes Cluster"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cloud_provider"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Cloud Provider"
               }
             ]
           },

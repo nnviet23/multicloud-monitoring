@@ -75,7 +75,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "sum by (server) (rate(traces_service_graph_request_failed_total{server=~\"$service\"}[1m]))",
+          "expr": "sum by (server) (rate(traces_service_graph_request_failed_total{server=~\"$service\"}[1m])) or (sum by (server) (rate(traces_service_graph_request_total{server=~\"$service\"}[1m])) * 0)",
           "legendFormat": "{{server}} failed",
           "range": true,
           "refId": "A"
@@ -277,7 +277,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "sum by (client, server) (rate(traces_service_graph_request_failed_total{server=~\"teadb|teastore-db|teastore-registry|teastore-persistence\"}[1m]))",
+          "expr": "sum by (client, server) (rate(traces_service_graph_request_failed_total{server=~\"teadb|teastore-db|teastore-registry|teastore-persistence\"}[1m])) or (sum by (client, server) (rate(traces_service_graph_request_total{server=~\"teadb|teastore-db|teastore-registry|teastore-persistence\"}[1m])) * 0)",
           "instant": false,
           "legendFormat": "Errors: {{client}} -> {{server}} (req/s)",
           "range": true,
@@ -441,7 +441,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "max by (cloud_provider, service_name) (ai_anomaly_likelihood_percent)",
+          "expr": "(max by (cloud_provider, service_name) (ai_anomaly_likelihood_percent)) or vector(0)",
           "legendFormat": "{{cloud_provider}}:{{service_name}} Anomaly Likelihood (%)",
           "range": true,
           "refId": "A"
@@ -452,7 +452,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "max by (target) (ai_rca_component_latency_ms{component=\"wan\"})",
+          "expr": "(max by (target) (ai_rca_component_latency_ms{component=\"wan\"})) or vector(0)",
           "legendFormat": "WAN Lag: {{target}} (ms)",
           "range": true,
           "refId": "B"
@@ -463,7 +463,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "max by (service_name) (ai_rca_component_latency_ms{component=\"self\"})",
+          "expr": "(max by (service_name) (ai_rca_component_latency_ms{component=\"self\"})) or vector(0)",
           "legendFormat": "Self-Exec: {{service_name}} (ms)",
           "range": true,
           "refId": "C"
@@ -474,7 +474,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "max by (component) (ai_rca_component_latency_ms{component=\"db\"})",
+          "expr": "(max by (component) (ai_rca_component_latency_ms{component=\"db\"})) or vector(0)",
           "legendFormat": "Database Query Time (ms)",
           "range": true,
           "refId": "D"

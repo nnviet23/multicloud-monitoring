@@ -23,7 +23,7 @@ spec:
           args: ["--config=/etc/otelcol/config.yaml"]
           envFrom:
             - secretRef:
-                name: loki-s3-creds
+                name: otel-s3-creds
           env:
             - name: AWS_REGION
               value: "us-east-1"

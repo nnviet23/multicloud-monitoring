@@ -76,8 +76,8 @@ spec:
               path: /tools.descartes.teastore.webui/status
               port: 8080
             failureThreshold: 30
-            periodSeconds: 5
-            timeoutSeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 10
           readinessProbe:
             httpGet:
               path: /tools.descartes.teastore.webui/status

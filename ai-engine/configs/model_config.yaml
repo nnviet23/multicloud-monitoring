@@ -11,6 +11,43 @@ data:
   processed_dir: "ai-engine/data/processed"
   entity_baselines_path: "ai-engine/models/saved/entity_baselines.json"
 
+  # 4 Domain Entity Schemas (Web App, Instance, Database, WAN)
+  entity_schemas:
+    web_app:
+      description: "TeaStore microservice container workloads"
+      target_services: ["teastore-webui", "teastore-auth", "teastore-image", "teastore-recommender", "teastore-registry", "teastore-persistence"]
+      features:
+        - qps
+        - server_latency_p95
+        - client_latency_p95
+        - error_rate_5xx
+        - max_pod_cpu_pct
+        - max_pod_ram_pct
+        - ram_floor_2m_pct
+        - gc_pause_rate
+    instance:
+      description: "Kubernetes Node & Host OS Kernel infrastructure"
+      features:
+        - cpu_utilization_pct
+        - memory_usage_pct
+        - disk_iops
+        - network_io_kbs
+        - paging_faults_rate # system_paging_faults_total
+    database:
+      description: "MariaDB / MySQL data storage tier"
+      target_services: ["teadb", "teastore-db"]
+      features:
+        - db_query_rate
+        - db_latency_p95
+        - db_error_rate
+    wan:
+      description: "Inter-cloud simulated WAN transport network"
+      features:
+        - wan_latency_p95
+        - wan_network_io_kbs
+        - wan_network_errors
+        - wan_packet_loss_pct
+
   # 8 Universal Entity Features extracted for EVERY (cloud_provider, service_name)
   # Invariant to horizontal pod scaling (1 -> N pods) and new cloud/service additions
   features:

@@ -22,6 +22,7 @@
 | **Network & Ingress** | Traefik | `v2.11.0` | `traefik:v2.11.0` | Ingress Controller hỗ trợ mTLS 1.3 |
 | **Metrics Collector** | Prometheus | `v2.50.0` | `prom/prometheus:v2.50.0` | Local scraping & Remote Write engine |
 | **Metrics Long-Term** | Thanos | `v0.36.1` | `quay.io/thanos/thanos:v0.36.1` | Receive, Query, Store, Compact, Ruler |
+| **Alert Routing** | Alertmanager | `v0.27.0` | `prom/alertmanager:v0.27.0` | Tiếp nhận alert từ Prometheus, khử trùng lặp và định tuyến webhook sang Robusta |
 | **Logs Backend** | Grafana Loki | `v2.9.4` | `grafana/loki:2.9.4` | Chunk-based Log TSDB không index full-text |
 | **Traces Backend** | Grafana Tempo | `v2.4.0` | `grafana/tempo:2.4.0` | Parquet block Trace TSDB & TraceQL |
 | **Object Storage** | MinIO Server (Chainguard build) | `RELEASE.2026-10-23T20-06-51Z` | `cgr.dev/chainguard/minio@sha256:0dab2f9fee1c1139ae8753b5e35bb4461af2a276cfe0923a2504c75a6170bc64` | S3-compatible storage. Ghim theo digest vì `minio/minio` (Docker Hub) và `quay.io/minio/minio` không còn pull công khai (kiểm tra 2026-11-12); image chạy UID 65532 |

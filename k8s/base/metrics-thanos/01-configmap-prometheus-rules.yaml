@@ -9,7 +9,7 @@ data:
       - name: multicloud-signoz-alerts
         rules:
           - alert: SpokeClusterHeartbeatAbsent
-            expr: absent(up{cluster="aws-k3d"} == 1) or absent(up{cluster="azure-k3d"} == 1) or absent(up{cluster="gcp-k3d"} == 1)
+            expr: absent(up{k8s_cluster_name="aws-k3d"} == 1) or absent(up{k8s_cluster_name="azure-k3d"} == 1) or absent(up{k8s_cluster_name="gcp-k3d"} == 1)
             for: 2m
             labels:
               severity: critical
@@ -51,4 +51,27 @@ data:
             annotations:
               summary: "Bộ đệm OTel Collector chịu áp lực bộ nhớ cao (>400MB)"
               description: "Pod {{ $labels.pod }} đang sử dụng bộ nhớ vượt 400MB RSS, có nguy cơ kích hoạt memory_limiter làm rơi dữ liệu viễn trắc."
+
+          - alert: AIOpsAnomalyDetected
+            expr: ai_anomaly_likelihood_percent > 80
+            for: 30s
+            labels:
+              severity: critical
+              category: aiops
+              strategy: deep-learning-ensemble
+            annotations:
+              summary: "AIOps: Phát hiện bất thường microservice {{ $labels.service_name }} ({{ $labels.cloud_provider }})"
+              description: "Mô hình {{ $labels.model }} phát hiện bất thường xác suất {{ $value }}% trên dịch vụ {{ $labels.service_name }} (Cụm: {{ $labels.k8s_cluster_name }}, Thực thể: {{ $labels.entity_type }})."
+              likelihood: "{{ $value }}"
+
+          - alert: SpokePodCrashLooping
+            expr: (rate(k8s_container_restarts_total[5m]) > 0) or (changes(process_uptime_seconds[5m]) > 2) or (increase(kube_pod_container_status_restarts_total[5m]) > 1)
+            for: 1m
+            labels:
+              severity: critical
+              category: infrastructure
+              strategy: robusta-pod-crashloop
+            annotations:
+              summary: "Cụm Spoke: Phát hiện Pod khởi động lại liên tục (CrashLooping)"
+              description: "Pod {{ $labels.pod }} trên cụm {{ $labels.k8s_cluster_name }} đã bị restart nhiều lần trong 5 phút qua. Cần kiểm tra startupProbe, livenessProbe hoặc lỗi JVM OutOfMemory/Exception."
 

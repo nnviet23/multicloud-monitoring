@@ -7,6 +7,12 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
+# Automatically load and export variables from .env if present
+ifneq (,$(wildcard ./.env))
+  include .env
+  export
+endif
+
 HUB_CTX    := k3d-hub-k3d
 AWS_CTX    := k3d-aws-k3d
 AZURE_CTX  := k3d-azure-k3d
@@ -57,7 +63,7 @@ infra: pki-generate ## Provision 4 k3d clusters, WAN bridge, CoreDNS & mTLS secr
 	@$(MAKE) import-images
 
 .PHONY: deploy-hub
-deploy-hub: ## Deploy complete Hub Observability Stack via Kustomize Overlay
+deploy-hub: env-setup ## Deploy complete Hub Observability Stack via Kustomize Overlay
 	@echo "--> Deploying Hub Observability Stack on $(HUB_CTX)..."
 	kubectl --context $(HUB_CTX) apply -k k8s/overlays/local-k3d/hub
 
@@ -71,7 +77,7 @@ deploy-spokes: ## Deploy TeaStore Workloads and Edge OTel Collectors on Spokes
 	kubectl --context $(GCP_CTX) apply -k k8s/overlays/local-k3d/spoke-gcp
 
 .PHONY: deploy
-deploy: deploy-hub deploy-spokes ## Deploy complete system (Hub + Spoke 1 AWS + Spoke 2 Azure + Spoke 3 GCP)
+deploy: env-setup deploy-hub deploy-spokes ## Deploy complete system (Hub + Spoke 1 AWS + Spoke 2 Azure + Spoke 3 GCP)
 	@echo "======================================================================"
 	@echo "Multi-Cloud System successfully deployed on all 4 clusters!"
 	@echo "  - TeaStore WebUI:   http://localhost:8080/tools.descartes.teastore.webui/ (via AWS nginx-api-gateway)"

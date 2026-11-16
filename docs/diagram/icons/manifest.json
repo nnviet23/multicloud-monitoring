@@ -1,0 +1,164 @@
+{
+  "docker": {
+    "source": "svgl",
+    "url": "https://svgl.app/library/docker.svg",
+    "file": "docker.svg",
+    "bytes": 1488
+  },
+  "kubernetes": {
+    "source": "svgl",
+    "url": "https://svgl.app/library/kubernetes.svg",
+    "file": "kubernetes.svg",
+    "bytes": 2429
+  },
+  "opentelemetry": {
+    "source": "devicon",
+    "url": "https://raw.githubusercontent.com/devicons/devicon/master/icons/opentelemetry/opentelemetry-original.svg",
+    "file": "opentelemetry.svg",
+    "bytes": 1223
+  },
+  "prometheus": {
+    "source": "devicon",
+    "url": "https://raw.githubusercontent.com/devicons/devicon/master/icons/prometheus/prometheus-original.svg",
+    "file": "prometheus.svg",
+    "bytes": 1223
+  },
+  "grafana": {
+    "source": "svgl",
+    "url": "https://svgl.app/library/grafana.svg",
+    "file": "grafana.svg",
+    "bytes": 5850
+  },
+  "mysql": {
+    "source": "svgl",
+    "url": "https://svgl.app/library/mysql-icon-light.svg",
+    "file": "mysql.svg",
+    "bytes": 925,
+    "dark_file": "mysql_dark.svg"
+  },
+  "python": {
+    "source": "svgl",
+    "url": "https://svgl.app/library/python.svg",
+    "file": "python.svg",
+    "bytes": 1126
+  },
+  "pytorch": {
+    "source": "devicon",
+    "url": "https://raw.githubusercontent.com/devicons/devicon/master/icons/pytorch/pytorch-original.svg",
+    "file": "pytorch.svg",
+    "bytes": 404
+  },
+  "telegram": {
+    "source": "svgl",
+    "url": "https://svgl.app/library/telegram.svg",
+    "file": "telegram.svg",
+    "bytes": 1199
+  },
+  "linux": {
+    "source": "svgl",
+    "url": "https://svgl.app/library/linux.svg",
+    "file": "linux.svg",
+    "bytes": 11498
+  },
+  "java": {
+    "source": "svgl",
+    "url": "https://svgl.app/library/java.svg",
+    "file": "java.svg",
+    "bytes": 852
+  },
+  "ansible": {
+    "source": "devicon",
+    "url": "https://raw.githubusercontent.com/devicons/devicon/master/icons/ansible/ansible-original.svg",
+    "file": "ansible.svg",
+    "bytes": 377
+  },
+  "terraform": {
+    "source": "svgl",
+    "url": "https://svgl.app/library/terraform.svg",
+    "file": "terraform.svg",
+    "bytes": 333
+  },
+  "aws": {
+    "source": "aws",
+    "url": "https://d1.awsstatic.com/onedam/marketing-channels/website/public/shared/architecture-icon-release/Icon-package_07312026.5846e92413caa21490223536cc97f1269e44fa92.zip#Architecture-Group-Icons_07312026/AWS-Cloud-logo_32.svg",
+    "file": "aws.svg",
+    "bytes": 6364,
+    "dark_file": "aws_dark.svg"
+  },
+  "azure": {
+    "source": "devicon",
+    "url": "https://raw.githubusercontent.com/devicons/devicon/master/icons/azure/azure-original.svg",
+    "file": "azure.svg",
+    "bytes": 1713
+  },
+  "traefik": {
+    "source": "custom",
+    "file": "traefik.svg",
+    "bytes": 220
+  },
+  "minio": {
+    "source": "custom",
+    "file": "minio.svg",
+    "bytes": 313
+  },
+  "shield": {
+    "source": "lucide",
+    "url": "https://cdn.jsdelivr.net/npm/lucide-static/icons/shield-check.svg",
+    "file": "shield.svg",
+    "bytes": 495
+  },
+  "key": {
+    "source": "lucide",
+    "url": "https://cdn.jsdelivr.net/npm/lucide-static/icons/key.svg",
+    "file": "key.svg",
+    "bytes": 427
+  },
+  "lock": {
+    "source": "lucide",
+    "url": "https://cdn.jsdelivr.net/npm/lucide-static/icons/lock.svg",
+    "file": "lock.svg",
+    "bytes": 381
+  },
+  "network": {
+    "source": "lucide",
+    "url": "https://cdn.jsdelivr.net/npm/lucide-static/icons/network.svg",
+    "file": "network.svg",
+    "bytes": 520
+  },
+  "server": {
+    "source": "lucide",
+    "url": "https://cdn.jsdelivr.net/npm/lucide-static/icons/server.svg",
+    "file": "server.svg",
+    "bytes": 487
+  },
+  "layers": {
+    "source": "lucide",
+    "url": "https://cdn.jsdelivr.net/npm/lucide-static/icons/layers.svg",
+    "file": "layers.svg",
+    "bytes": 584
+  },
+  "cpu": {
+    "source": "lucide",
+    "url": "https://cdn.jsdelivr.net/npm/lucide-static/icons/cpu.svg",
+    "file": "cpu.svg",
+    "bytes": 661
+  },
+  "workflow": {
+    "source": "lucide",
+    "url": "https://cdn.jsdelivr.net/npm/lucide-static/icons/workflow.svg",
+    "file": "workflow.svg",
+    "bytes": 427
+  },
+  "bell": {
+    "source": "lucide",
+    "url": "https://cdn.jsdelivr.net/npm/lucide-static/icons/bell.svg",
+    "file": "bell.svg",
+    "bytes": 465
+  },
+  "activity": {
+    "source": "lucide",
+    "url": "https://cdn.jsdelivr.net/npm/lucide-static/icons/activity.svg",
+    "file": "activity.svg",
+    "bytes": 422
+  }
+}

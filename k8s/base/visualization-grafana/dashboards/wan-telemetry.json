@@ -145,7 +145,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "sum(rate(traces_service_graph_request_total{client_cloud_provider!=server_cloud_provider}[1m])) or sum(rate(traces_service_graph_request_total{server=~\"teadb|teastore-registry\"}[1m]))",
+          "expr": "(sum(rate(traces_service_graph_request_total{client_cloud_provider=\"aws\", server_cloud_provider=\"azure\"}[1m])) or sum(rate(traces_service_graph_request_total{client_cloud_provider=\"azure\", server_cloud_provider=\"aws\"}[1m])) or sum(rate(traces_service_graph_request_total{server=~\"teadb|teastore-registry\"}[1m])) or vector(0))",
           "instant": true,
           "refId": "A"
         }
@@ -183,7 +183,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le, client, server) (rate(traces_service_graph_request_server_seconds_bucket{client_cloud_provider!=server_cloud_provider}[5m]) or rate(traces_service_graph_request_server_seconds_bucket{server=~\"teadb|teastore-registry\"}[5m]))) * 1000",
+          "expr": "histogram_quantile(0.95, sum by (le, client, server) (rate(traces_service_graph_request_server_seconds_bucket{client_cloud_provider=\"aws\", server_cloud_provider=\"azure\"}[5m]) or rate(traces_service_graph_request_server_seconds_bucket{client_cloud_provider=\"azure\", server_cloud_provider=\"aws\"}[5m]) or rate(traces_service_graph_request_server_seconds_bucket{server=~\"teadb|teastore-registry\"}[5m]))) * 1000",
           "legendFormat": "{{client}} (AWS) -> {{server}} (Azure) [P95]",
           "range": true,
           "refId": "A"
@@ -194,7 +194,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by (le, client, server) (rate(traces_service_graph_request_server_seconds_bucket{client_cloud_provider!=server_cloud_provider}[5m]) or rate(traces_service_graph_request_server_seconds_bucket{server=~\"teadb|teastore-registry\"}[5m]))) * 1000",
+          "expr": "histogram_quantile(0.50, sum by (le, client, server) (rate(traces_service_graph_request_server_seconds_bucket{client_cloud_provider=\"aws\", server_cloud_provider=\"azure\"}[5m]) or rate(traces_service_graph_request_server_seconds_bucket{client_cloud_provider=\"azure\", server_cloud_provider=\"aws\"}[5m]) or rate(traces_service_graph_request_server_seconds_bucket{server=~\"teadb|teastore-registry\"}[5m]))) * 1000",
           "legendFormat": "{{client}} (AWS) -> {{server}} (Azure) [P50]",
           "range": true,
           "refId": "B"
@@ -295,7 +295,32 @@
           "color": {
             "mode": "palette-classic"
           }
-        }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "pps"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -342,8 +367,33 @@
           "custom": {
             "lineWidth": 2
           },
-          "unit": "short"
-        }
+          "unit": "pps"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       }
     }
   ],

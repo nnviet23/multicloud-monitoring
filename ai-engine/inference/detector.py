@@ -7,7 +7,7 @@ Project: Multicloud Monitoring (AWS + Azure + GCP + Hub)
 Key Architectural Capabilities (V3):
   1. Dynamic Multi-Cloud Entity Auto-Discovery:
      Automatically discovers all active `(cloud_provider, service_name)` entities
-     from Prometheus without hardcoded service lists.
+     from Prometheus / Thanos without hardcoded service lists.
   2. Per-Entity Z-Score Standardization & Online Auto-Calibration:
      Applies entity-specific baseline standardization (and 30-sample online calibration
      for newly added clouds/microservices) before feeding 8-feature entity windows
@@ -29,6 +29,7 @@ import math
 import time
 import json
 import yaml
+import html
 import signal
 import threading
 import http.server
@@ -139,7 +140,13 @@ def probe_webui_health(url="http://localhost:8080/tools.descartes.teastore.webui
 
 
 class PrometheusVectorClient:
-    def __init__(self, base_url="http://localhost:9090"):
+    def __init__(self, base_url=None):
+        if not base_url:
+            base_url = (
+                os.environ.get("THANOS_QUERY_URL")
+                or os.environ.get("PROMETHEUS_URL")
+                or "http://localhost:9090"
+            )
         self.base_url = base_url.rstrip("/")
         self.pf_proc = None
         self.ram_history = {}
@@ -176,8 +183,12 @@ class PrometheusVectorClient:
         except Exception as e:
             print(f"[Warning] Failed to start Prometheus port-forward: {e}")
 
-    def query_vector(self, promql):
-        url = f"{self.base_url}/api/v1/query?" + urllib.parse.urlencode({"query": promql})
+    def query_vector(self, promql, timestamp=None):
+        params = {"query": promql}
+        lag_offset = float(os.environ.get("THANOS_QUERY_LAG_OFFSET", "5.0"))
+        query_ts = timestamp if timestamp is not None else (time.time() - lag_offset)
+        params["time"] = f"{query_ts:.3f}"
+        url = f"{self.base_url}/api/v1/query?" + urllib.parse.urlencode(params)
         try:
             req = urllib.request.Request(url)
             with urllib.request.urlopen(req, timeout=4) as resp:
@@ -188,6 +199,45 @@ class PrometheusVectorClient:
         except Exception:
             self.query_failures.append(promql)
         return []
+
+    def query_range(self, promql, start_ts, end_ts=None, step="10s"):
+        lag_offset = float(os.environ.get("THANOS_QUERY_LAG_OFFSET", "5.0"))
+        effective_end = (end_ts if end_ts is not None else time.time()) - lag_offset
+        params = {
+            "query": promql,
+            "start": f"{start_ts:.3f}",
+            "end": f"{effective_end:.3f}",
+            "step": step,
+        }
+        url = f"{self.base_url}/api/v1/query_range?" + urllib.parse.urlencode(params)
+        series_out = []
+        try:
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+                if payload.get("status") == "success":
+                    for item in payload.get("data", {}).get("result", []):
+                        labels = item.get("metric", {})
+                        raw_values = item.get("values", [])
+                        sanitized = []
+                        last_valid = 0.0
+                        for point in raw_values:
+                            try:
+                                t_pt = float(point[0])
+                                v_pt = float(point[1])
+                                if math.isnan(v_pt) or math.isinf(v_pt):
+                                    v_pt = last_valid
+                                else:
+                                    last_valid = v_pt
+                                sanitized.append([t_pt, v_pt])
+                            except (ValueError, TypeError, IndexError):
+                                sanitized.append([float(point[0]) if point else 0.0, last_valid])
+                        if sanitized and (math.isnan(sanitized[-1][1]) or math.isinf(sanitized[-1][1])):
+                            sanitized[-1][1] = last_valid
+                        series_out.append((labels, sanitized))
+        except Exception:
+            pass
+        return series_out
 
     def discover_entities(self):
         results = self.query_vector(ENTITY_VECTOR_QUERIES["discover"])
@@ -333,7 +383,8 @@ class TempoTraceAnalyzer:
       - T_DB(azure:mariadb)           = SQL query span duration
     """
     def __init__(self, base_url="http://localhost:3200"):
-        self.base_url = base_url.rstrip("/")
+        env_url = os.environ.get("TEMPO_URL")
+        self.base_url = (env_url or base_url or "http://localhost:3200").rstrip("/")
         self.pf_proc = None
         self.evidence = TraceEvidence()
         self._ensure_connection()
@@ -491,8 +542,9 @@ class TempoTraceAnalyzer:
                 for a in batch.get("resource", {}).get("attributes", [])
                 if a.get("value")
             }
-            cp = str(res_attrs.get("cloud.provider", "unknown"))
-            sn = str(res_attrs.get("service.name", "unknown"))
+            cp = str(res_attrs.get("cloud.provider") or res_attrs.get("cloud_provider", "unknown"))
+            sn = str(res_attrs.get("service.name") or res_attrs.get("service_name", "unknown"))
+            cluster = str(res_attrs.get("k8s.cluster.name") or res_attrs.get("k8s_cluster_name", "unknown"))
             entity_id = f"{cp}:{sn}"
 
             scope_list = batch.get("scopeSpans") or batch.get("instrumentationLibrarySpans") or []
@@ -737,7 +789,12 @@ class EntityCalibrator:
                     vals = np.array([b[col] for b in buf], dtype=np.float64) if buf else np.array([raw_feature_dict[col]], dtype=np.float64)
                     med = float(np.median(vals))
                     sc = max(float(np.std(vals)), float(self.scale_floors.get(col, 1.0)))
-                    z = np.clip((raw_feature_dict[col] - med) / sc, -self.clip_z, self.clip_z)
+                    val = raw_feature_dict.get(col, 0.0)
+                    if val is None or math.isnan(val) or math.isinf(val):
+                        val = 0.0
+                    z = np.clip((val - med) / sc, -self.clip_z, self.clip_z)
+                    if math.isnan(z) or math.isinf(z):
+                        z = 0.0
                     z_vec.append(float(z))
                 return np.array(z_vec, dtype=np.float32), False
 
@@ -746,7 +803,12 @@ class EntityCalibrator:
         for col in ENTITY_FEATURE_COLS:
             mu = float(f_meta[col]["median"])
             sc = max(float(f_meta[col]["scale"]), float(self.scale_floors.get(col, 1e-3)))
-            z = np.clip((raw_feature_dict[col] - mu) / sc, -self.clip_z, self.clip_z)
+            val = raw_feature_dict.get(col, 0.0)
+            if val is None or math.isnan(val) or math.isinf(val):
+                val = 0.0
+            z = np.clip((val - mu) / sc, -self.clip_z, self.clip_z)
+            if math.isnan(z) or math.isinf(z):
+                z = 0.0
             z_vec.append(float(z))
         return np.array(z_vec, dtype=np.float32), True
 
@@ -910,6 +972,29 @@ def _label(value):
     return str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
 
+def resolve_entity_type(service_name):
+    sn = (service_name or "").lower()
+    if any(k in sn for k in ("mariadb", "mysql", "db")):
+        return "database"
+    if any(k in sn for k in ("node", "server", "host", "instance")):
+        return "instance"
+    if any(k in sn for k in ("wan", "network", "link")):
+        return "wan"
+    return "web_app"
+
+
+def resolve_cluster_name(cloud_provider):
+    """Map a canonical cloud.provider value to its k3d cluster id (aws/azure/gcp/hub)."""
+    cp = (cloud_provider or "").lower()
+    return {"aws": "aws-k3d", "azure": "azure-k3d", "gcp": "gcp-k3d", "hub": "hub-k3d"}.get(cp, f"{cp}-k3d")
+
+
+def _entity_labels(cp, sn):
+    """Common low-cardinality identity labels for per-entity AI metrics."""
+    return (f'k8s_cluster_name="{_label(resolve_cluster_name(cp))}",entity_type="{resolve_entity_type(sn)}",'
+            f'cloud_provider="{_label(cp)}",service_name="{_label(sn)}"')
+
+
 def format_prometheus_metrics(sample_record, entity_results, trace_summary, probe_ms, probe_ok):
     lines = []
     lines.append("# HELP ai_anomaly_likelihood_percent Calibrated anomaly probability (0-100) from each entity's own scorer")
@@ -918,7 +1003,7 @@ def format_prometheus_metrics(sample_record, entity_results, trace_summary, prob
         if res.get("likelihood_pct") is None:
             continue
         cp, _, sn = eid.partition(":")
-        lines.append(f'ai_anomaly_likelihood_percent{{cloud_provider="{_label(cp)}",service_name="{_label(sn)}",'
+        lines.append(f'ai_anomaly_likelihood_percent{{{_entity_labels(cp, sn)},'
                      f'model="gru_tcn_ensemble"}} {res["likelihood_pct"]:.2f}')
 
     lines.append("# HELP ai_reconstruction_error Directional reconstruction MSE, mean of GRU and TCN autoencoders")
@@ -926,7 +1011,7 @@ def format_prometheus_metrics(sample_record, entity_results, trace_summary, prob
     for eid, res in sorted(entity_results.items()):
         cp, _, sn = eid.partition(":")
         mse = res.get("mse", 0.0)
-        lines.append(f'ai_reconstruction_error{{cloud_provider="{_label(cp)}",service_name="{_label(sn)}",'
+        lines.append(f'ai_reconstruction_error{{{_entity_labels(cp, sn)},'
                      f'model="gru_tcn_ensemble"}} {mse:.6f}')
 
     lines.append("# HELP ai_entity_sustained_anomaly 1 when the entity's own scorer reports a sustained anomaly")
@@ -939,14 +1024,16 @@ def format_prometheus_metrics(sample_record, entity_results, trace_summary, prob
     lines.append("# HELP ai_rca_component_latency_ms Decomposed latency from Tempo distributed trace spans")
     lines.append("# TYPE ai_rca_component_latency_ms gauge")
     for link, lag in trace_summary.get("wan_links", {}).items():
-        lines.append(f'ai_rca_component_latency_ms{{component="wan",target="{_label(link)}"}} {lag:.2f}')
+        lines.append(f'ai_rca_component_latency_ms{{k8s_cluster_name="hub-k3d",cloud_provider="cross-cloud",'
+                     f'component="wan",entity_type="wan",target="{_label(link)}"}} {lag:.2f}')
     for ent, st in trace_summary.get("self_times", {}).items():
         cp, _, sn = ent.partition(":")
-        lines.append(f'ai_rca_component_latency_ms{{cloud_provider="{_label(cp)}",service_name="{_label(sn)}",component="self"}} {st:.2f}')
+        lines.append(f'ai_rca_component_latency_ms{{{_entity_labels(cp, sn)},component="self"}} {st:.2f}')
     db_entity = trace_summary.get("db_entity")
     if db_entity:
         cp, _, sn = db_entity.partition(":")
-        lines.append(f'ai_rca_component_latency_ms{{cloud_provider="{_label(cp)}",service_name="{_label(sn)}",'
+        lines.append(f'ai_rca_component_latency_ms{{k8s_cluster_name="{_label(resolve_cluster_name(cp))}",'
+                     f'cloud_provider="{_label(cp)}",service_name="{_label(sn)}",entity_type="database",'
                      f'component="db",target="{_label(trace_summary.get("db_target") or "")}"}} '
                      f'{trace_summary.get("db_time_ms", 0.0):.2f}')
 
@@ -1025,11 +1112,13 @@ class TelegramAlertSink:
     """
     Sends structured AIOps alerts with Root Cause Analysis to Telegram Bot channel.
     Rate-limited per entity to avoid channel spam during sustained outages.
+    Auto-resets cooldown when cluster returns to HEALTHY to never miss sequential chaos runs.
     """
-    def __init__(self, token=None, chat_id=None, cooldown_seconds=60, enabled=True):
+    def __init__(self, token=None, chat_id=None, cooldown_seconds=None, enabled=True):
         self.token = (token or os.environ.get("TELEGRAM_BOT_TOKEN")) if enabled else None
         self.chat_id = (chat_id or os.environ.get("TELEGRAM_CHAT_ID")) if enabled else None
-        self.cooldown_seconds = cooldown_seconds
+        env_cooldown = os.environ.get("TELEGRAM_COOLDOWN_SECONDS")
+        self.cooldown_seconds = cooldown_seconds if cooldown_seconds is not None else (int(env_cooldown) if env_cooldown else 60)
         self.last_sent = {}
 
         if enabled and (not self.token or self.token.startswith("CHANGE_ME")):
@@ -1085,6 +1174,14 @@ class TelegramAlertSink:
         except Exception as e:
             print(f"[AIOps-Telegram] Failed to send Telegram alert: {e}", flush=True)
 
+    def reset_all(self):
+        """Clears cooldown records when cluster returns to HEALTHY."""
+        if self.last_sent:
+            self.last_sent.clear()
+
+    def reset_entity(self, entity_id):
+        self.last_sent.pop(entity_id, None)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Multi-Cloud Real-Time Anomaly Detector & Trace RCA Engine (V3)")
@@ -1095,7 +1192,8 @@ def parse_args():
     parser.add_argument("--metrics-port", type=int, default=9108, help="Prometheus metrics exporter port (default 9108, 0 to disable)")
     parser.add_argument("--telegram-token", default="", help="Telegram Bot Token for alerts")
     parser.add_argument("--telegram-chat-id", default="", help="Telegram Chat ID for alerts")
-    parser.add_argument("--telegram-cooldown", type=int, default=60, help="Cooldown in seconds between alerts for same entity")
+    parser.add_argument("--telegram-cooldown", type=int, default=None,
+                        help="Cooldown in seconds between alerts for same entity (default: $TELEGRAM_COOLDOWN_SECONDS or 60)")
     parser.add_argument("--disable-telegram", action="store_true",
                         help="Never send Telegram alerts (experiments/chaos runs); ignores env and .env credentials")
     return parser.parse_args()
@@ -1564,6 +1662,8 @@ def main():
                     trace_summary=rca_trace_summary,
                     guard_reasons=guard_reasons,
                 )
+            elif verdict == "HEALTHY" and alert_sink.configured:
+                alert_sink.reset_all()
 
             if args.max_samples > 0 and sample_idx >= args.max_samples:
                 print(f"\n[Detector] Reached target {args.max_samples} samples. Finishing run...", flush=True)

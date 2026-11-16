@@ -32,7 +32,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "sum(rate(otelcol_receiver_accepted_metric_points[1m])) + sum(rate(otelcol_receiver_accepted_spans[1m])) + sum(rate(otelcol_receiver_accepted_log_records[1m]))",
+          "expr": "sum(rate({__name__=~\"otelcol_receiver_accepted_metric_points.*\"}[1m])) + sum(rate({__name__=~\"otelcol_receiver_accepted_spans.*\"}[1m])) + sum(rate({__name__=~\"otelcol_receiver_accepted_log_records.*\"}[1m]))",
           "instant": true,
           "refId": "A"
         }
@@ -72,7 +72,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "(sum(rate(otelcol_exporter_sent_metric_points[5m])) * 0.0005 + sum(rate(otelcol_exporter_sent_spans[5m])) * 0.001 + sum(rate(otelcol_exporter_sent_log_records[5m])) * 0.0008) * 86400 * 30 / 1024",
+          "expr": "(sum(rate({__name__=~\"otelcol_exporter_sent_metric_points.*\"}[5m])) * 0.0005 + sum(rate({__name__=~\"otelcol_exporter_sent_spans.*\"}[5m])) * 0.001 + sum(rate({__name__=~\"otelcol_exporter_sent_log_records.*\"}[5m])) * 0.0008) * 86400 * 30 / 1024",
           "instant": true,
           "refId": "A"
         }
@@ -112,7 +112,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "((sum(rate(otelcol_exporter_sent_spans{exporter=~\"otlp.*\"}[5m])) * 0.001 + sum(rate(otelcol_exporter_sent_metric_points{exporter=~\"otlp.*\"}[5m])) * 0.0005) * 86400 * 30 / 1024) * 0.09",
+          "expr": "((sum(rate({__name__=~\"otelcol_exporter_sent_spans.*\", exporter=~\"otlp.*\"}[5m])) * 0.001 + sum(rate({__name__=~\"otelcol_exporter_sent_metric_points.*\", exporter=~\"otlp.*\"}[5m])) * 0.0005) * 86400 * 30 / 1024) * 0.09",
           "instant": true,
           "refId": "A"
         }
@@ -152,7 +152,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "sum by (k8s_cluster_name) (rate(otelcol_receiver_accepted_metric_points[1m]))",
+          "expr": "sum by (k8s_cluster_name) (rate({__name__=~\"otelcol_receiver_accepted_metric_points.*\"}[1m]))",
           "legendFormat": "Metrics - {{k8s_cluster_name}}",
           "range": true,
           "refId": "A"
@@ -163,7 +163,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "sum by (k8s_cluster_name) (rate(otelcol_receiver_accepted_log_records[1m]))",
+          "expr": "sum by (k8s_cluster_name) (rate({__name__=~\"otelcol_receiver_accepted_log_records.*\"}[1m]))",
           "legendFormat": "Logs - {{k8s_cluster_name}}",
           "range": true,
           "refId": "B"
@@ -176,7 +176,32 @@
             "lineWidth": 2
           },
           "unit": "pps"
-        }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "logs/s"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -202,7 +227,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "sum(rate(otelcol_receiver_accepted_spans[1m]))",
+          "expr": "sum(rate({__name__=~\"otelcol_receiver_accepted_spans.*\"}[1m]))",
           "legendFormat": "Spans Received at Collector",
           "range": true,
           "refId": "A"
@@ -213,7 +238,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "sum(rate(otelcol_processor_filter_spans_filtered[1m]))",
+          "expr": "sum(rate({__name__=~\"otelcol_processor_filter_spans_filtered.*\"}[1m]))",
           "legendFormat": "Noise Spans Dropped at Edge (Health Checks)",
           "range": true,
           "refId": "B"
@@ -224,7 +249,7 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "sum(rate(otelcol_exporter_sent_spans[1m]))",
+          "expr": "sum(rate({__name__=~\"otelcol_exporter_sent_spans.*\"}[1m]))",
           "legendFormat": "Sampled Spans Ingested to Tempo",
           "range": true,
           "refId": "C"
@@ -362,8 +387,8 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "sum by (service_name) (rate(otelcol_receiver_accepted_log_records{service_name=~\"$service\"}[1m]))",
-          "legendFormat": "{{service_name}} Logs/s",
+          "expr": "sum by (k8s_cluster_name) (rate({__name__=~\"otelcol_exporter_sent_log_records.*\"}[1m])) or sum(rate(loki_distributor_lines_received_total[1m])) or vector(0)",
+          "legendFormat": "{{k8s_cluster_name}} Logs/s",
           "range": true,
           "refId": "A"
         }
@@ -401,8 +426,8 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "sum by (pod) (container_memory_working_set_bytes{pod=~\"otel-collector.*\"})",
-          "legendFormat": "Memory RSS - {{pod}}",
+          "expr": "sum by (job, app) (otelcol_process_memory_rss) or sum by (pod) (container_memory_working_set_bytes{pod=~\"otel-collector.*\"})",
+          "legendFormat": "Memory RSS - {{job}}",
           "range": true,
           "refId": "A"
         },
@@ -412,8 +437,8 @@
             "uid": "thanos-query-ds"
           },
           "editorMode": "code",
-          "expr": "sum by (pod) (rate(otelcol_processor_dropped_metric_points[1m])) + sum by (pod) (rate(otelcol_processor_dropped_spans[1m]))",
-          "legendFormat": "Dropped Telemetry Points/s - {{pod}}",
+          "expr": "(sum by (job) (rate({__name__=~\"otelcol_processor_dropped_metric_points.*\"}[1m])) or vector(0)) + (sum by (job) (rate({__name__=~\"otelcol_processor_dropped_spans.*\"}[1m])) or vector(0))",
+          "legendFormat": "Dropped Telemetry Points/s - {{job}}",
           "range": true,
           "refId": "B"
         }

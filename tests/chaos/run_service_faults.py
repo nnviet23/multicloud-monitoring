@@ -13,11 +13,20 @@ import urllib.error
 import urllib.request
 import ipaddress
 
-from run_live import ROOT, command, utc_now
+from run_live import ROOT, command, utc_now, resolve_context
+
+_CONTEXT_CACHE = {}
+
+
+def get_context(cloud: str) -> str:
+    if cloud not in _CONTEXT_CACHE:
+        _CONTEXT_CACHE[cloud] = resolve_context(cloud)
+    return _CONTEXT_CACHE[cloud]
 
 
 def kubectl(cloud, *args):
-    return ["kubectl", "--context", f"k3d-{cloud}-k3d", "--request-timeout=10s", "-n", "teastore", *args]
+    ctx = get_context(cloud)
+    return ["kubectl", "--context", ctx, "--request-timeout=10s", "-n", "teastore", *args]
 
 
 def sql_command(sql, timeout=150):
@@ -184,7 +193,23 @@ def main():
     parser.add_argument("--interval", type=int, default=10,
                         help="Detector polling interval; 10s matches the training sampling interval")
     parser.add_argument("--output", required=True)
+    parser.add_argument("--aws-context", default=None, help="Kubectl context for AWS cluster")
+    parser.add_argument("--azure-context", default=None, help="Kubectl context for Azure cluster")
+    parser.add_argument("--gcp-context", default=None, help="Kubectl context for GCP cluster")
+    parser.add_argument("--context", default=None, help="Default kubectl context override")
     args = parser.parse_args()
+    if args.aws_context:
+        _CONTEXT_CACHE["aws"] = args.aws_context
+    elif args.context:
+        _CONTEXT_CACHE["aws"] = args.context
+    if args.azure_context:
+        _CONTEXT_CACHE["azure"] = args.azure_context
+    elif args.context:
+        _CONTEXT_CACHE["azure"] = args.context
+    if args.gcp_context:
+        _CONTEXT_CACHE["gcp"] = args.gcp_context
+    elif args.context:
+        _CONTEXT_CACHE["gcp"] = args.context
     if not 30 <= args.fault <= 120 or args.recovery < 90 or not 1 <= args.users <= 20:
         parser.error("fault must be 30..120s, recovery >=90s, users 1..20")
     output = (ROOT / args.output).resolve()

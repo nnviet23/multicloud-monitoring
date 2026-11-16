@@ -1,541 +1,807 @@
-# Kế Hoạch Kiến Trúc Hệ Thống & Đánh Giá Benchmark Ứng Dụng (System Architecture Plan & Benchmark Evaluation)
-
-> **Tài liệu:** `docs/architecture/01_SystemArchitecturePlan.md`  
-> **Phiên bản:** 3.0 (Final Architecture Plan & Closed-Loop AIOps Integration)  
-> **Trạng thái:** Kế hoạch kiến trúc phê duyệt chính thức (Approved Master Plan)  
-> **Quyết định nền tảng:** Triển khai theo **Phương án A** (Edge-Filtered Ingestion with Centralized Processing & Batch Ingestion) kết hợp **AI Anomaly Detection Engine V3** & **Vòng lặp Closed-Loop AIOps**. Tỷ lệ lấy mẫu vết (trace sampling rate) khởi điểm là **20%** tại biên (100% giữ lại trace lỗi và latency cao) và tiền tổng hợp đồ thị Topology (`traces_service_graph_*`) tại Hub OTel Gateway. Toàn bộ hạ tầng được điều phối tự động bằng **Makefile** và cấu hình bảo mật tập trung qua **.env**.
+# BÁO CÁO THIẾT KẾ KIẾN TRÚC HỆ THỐNG GIÁM SÁT ĐA ĐÁM MÂY (MULTI-CLOUD OBSERVABILITY PLATFORM)
+## Nền Tảng Quan Sát Toàn Diện Hub-Spoke, Bảo Mật mTLS 1.3 Native, Chuẩn Hóa OpenTelemetry Semantic Conventions v1.45 & Vận Hành Trí Tuệ Nhân Tạo AIOps V3
 
 ---
 
-## 1. Tổng Quan Kiến Trúc Hệ Thống & Lộ Trình Triển Khai (4 Phases)
+## PHẦN MỞ ĐẦU: DANH MỤC CÔNG NGHỆ SỬ DỤNG (TECH STACK MATRIX)
 
-Kiến trúc hệ thống được xây dựng nhằm hiện thực hóa mô hình quan sát đa đám mây (Multi-Cloud Observability) phân tán theo cấu trúc **Hub-Spoke**, giải quyết triệt để bài toán cô lập dữ liệu, tối ưu chi phí băng thông truyền tải qua mạng diện rộng (WAN egress cost) và thống nhất phân tích 3 trụ cột dữ liệu viễn trắc (Metrics, Logs, Traces).
+Để xây dựng một nền tảng giám sát đa đám mây có tính tái lập cao (Reproducibility), độ tin cậy tuyệt đối và sẵn sàng triển khai trên các môi trường đám mây thực tế, toàn bộ các thành phần phần mềm trong đồ án đều được **ghim cứng phiên bản (Strict Version Pinning)**.
 
-### 1.1. Sơ Đồ Kiến Trúc Hệ Thống (System Architecture Diagram)
+| Thành Phần Công Nghệ | Phiên Bản Ghim Cứng (Pinned Version) | Vai Trò & Chức Năng Kỹ Thuật Cốt Lõi |
+| :--- | :--- | :--- |
+| **Docker Engine & Compose** | `26.1.3` / `v2.27.1` | Nền tảng ảo hóa container máy chủ cục bộ, khởi tạo mạng ảo liên kết `mc-monitoring-net`. |
+| **k3d (Lightweight K8s)** | `v5.6.0` (K3s `v1.28.8-k3s1`) | Khởi tạo 3 cụm Kubernetes độc lập giả lập môi trường đa đám mây (`aws-k3d`, `azure-k3d`, `hub-k3d`). |
+| **Linux Traffic Control (`tc netem`)** | `iproute2-6.1.0` | Giả lập suy hao mạng WAN liên đám mây (độ trễ RTT $10\text{ms} \pm 2\text{ms}$, mất gói $0.1\%$). |
+| **Ansible Core** | `2.16.5` (Python `3.10.12`) | Tự động hóa toàn bộ vòng đời triển khai hạ tầng, đồng bộ cấu hình và xác thực hệ thống. |
+| **Kustomize** | `v5.3.0` | Quản trị khai báo Kubernetes theo nguyên tắc đơn nhiệm (Single Responsibility Principle - SRP) và phân tách Base/Overlay. |
+| **OpenTelemetry Collector Contrib**| `0.98.0` | Xương sống thu nhận viễn trắc tại biên (Spoke Edge) và chuẩn hóa tập trung tại trung tâm (Hub Gateway). |
+| **OpenTelemetry Java Agent** | `v2.10.0` | Tự động đo đạc (Bytecode Auto-Instrumentation) mã nguồn Java microservices của TeaStore không cần can thiệp code. |
+| **Native mTLS 1.3 Engine** | `Go crypto/tls` (TLS 1.3) | Bảo mật đường truyền OTLP gRPC `:4317` xuyên đám mây bằng chứng chỉ X.509 hai chiều, loại bỏ Proxy trung gian. |
+| **Prometheus & Thanos** | Prom `v2.51.2` / Thanos `v0.34.1` | Lưu trữ số đo (Metrics TSDB), gom cụm dữ liệu phân tán và phân tầng lưu trữ dài hạn về Object Storage. |
+| **Grafana Loki** | `v2.9.8` | Lưu trữ và lập chỉ mục nhật ký phân tán (Logs), hỗ trợ ngôn ngữ truy vấn LogQL tương quan cao. |
+| **Grafana Tempo** | `v2.4.1` | Lưu trữ vết phân tán (Distributed Traces) quy mô lớn, tích hợp sâu với Loki và Prometheus. |
+| **MinIO S3 Storage** | `RELEASE.2024-04-18T19-09-19Z` | Hệ thống lưu trữ đối tượng tương thích AWS S3, đóng vai trò Kho lưu trữ lạnh (Cold Tier) cho Hub. |
+| **Grafana Enterprise OSS** | `10.4.2` | Bảng điều khiển trực quan hóa tập trung (8 Dashboards chuyên sâu với 61 Panels chuẩn mực). |
+| **Pyrra SLO Controller** | `v0.7.1` | Quản trị chỉ tiêu mức dịch vụ dạng mã (SLO-as-Code) theo chuẩn Google SRE Multi-Window Multi-Burn-Rate. |
+| **Robusta Runner & Smart Alerting**| `0.10.28` | Nền tảng tiếp nhận cảnh báo thông minh từ Alertmanager, tự động trích xuất log/sự kiện K8s và gửi Telegram. |
+| **AI Anomaly Engine V3** | Python `3.10`, PyTorch `2.2.2` | Động cơ trí tuệ nhân tạo phối hợp (GRU + TCN Autoencoder + Isolation Forest) suy luận bất thường thời gian thực. |
+| **TeaStore Microservices** | `1.4.1` (SPEC RG Certified) | Ứng dụng thương mại điện tử mẫu chuẩn nghiên cứu quốc tế, phân tán đa đám mây. |
+| **Locust Load Generator** | `2.24.1` | Công cụ sinh tải người dùng thực tế theo hành vi khách hàng thương mại điện tử chuẩn SPEC RG. |
+| **Chaos Engineering Tools** | `FaultAgent.java` (JVM Attach) | Bộ công cụ tiêm lỗi hỗn loạn (Rò rỉ bộ nhớ Heap, thắt cổ chai CPU, khóa bảng DB MySQL). |
 
-Dưới đây là sơ đồ chi tiết phản ánh toàn bộ các thành phần đã được chuẩn hóa từ [SystemArchitecture.drawio](file:///d:/Workstation/HCMUS/Grade4/01_TTDATN_K23/Tuần%203/multicloud-monitoring/docs/architecture/SystemArchitecture.drawio):
+---
+
+## PHẦN 1: TỔNG QUAN KIẾN TRÚC HỆ THỐNG, ỨNG DỤNG MẪU & CƠ CHẾ KHỞI TẠO HẠ TẦNG
+
+### 1.1. Bài toán Giám sát Đa đám mây & Mô hình Phân tán Ứng dụng TeaStore
+
+Trong kỷ nguyên điện toán đám mây hiện đại, các tổ chức lớn thường triển khai hệ thống phân tán trên nhiều nhà cung cấp dịch vụ đám mây (Multi-Cloud) như **AWS (Amazon Web Services)** và **Azure (Microsoft Azure)** nhằm:
+- Tránh phụ thuộc độc quyền vào một nhà cung cấp (**Vendor Lock-in**).
+- Tối ưu hóa chi phí vận hành dựa trên thế mạnh của từng nền tảng (ví dụ: tận dụng năng lực điện toán linh hoạt của AWS và cơ sở dữ liệu doanh nghiệp của Azure).
+- Nâng cao tính sẵn sàng và khả năng khắc phục thảm họa (**Disaster Recovery**).
+
+Tuy nhiên, kiến trúc đa đám mây đặt ra **3 thách thức viễn trắc sống còn**:
+1. **Chi phí truyền dữ liệu mạng WAN (WAN Egress Cost):** Cước phí truyền dữ liệu ra khỏi đám mây công cộng (Internet Egress) rất đắt đỏ (trung bình \$0.09/GB trên AWS/Azure). Nếu truyền toàn bộ dữ liệu viễn trắc thô về trung tâm, chi phí giám sát sẽ bùng nổ, thậm chí vượt quá chi phí vận hành ứng dụng chính.
+2. **Xung đột định danh và phân mảnh ngữ cảnh (Semantic Fragmentation):** Mỗi nhà cung cấp đám mây và cụm Kubernetes gán nhãn tài nguyên khác nhau (ví dụ: AWS dùng `instance-id`, Azure dùng `vm-id`, Kubernetes dùng `pod-uid`). Nếu không chuẩn hóa, các công cụ phân tích không thể liên kết vết giao dịch xuyên suốt.
+3. **Bảo mật đường truyền qua mạng công cộng (Perimeter Security):** Dữ liệu viễn trắc di chuyển giữa các đám mây qua mạng Internet công cộng rất dễ bị nghe lén, giả mạo hoặc tấn công man-in-the-middle (MITM).
+
+Để giải quyết bài toán trên, đồ án xây dựng hệ thống giám sát trên mô hình ứng dụng mẫu **TeaStore** (được chứng nhận bởi SPEC Research Group). Ứng dụng TeaStore gồm 6 vi dịch vụ viết bằng Java và 1 cơ sở dữ liệu quan hệ MySQL, được chia tách theo mô hình kiến trúc phân tầng:
+- **Cụm Spoke 1 - `aws-k3d` (Tầng Điện Toán & Giao Diện - Compute Tier):** Mô phỏng cụm AWS EKS, lưu trữ các dịch vụ tiếp nhận lưu lượng người dùng và tính toán phi trạng thái:
+  - `teastore-webui`: Cổng giao diện người dùng web.
+  - `teastore-auth`: Dịch vụ xác thực và cấp phiên đăng nhập.
+  - `teastore-image`: Dịch vụ xử lý và lưu trữ bộ nhớ đệm hình ảnh sản phẩm.
+  - `teastore-recommender`: Dịch vụ gợi ý sản phẩm dựa trên học máy nhẹ.
+  - `teastore-registry`: Dịch vụ định danh đăng ký vi dịch vụ qua giao thức **RMI (Remote Method Invocation - Gọi phương thức từ xa của Java)**.
+  - `locust-loadgen`: Máy sinh tải người dùng thực nghiệm.
+- **Cụm Spoke 2 - `azure-k3d` (Tầng Lưu Trữ Trạng Thái - Data Tier):** Mô phỏng cụm Azure AKS, lưu trữ các dịch vụ nghiệp vụ cốt lõi và dữ liệu trạng thái:
+  - `teastore-persistence`: Dịch vụ trừu tượng hóa tầng dữ liệu, cung cấp REST API cho các dịch vụ trên `aws-k3d`.
+  - `teastore-db`: Cơ sở dữ liệu quan hệ MySQL 8.0 lưu trữ thông tin tài khoản, danh mục sản phẩm và lịch sử đặt hàng.
+- **Cụm Trung Tâm - `hub-k3d` (Tầng Giám Sát Tập Trung - Central Observability Hub):** Cụm tiếp nhận tập trung toàn bộ dữ liệu viễn trắc từ cả hai Spoke, xử lý, chuẩn hóa, phân tầng lưu trữ và vận hành động cơ trí tuệ nhân tạo AIOps.
+
+
+> **Sơ Đồ 1 — Tổng Quan Kiến Trúc Nền Tảng Giám Sát Đa Đám Mây (Hub-Spoke Native mTLS 1.3):**
+
+> 
+> ![Sơ đồ 1: Tổng quan Kiến trúc Hệ thống Multi-Cloud Hub-Spoke](../diagram/01_system_architecture_overview.png)
+
+
+![](../diagram/00_SystemArchitecture.png)
+
+### 1.2. 5 Chiến Lược Kỹ Thuật Cốt Lõi
+
+Để hiện thực hóa kiến trúc trên với hiệu năng vượt trội, đồ án áp dụng 5 chiến lược kỹ thuật cốt lõi:
+
+1. **Lọc Tại Biên & Lấy Mẫu 2 Tầng (Edge Pre-filtering & Two-Tier Sampling):**
+   - **Tầng 1 (Tại Spoke Edge Collector):** Bộ xử lý `filter/drop_noise` loại bỏ ngay tại chỗ các bản ghi thăm dò sức khỏe (`/actuator/health`, `/healthz`, kube-probe). Đồng thời, bộ lấy mẫu xác suất `probabilistic_sampler` chỉ lấy **20%** vết giao dịch thông thường thành công, giúp cắt giảm ngay 60–75% băng thông truyền qua WAN.
+   - **Tầng 2 (Tại Hub OTel Gateway):** Bộ lấy mẫu đuôi `tail_sampling` tiếp nhận các vết còn lại và **giữ lại 100% các vết bị lỗi (HTTP 5xx, Exception)** cùng các vết có **thời gian phản hồi bất thường (>1500ms)**. Nhờ đó, băng thông WAN được tiết kiệm tối đa nhưng không bao giờ bỏ sót bất kỳ sự cố nào.
+2. **Chuẩn Hóa Ngữ Nghĩa Toàn Diện (OpenTelemetry Semantic Conventions v1.45):**
+   Toàn bộ viễn trắc từ các nguồn không đồng nhất được chuẩn hóa về định dạng OTel chuẩn mực. Hệ thống sử dụng khóa định danh phức hợp chống va chạm (`k8s.cluster.name`, `cloud.provider`, `cloud.region`, `k8s.namespace.name`, `k8s.pod.name`), loại bỏ hoàn toàn tình trạng trùng lặp định danh khi ghép nối dữ liệu giữa các đám mây.
+3. **Bảo Mật Kênh Truyền mTLS 1.3 Native (Loại Bỏ Proxy Trung Gian):**
+   Thay vì sử dụng một tầng Reverse Proxy trung gian (như Traefik hay NGINX Ingress) phía trước Hub Gateway, đồ án kích hoạt cơ chế xác thực hai chiều mTLS 1.3 trực tiếp ngay trong nhân Go của OpenTelemetry Collector Receiver tại cổng `:4317`.
+   > **Lý do loại bỏ Traefik Proxy:**
+   > - *Giảm thiểu điểm trễ mạng (Network Hop):* Việc đi qua Traefik tạo thêm 1 chặng mạng trung gian, làm tăng độ trễ gRPC từ 2–5ms cho mỗi gói tin viễn trắc.
+   > - *Tránh nghẽn cổ chai tài nguyên (Resource Overhead):* Traefik phải duy trì bảng định tuyến và tiêu tốn thêm 150–250MB RAM trên cụm Hub.
+   > - *Bảo toàn đầu cuối bảo mật (True End-to-End Encryption):* Traefik giải mã mTLS rồi chuyển tiếp gRPC nội bộ dạng bản rõ (Plaintext) sang OTel Gateway, tạo ra lỗ hổng bảo mật nội bộ. Cơ chế Native mTLS đảm bảo dữ liệu chỉ được giải mã bên trong tiến trình của OTel Gateway.
+4. **Tiền Tổng Hợp Đồ Thị Dịch Vụ Tại Hub (`servicegraphconnector`):**
+   Thay vì bắt các bảng điều khiển Grafana hoặc dịch vụ bên ngoài phải quét hàng triệu vết giao dịch để vẽ đồ thị phụ thuộc (rất chậm và tốn RAM), Hub Gateway tích hợp `servicegraphconnector`. Thành phần này tự động phân tích cặp span client-server trong luồng vết và sinh ra metric `traces_service_graph_request_total` đẩy trực tiếp sang Thanos Receive theo thời gian thực.
+5. **Quan Sát Cơ Sở Dữ Liệu 3 Lớp Không Xâm Lấn (Non-Invasive Database Observability):**
+   Giám sát cơ sở dữ liệu MySQL mà không cần cài đặt agent nặng nề vào bên trong container cơ sở dữ liệu:
+   - *Lớp 1 (Ứng dụng APM):* Bắt các span JDBC từ `teastore-persistence` để đo thời gian thực thi câu lệnh SQL và các tham số truy vấn.
+   - *Lớp 2 (Hạ tầng Kernel & K8s):* Đo thời gian chờ đĩa I/O (I/O Wait), tỷ lệ sử dụng cgroup CPU/RAM của container MySQL.
+   - *Lớp 3 (Nhật ký Engine):* Thu thập nhật ký lỗi MySQL (`error.log`) và truy vấn chậm (`mysql-slow.log`) qua OTel `filelog` receiver.
+6. **Lưu Trữ Phân Tầng Nóng - Lạnh (Multi-Tier Hot/Cold Storage):**
+   Dữ liệu mới (1–2 giờ gần nhất) được lưu trên bộ nhớ đệm và SSD cục bộ (Hot Tier) để phục vụ truy vấn tức thời. Dữ liệu lịch sử được Thanos, Loki và Tempo tự động nén thành các khối (blocks) và đẩy về **MinIO S3 Object Storage** (Cold Tier), giúp giảm 80% chi phí lưu trữ dài hạn.
+
+---
+
+### 1.3. Quy Trình Cấp Phát Tự Động Qua Makefile, Ansible & Kustomize SRP
+
+Toàn bộ hệ thống được tự động hóa 100% thông qua công cụ quản lý tác vụ `make` kết hợp cùng các Playbook Ansible và công cụ quản trị khai báo Kustomize tuân thủ nghiêm ngặt **Nguyên Tắc Đơn Nhiệm (SRP - Single Responsibility Principle)**: mỗi tệp manifest chỉ đảm nhận đúng một đối tượng Kubernetes, được đánh số theo thứ tự phụ thuộc (`00-namespace.yaml`, `01-secret.yaml`, `02-configmap.yaml`, `03-pvc.yaml`, `04-deployment.yaml`, `05-service.yaml`).
+
+
+> **Sơ Đồ 2 — Vòng Đời Cấp Phát Hạ Tầng & Tự Động Hóa Vận Hành (Makefile & Ansible Lifecycle):**
+
+> 
+> ![Sơ đồ 2: Vòng đời Cấp phát Hạ tầng và Tự động hóa qua Makefile & Ansible](../diagram/02_infrastructure_provisioning_lifecycle.png)
+
 
 ```mermaid
-flowchart TB
-    subgraph SpokeAWS ["Spoke 1: AWS Simulation (aws-k3d)"]
-        direction TB
-        subgraph TS_Compute ["TeaStore Compute Services"]
-            WebUI["WebUI Service"]
-            Auth["Auth Service"]
-            ImageProvider["Image Provider"]
-            Recommender["Recommender Service"]
-        end
-        Agent1["OTel Java Agent"] -.->|Inject TraceContext & Scrape| TS_Compute
-        LoadGen["Load Generator (Locust Master/Worker)"] -->|HTTP Traffic| WebUI
-        
-        EdgeCol1["OTel Collector Spoke 1"]
-        EdgeCol1_Recv["OTLP Receiver (gRPC:4317 / HTTP:4318)"]
-        EdgeCol1_Proc["Processors: Memory Limiter -> Filter -> Batch (20% Sampling)"]
-        EdgeCol1_Exp["OTLP Exporter (mTLS Client)"]
-        
-        TS_Compute -->|OTLP Traces/Metrics/Logs| EdgeCol1_Recv
-        EdgeCol1_Recv --> EdgeCol1_Proc --> EdgeCol1_Exp
-    end
-
-    subgraph SpokeAzure ["Spoke 2: Azure Simulation (azure-k3d)"]
-        direction TB
-        subgraph TS_Data ["TeaStore Persistence Services"]
-            Persistence["Persistence Service"]
-            MySQL[(MySQL Database 8.0)]
-        end
-        Agent2["OTel Java Agent"] -.->|Inject TraceContext & Scrape| Persistence
-        Persistence -->|JDBC Queries| MySQL
-        
-        EdgeCol2["OTel Collector Spoke 2"]
-        EdgeCol2_Recv["OTLP & MySQL Receiver"]
-        EdgeCol2_Proc["Processors: Memory Limiter -> Filter -> Batch (20% Sampling)"]
-        EdgeCol2_Exp["OTLP Exporter (mTLS Client)"]
-        
-        Persistence -->|OTLP| EdgeCol2_Recv
-        MySQL -.->|Metrics Scrape:3306| EdgeCol2_Recv
-        EdgeCol2_Recv --> EdgeCol2_Proc --> EdgeCol2_Exp
-    end
-
-    subgraph WAN ["Mạng WAN Giả Lập (Simulated WAN - Docker Bridge: mc-monitoring-net)"]
-        direction LR
-        WAN_Net["tc / netem Impairment: RTT 10ms | Jitter 2ms | Packet Loss 0.1%"]
-        mTLS_Tunnel["Kênh truyền bảo mật mTLS 1.3 (x509 Mutual Authentication)"]
-    end
-
-    subgraph HubCluster ["Central Hub: Aggregation & Storage (hub-k3d)"]
-        direction TB
-        Ingress["Traefik Ingress Controller (mTLS Termination)"]
-        
-        subgraph HubPipeline ["Hub Ingestion & Enrichment Pipeline"]
-            HubGateway["OTel Collector Gateway (Contrib)"]
-            Hub_Recv["OTLP Receiver (4317/4318)"]
-            Hub_Proc["Processors: Memory Limiter -> Filter -> Transform (OTTL Normalization) -> Batch"]
-            Hub_Exp["Exporters: Remote Write | OTLP/HTTP | OTLP/gRPC"]
-            Hub_Recv --> Hub_Proc --> Hub_Exp
-        end
-
-        subgraph StorageLayer ["Tầng Lưu Trữ Đa Tín Hiệu (Storage Backends)"]
-            ThanosRecv["Thanos Receive (Metrics TSDB)"]
-            ThanosQuery["Thanos Query (PromQL Engine)"]
-            Loki["Grafana Loki (Logs TSDB)"]
-            Tempo["Grafana Tempo (Traces TSDB)"]
-            MinIO[("MinIO Object Storage (S3 API)\n- thanos-bucket\n- loki-bucket\n- tempo-bucket")]
-        end
-
-        subgraph AlertingAndSLO ["Vòng Lặp Cảnh Báo & SLO Engine"]
-            Pyrra["Pyrra (SLO-as-code)"]
-            ThanosRuler["Thanos Ruler"]
-            Alertmgr["Alertmanager"]
-            Robusta["Robusta Engine"]
-            TelegramBot["Telegram Alert Sink"]
-        end
-
-        subgraph AIOpsClosedLoop ["Vòng Lặp Phát Hiện Bất Thường AI (Closed-Loop AIOps)"]
-            AIEngine["AI Anomaly Detector (detector.py)\n- Universal Autoencoder (GRU + TCN)\n- Dual Sliding Window Scorer\n- Tempo Trace RCA Decomposition"]
-            MetricsExporter["Embedded Prometheus Exporter (:9108)"]
-            AIEngine -->|Update Metrics| MetricsExporter
-            MetricsExporter -->|Scrape 5s| ThanosRecv
-            AIEngine -->|Alert Markdown + RCA| TelegramBot
-        end
-
-        Grafana["Grafana Central Dashboard (7 SRE Dashboards + Panel 7 AI Anomaly)"]
-    end
-
-    %% Connections
-    EdgeCol1_Exp ==>|OTLP over mTLS 1.3| WAN_Net
-    EdgeCol2_Exp ==>|OTLP over mTLS 1.3| WAN_Net
-    WAN_Net ==> Ingress
-    Ingress --> Hub_Recv
-    
-    Hub_Exp -->|Prometheus Remote Write| ThanosRecv
-    Hub_Exp -->|OTLP/HTTP| Loki
-    Hub_Exp -->|OTLP/gRPC| Tempo
-    
-    ThanosRecv -->|Block Push / Store Gateway| MinIO
-    Loki -->|Chunks Push| MinIO
-    Tempo -->|Trace Blocks Push| MinIO
-    
-    ThanosQuery --> ThanosRecv
-    ThanosQuery -.->|Read Historical Blocks| MinIO
-    
-    Pyrra -->|Generate PromQL Rules| ThanosRuler
-    ThanosRuler -->|Evaluate PromQL| ThanosQuery
-    ThanosRuler -->|Fire Alerts| Alertmgr
-    Alertmgr -->|Webhook| Robusta
-    Robusta -.->|Query Pod Logs/Events| HubCluster
-    Robusta -->|Enriched Alert Message| TelegramBot
-    
-    AIEngine -->|Vectorized PromQL: 8 features| ThanosQuery
-    Tempo -->|Trace Spans Analysis: T_WAN + T_self + T_DB| AIEngine
-
-    Grafana -->|PromQL| ThanosQuery
-    Grafana -->|LogQL| Loki
-    Grafana -->|TraceQL| Tempo
+flowchart TD
+  Start(["Bắt đầu: make deploy-all"]) --> Step1["1. make infra\n(Ansible: 01_setup_local_infra.yml)"]
+  
+  subgraph Infra_Detail ["Chi tiết Khởi tạo Hạ tầng (01_setup_local_infra.yml)"]
+    DockerNet["Tạo Docker Network: mc-monitoring-net (172.28.0.0/16)"]
+    k3d_AWS["Tạo cụm k3d: aws-k3d (172.28.0.2)"]
+    k3d_Azure["Tạo cụm k3d: azure-k3d (172.28.0.3)"]
+    k3d_Hub["Tạo cụm k3d: hub-k3d (172.28.0.4)"]
+    WAN_TC_Apply["Tiêm suy hao: tc qdisc add dev eth0 root netem delay 10ms 2ms loss 0.1%"]
+    DockerNet --> k3d_AWS & k3d_Azure & k3d_Hub
+    k3d_AWS & k3d_Azure --> WAN_TC_Apply
+  end
+  Step1 --> Infra_Detail
+  
+  Infra_Detail --> Step2["2. make certs\n(Script: generate_certs.sh)"]
+  
+  subgraph Certs_Detail ["Chi tiết Cấp phát PKI mTLS (generate_certs.sh)"]
+    CA["Tạo Root CA (ca.crt / ca.key)"]
+    HubCert["Ký Server Cert cho Hub (SAN: hub-collector, hub-k3d, localhost)"]
+    Spoke1Cert["Ký Client Cert cho Spoke 1 (spoke1.crt / spoke1.key)"]
+    Spoke2Cert["Ký Client Cert cho Spoke 2 (spoke2.crt / spoke2.key)"]
+    CA --> HubCert & Spoke1Cert & Spoke2Cert
+  end
+  Step2 --> Certs_Detail
+  
+  Certs_Detail --> Step3["3. make hub\n(Ansible: 02_deploy_hub_observability.yml)"]
+  
+  subgraph Hub_Deploy ["Chi tiết Cài đặt Hub (Kustomize SRP)"]
+    HubK8s["Tạo Namespace: monitoring\nNạp Secret mTLS: hub-mtls-certs\nTriển khai MinIO S3, Thanos, Loki, Tempo\nTriển khai Hub OTel Gateway Native mTLS\nTriển khai Grafana, Pyrra, Robusta, AI Engine V3"]
+  end
+  Step3 --> Hub_Deploy
+  
+  Hub_Deploy --> Step4["4. make spokes\n(Ansible: 03_deploy_spokes_collectors.yml)"]
+  
+  subgraph Spokes_Deploy ["Chi tiết Cài đặt Spoke"]
+    SpokeK8s["Nạp Secret mTLS: spoke-mtls-certs\nTriển khai OTel Edge Collectors trên aws-k3d & azure-k3d\nCấu hình mTLS Client Exporter trỏ về 172.28.0.4:4317"]
+  end
+  Step4 --> Spokes_Deploy
+  
+  Spokes_Deploy --> Step5["5. Đồng bộ DNS Liên cụm\n(Ansible: 04_sync_cluster_hosts.yml)"]
+  
+  subgraph DNS_Sync ["Cơ chế Phân giải Tên miền Liên đám mây"]
+    CoreDNS["Ghi đè CoreDNS NodeHosts trên aws-k3d & azure-k3d:\n172.28.0.4 -> hub-collector.mc-monitoring-net\n172.28.0.3 -> teastore-persistence.azure-k3d"]
+  end
+  Step5 --> DNS_Sync
+  
+  DNS_Sync --> Step6["6. make teastore\n(Triển khai ứng dụng phân tán TeaStore & MySQL)"]
+  Step6 --> EndNode(["Hệ thống Sẵn sàng Hoạt động 100%"])
 ```
 
----
+#### Minh chứng Khởi tạo & Kiểm thử Toàn diện Cụm (`make verify`)
+Dưới đây là hình ảnh thực thi lệnh `make verify`, xác nhận trạng thái toàn bộ các Node, Pod và tài nguyên trên cả 3 cụm `hub-k3d`, `aws-k3d`, `azure-k3d` đạt 100% Running và Ready:
 
-### 1.2. Giải Thích Chi Tiết Các Phase Triển Khai Thực Tế
-
-| Giai đoạn (Phase) | Mục tiêu trọng tâm | Trạng thái | Chi tiết kỹ thuật & Tiêu chí hoàn thành (Exit Criteria) |
-|---|---|---|---|
-| **Phase 1: Local Infrastructure & Network Baseline** | Thiết lập hạ tầng cụm cục bộ và mô phỏng mạng WAN | **HOÀN THÀNH** | - Sử dụng **Makefile** và **Ansible** tự động hóa tạo 3 cụm k3d (`aws-k3d`, `azure-k3d`, `hub-k3d`) gắn trên Docker bridge `mc-monitoring-net: 172.28.0.0/16`.<br>- Sử dụng Linux `tc` và `netem` tiêm suy hao mạng WAN: trễ khứ hồi (RTT) 10ms, jitter 2ms, tỉ lệ mất gói 0.1%.<br>- Khởi tạo PKI CA nội bộ, phát hành chứng chỉ x509 SAN cho Traefik Ingress và OTel Collectors mTLS 1.3.<br>- *Kết quả:* 3 cụm kết nối an toàn, phân giải DNS thông suốt qua mạng WAN giả lập. |
-| **Phase 2: Workload & Telemetry Collection (Spoke Layer)** | Triển khai TeaStore và thu thập viễn trắc tại biên | **HOÀN THÀNH** | - Triển khai các vi dịch vụ tính toán của TeaStore trên `aws-k3d` và tầng lưu trữ MySQL trên `azure-k3d`.<br>- Tích hợp OTel Java Auto-Instrumentation Agent v2.10 vào tất cả container Tomcat.<br>- Cấu hình OTel Edge Collector tại từng Spoke: áp dụng thứ tự xử lý `Memory Limiter -> Filter -> Batch`.<br>- Cấu hình tỷ lệ lấy mẫu vết ban đầu ở mức **20% (Head-based sampling)** đối với traffic bình thường; giữ lại 100% trace lỗi và latency cao.<br>- *Kết quả:* Đẩy viễn trắc an toàn qua mTLS 1.3 sang Hub. |
-| **Phase 3: Central Hub Aggregation, Storage & Alerting** | Hoàn thiện tầng trung tâm tiếp nhận, lưu trữ và cảnh báo | **HOÀN THÀNH** | - Triển khai OTel Collector Gateway tại `hub-k3d` làm giàu dữ liệu (enrichment), gán nhãn định danh và chuẩn hóa timestamp UTC.<br>- Tiền tổng hợp Topology mạng bằng `servicegraphconnector` sinh chỉ số `traces_service_graph_request_total`.<br>- Triển khai Thanos, Loki, Tempo gắn kết với MinIO Object Storage (3 bucket riêng biệt).<br>- Tích hợp Pyrra quản lý SLO-as-code, Thanos Ruler sinh cảnh báo, Robusta đẩy sự cố pod về Telegram.<br>- *Kết quả:* Hệ thống lưu trữ và cảnh báo hoạt động ổn định. |
-| **Phase 3.5: Full-Stack Hostmetrics & SRE Dashboards Upgrade** | Giám sát hạ tầng toàn diện & nâng cấp 7 Dashboards Grafana | **HOÀN THÀNH** | - Bổ sung toàn bộ 7 scrapers `hostmetrics` (`cpu`, `load`, `memory`, `paging`, `disk`, `filesystem`, `network`) tại Edge và Gateway.<br>- Nâng cấp toàn diện bộ 7 Dashboards Grafana chuẩn SRE (USE method, Dual Y-Axis `byFrameRefID`, chuyển đổi `merge` cho bảng đa truy vấn).<br>- *Kết quả:* 100% dashboard hiển thị sống động dữ liệu tài nguyên thực tế. |
-| **Phase 3.6: Unified Resource Monitoring Schemas** | Chuẩn hóa lược đồ tài nguyên Web App & Compute Instance | **HOÀN THÀNH** | - Xây dựng tài liệu đặc tả kiến trúc `RESOURCE_MONITORING_SCHEMAS.md` với cơ chế thu thập 3 tầng (IMDS vs Downward API vs OTTL Enrichment).<br>- Xuất bản 2 bản đặc tả máy đọc được `webapp-monitoring-schema.yaml` và `instance-monitoring-schema.yaml`.<br>- Bổ sung Panel 6 đo lường độ bão hòa JVM Runtime trên Dashboard `red-metrics.json`. |
-| **Phase 3.7: AI Anomaly Detection Engine V3 & Closed-Loop AIOps** | Tích hợp học sâu phát hiện bất thường & bóc tách vết RCA | **HOÀN THÀNH** | - Hợp nhất module `ai-engine/` (Universal GRU + TCN Autoencoders + Isolation Forest) với 8 đặc trưng PromQL $O(1)$.<br>- Bóc tách vết thực thi phân tán qua Tempo (`TempoTraceAnalyzer`) thành $T_{\text{WAN}}$, $T_{\text{self}}$, $T_{\text{DB}}$.<br>- Thiết lập vòng lặp Closed-Loop AIOps: Embedded Prometheus Exporter (`:9108`), Panel 7 Grafana, và Telegram Alert Sink rate-limited 60s.<br>- Chuẩn hóa kịch bản chaos (`tests/chaos/`) tương thích 100% với 3 cụm k3d và xác thực không xung đột giữa `FaultAgent.java` và `CATALINA_OPTS`. |
-| **Phase 4: Workload Testing, Chaos Benchmark & Final Evaluation** | Thực nghiệm đo lường hiệu năng và đánh giá khoa học | **SẴN SÀNG THỰC THI** | - Chạy kịch bản tải thực tế với Locust (`tests/locust/locustfile.py`).<br>- Tiêm lỗi hỗn loạn tự động (`tests/chaos/run_live.py`, `run_service_faults.py`).<br>- Đo lường Recall, Precision, MTTD, False Positive Rate và độ phủ giám sát đa đám mây.<br>- Xuất báo cáo khoa học tổng kết đồ án tốt nghiệp. |
+![Minh chứng lệnh make verify toàn bộ 3 cụm](../pics/C0_make_verify.png)
 
 ---
 
-## 2. Ứng Dụng Kiểm Chuẩn — TeaStore Benchmark Application
+## PHẦN 2: TẦNG MẠNG DIỆN RỘNG (WAN) & HẠ TẦNG KHÓA CÔNG KHAI (PKI / mTLS 1.3)
 
-### 2.1. Kiến Trúc Vi Dịch Vụ Của TeaStore
-TeaStore là ứng dụng chuẩn được cộng đồng nghiên cứu SPEC RG (Standard Performance Evaluation Corporation Research Group) công nhận rộng rãi. Ứng dụng mô phỏng hệ thống thương mại điện tử với 5 microservices Java độc lập và 1 cơ sở dữ liệu:
-1. **WebUI (`aws-k3d`):** Cung cấp giao diện web cho người dùng, xử lý các request HTTP từ client, điều phối gọi các dịch vụ bên dưới.
-2. **Auth (`aws-k3d`):** Xác thực người dùng, cấp phát và kiểm tra token phiên làm việc (session tokens).
-3. **Image Provider (`aws-k3d`):** Quản lý và phân phối hình ảnh sản phẩm (I/O-intensive).
-4. **Recommender (`aws-k3d`):** Sử dụng thuật toán lọc cộng tác (collaborative filtering) để đề xuất sản phẩm liên quan (CPU-intensive & memory-intensive).
-5. **Persistence Service (`azure-k3d`):** Cung cấp API truy cập dữ liệu trung gian, xử lý logic nghiệp vụ đọc/ghi dữ liệu sản phẩm, danh mục, giỏ hàng và đơn hàng.
-6. **Database (`azure-k3d`):** Cơ sở dữ liệu MySQL 8.0 lưu trữ bền vững trạng thái hệ thống.
+### 2.1. Giả lập Suy hao Mạng WAN Liên đám mây (`mc-monitoring-net` & `tc netem`)
 
-### 2.2. Lý Do Lựa Chọn & Phân Bổ Kiến Trúc Đa Đám Mây (Multi-Cloud Splitting)
-- **Mô phỏng chân thực mô hình Multi-Cloud:** Việc phân tách các vi dịch vụ tính toán (WebUI, Auth, Image, Recommender) chạy tại Spoke 1 (`aws-k3d`) và dịch vụ lưu trữ dữ liệu (Persistence, MySQL) chạy tại Spoke 2 (`azure-k3d`) tái hiện mô hình thực tế: Doanh nghiệp đặt compute tại một cloud để tối ưu chi phí tính toán hoặc mở rộng linh hoạt, trong khi cơ sở dữ liệu lõi được đặt tại một cloud khác do yêu cầu bảo mật hoặc chính sách dữ liệu.
-- **Tạo ra luồng giao tiếp liên cụm (Cross-Cluster / Inter-Spoke Communication):** Khi người dùng duyệt web, WebUI tại Spoke 1 bắt buộc phải gọi sang Persistence tại Spoke 2 qua mạng WAN mô phỏng. Điều này tạo điều kiện thực nghiệm hoàn hảo để đánh giá tính phân tán của OTel Tracing (Distributed Tracing qua W3C TraceContext).
-
----
-
-## 3. Giải Quyết Chuyên Sâu 10 Câu Hỏi & Yêu Cầu Kỹ Thuật Bắt Buộc
-
-### 3.1. Chuẩn Hóa Timestamp Về Central Hub Khi Khác Region
-
-#### Vấn đề kỹ thuật
-Trong môi trường đa đám mây phân tán giữa các khu vực địa lý (multi-region):
-1. **Lệch múi giờ (Timezone offsets):** Các server/node có thể thiết lập múi giờ địa phương khác nhau.
-2. **Độ trôi đồng hồ (Clock Skew / Drift):** Mặc dù các cloud provider sử dụng NTP/Chrony, sự bất đồng bộ giữa các máy chủ vật lý vẫn dao động từ vài phần nghìn giây (vài milliseconds) đến hàng chục milliseconds.
-3. Nếu Hub tự ý ghi đè timestamp tại nguồn bằng thời điểm nhận được gói tin, toàn bộ thứ tự xảy ra sự kiện (causal ordering) và phép đo thời gian thực thi (duration) của microservices sẽ bị sai lệch hoàn toàn.
-
-#### Giải pháp: Hợp đồng thời gian 4 lớp (4-Tier Timestamp Contract)
-Hệ thống tuân thủ nghiêm ngặt quy tắc tại [telemetry-schema-time](file:///d:/Workstation/HCMUS/Grade4/01_TTDATN_K23/Tuần%203/multicloud-monitoring/.agent/rules/agents__rules__10-telemetry-data-integrity.md):
-```
-[Event Source] ----------> [Spoke Collector] ------------> [Hub Gateway] ------------> [Unified Storage]
-  event_timestamp           observed_timestamp              received_timestamp         normalized_timestamp
-  (Gốc tại app)             (Lúc Collector bắt)             (Lúc Hub tiếp nhận)        (Chuẩn ISO 8601 UTC)
-```
-
-1. **`event_timestamp`:** Thời điểm chính xác sự kiện phát sinh trong ứng dụng (tính bằng nanosecond UTC epoch). Thuộc tính này là bất biến (immutable), không bao giờ bị ghi đè.
-2. **`observed_timestamp`:** Thời điểm OTel Edge Collector tại Spoke nhận được bản ghi viễn trắc từ tiến trình cục bộ.
-3. **`received_timestamp`:** Thời điểm Ingress/Gateway tại Central Hub tiếp nhận gói tin OTLP sau khi truyền qua mạng WAN.
-4. **`normalized_timestamp`:** Giá trị thời gian được bộ vi xử lý Transform OTTL tại Hub chuẩn hóa sang định dạng chuỗi chuẩn ISO 8601 UTC (`YYYY-MM-DDTHH:mm:ss.ssssssZ`).
-
-#### Đo lường và Bóc tách Độ trễ (Latency Decomposition)
-Nhờ lưu trữ đầy đủ 4 mốc thời gian, hệ thống bóc tách chính xác từng thành phần trễ mà không gây nhầm lẫn:
-- **Độ trễ truyền thông WAN (Network Transit Latency):**
-  $$\Delta t_{\text{transit}} = \text{received\_timestamp} - \text{observed\_timestamp}$$
-- **Độ trễ xử lý tại Agent/Edge (Edge Pipeline Latency):**
-  $$\Delta t_{\text{edge}} = \text{observed\_timestamp} - \text{event\_timestamp}$$
-- **Độ trễ toàn trình đến khi sẵn sàng truy vấn (End-to-End Freshness Latency):**
-  $$\Delta t_{\text{e2e}} = \text{query\_visible\_timestamp} - \text{event\_timestamp}$$
-
-#### Xử lý độ bất định đồng hồ (Clock Uncertainty)
-Tại mỗi Spoke, node agent định kỳ kiểm tra trạng thái đồng bộ NTP qua lệnh Chrony và bổ sung siêu dữ liệu vào thuộc tính tài nguyên:
-- `clock.source`: `"chrony_ptp"` hoặc `"ntp"`
-- `clock.uncertainty_ms`: Độ lệch ước lượng tối đa (ví dụ: `2.4ms`)
-- `time.quality`: Gắn cờ `"trusted"` nếu uncertainty < 10ms; `"skew_warning"` nếu uncertainty $\ge$ 10ms.
+Để tái hiện chân thực điều kiện mạng Internet kết nối giữa các vùng địa lý của AWS và Azure, đồ án không để các container giao tiếp ở tốc độ mạng nội bộ không tưởng ($0.1\text{ms}$ latency). Thay vào đó:
+1. Toàn bộ các Node của 3 cụm k3d được gắn vào mạng cầu nối Docker Bridge chuyên dụng: `mc-monitoring-net` với dải địa chỉ mạng `172.28.0.0/16`.
+2. Ansible thực thi công cụ kiểm soát lưu lượng nhân Linux **`tc` (Traffic Control)** kết hợp module mô phỏng mạng **`netem` (Network Emulator)** trực tiếp trên các card mạng ảo `eth0` của các node worker:
+   ```bash
+   tc qdisc add dev eth0 root netem delay 10ms 2ms distribution normal loss 0.1%
+   ```
+   - **Độ trễ cơ sở (Base RTT):** $10\text{ms}$ đại diện cho thời gian truyền tín hiệu quang giữa 2 trung tâm dữ liệu đám mây trong cùng một khu vực địa lý.
+   - **Độ lệch pha (Jitter):** $\pm 2\text{ms}$ theo phân phối chuẩn Gaussian, mô phỏng sự biến thiên hàng đợi của router Internet.
+   - **Tỷ lệ mất gói (Packet Loss):** $0.1\%$, buộc tầng giao vận TCP phải thực hiện cơ chế truyền lại gói tin (Retransmission) và điều chỉnh cửa sổ trượt (Congestion Window).
 
 ---
 
-### 3.2. Thu Thập Dữ Liệu Phụ Thuộc (Dependency Telemetry)
+### 2.2. Quy Trình Khởi Tạo Khóa PKI & Cơ Chế Bắt Tay mTLS 1.3 Native
 
-Hệ thống theo dõi tự động cả hai tầng phụ thuộc: **Phụ thuộc Ứng dụng (Application Dependencies)** và **Phụ thuộc Hạ tầng/Đám mây (Cloud & Infrastructure Dependencies)**.
+**mTLS (Mutual Transport Layer Security - Bảo mật tầng giao vận hai chiều):** Cơ chế bảo mật mạng mà ở đó **cả máy khách (Spoke Collector) và máy chủ (Hub Gateway) đều phải xuất trình chứng chỉ số X.509 hợp lệ** được ký bởi cùng một cơ quan cấp phát chứng chỉ chung (Root CA) thì kênh truyền mới được thiết lập.
+
+
+> **Sơ Đồ 3 — Khởi Tạo Khóa PKI & Cơ Chế Bắt Tay Bảo Mật mTLS 1.3 Native:**
+
+> 
+> ![Sơ đồ 3: Quy trình Cấp phát Khóa PKI và Bắt tay mTLS 1.3 Native](../diagram/03_pki_mtls_initialization_handshake.png)
+
 
 ```mermaid
-graph TD
-    subgraph AppDep ["Application Dependency Graph"]
-        WebUI -->|HTTP GET /auth| Auth
-        WebUI -->|HTTP GET /recommender| Recommender
-        WebUI -->|HTTP POST /persistence| Persistence
-        Persistence -->|TCP / MySQL Protocol| MySQL
-    end
+sequenceDiagram
+  autonumber
+  participant CA as Root CA (Cơ Quan Cấp Khóa Trung Tâm)
+  participant Spoke as Edge Spoke Collector (Client)
+  participant Hub as Hub OTel Gateway (Server :4317)
 
-    subgraph InfraDep ["Infrastructure Hierarchy Dependency"]
-        MySQL -->|Runs in Pod| Pod_MySQL["Pod: teastore-mysql-xxxx"]
-        Pod_MySQL -->|Scheduled on Node| Node_Azure["Node: azure-k3d-server"]
-        Node_Azure -->|Belongs to Cloud| AzureCloud["Cloud: Azure (West Europe)"]
-    end
+  Note over CA: Giai đoạn 1: Sinh Khóa & Ký Chứng Chỉ (make certs)
+  CA->>CA: Sinh ca.key (RSA 4096-bit) & Tự ký ca.crt (Thời hạn 365 ngày)
+  CA->>Hub: Ký server.crt (SAN: hub-collector, 172.28.0.4, localhost)
+  CA->>Spoke: Ký spoke.crt (Client Auth) & cấp ca.crt
 
-    AppDep -.->|Correlated via Resource Identity| InfraDep
+  Note over Spoke,Hub: Giai đoạn 2: Bắt Tay mTLS 1.3 Native qua Mạng WAN
+  Spoke->>Hub: 1. ClientHello (Hỗ trợ TLS 1.3, Cipher: TLS_AES_128_GCM_SHA256, ALPN: h2)
+  Hub-->>Spoke: 2. ServerHello, EncryptedExtensions, CertificateRequest, Certificate (server.crt), CertVerify, Finished
+  Note over Spoke: Spoke xác thực: server.crt có được ký bởi ca.crt? Có chứa SAN hợp lệ?
+  Spoke->>Hub: 3. Certificate (spoke.crt), CertificateVerify (Ký bằng spoke.key), Finished
+  Note over Hub: Hub xác thực: spoke.crt có được ký bởi ca.crt? Khóa bí mật khớp chữ ký?
+  Note over Spoke,Hub: BẮT TAY THÀNH CÔNG (Mutual Authentication Established)
+  Spoke->>Hub: 4. Luồng gRPC OTLP Mã Hóa Tuyệt Đối (Metrics, Traces, Logs Traversal)
 ```
 
-#### 1. Thu thập phụ thuộc ứng dụng (Application Dependencies)
-- **Cơ chế:** Sử dụng chuẩn W3C TraceContext do OTel Java Agent tiêm vào request header. Khi WebUI gọi sang Auth hoặc Persistence, agent tự động chèn 2 HTTP headers:
-  - `traceparent`: `00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01` (phiên bản, trace_id, parent_span_id, trace_flags).
-  - `tracestate`: lưu trữ thông tin nhà cung cấp trung gian.
-- **Xác định mối quan hệ:**
-  - Phía gọi (Caller) sinh span với `SpanKind = SPAN_KIND_CLIENT`.
-  - Phía nhận (Callee) sinh span với `SpanKind = SPAN_KIND_SERVER`.
-  - Đối với MySQL, OTel JDBC wrapper sinh span với `SpanKind = SPAN_KIND_CLIENT` kèm thuộc tính `db.system = "mysql"`, `net.peer.name = "teastore-mysql"`, `net.peer.port = 3306`.
-- **Dựng Service Graph:** Tempo và Grafana tự động gom nhóm các cặp Client-Server spans này để tạo biểu đồ phụ thuộc động (Dynamic Dependency Graph) hiển thị lưu lượng (throughput), tỷ lệ lỗi (error rate) và độ trễ (latency) trên từng nhánh liên kết.
-
-#### 2. Thu thập phụ thuộc hạ tầng & đám mây (Cloud & Infrastructure Dependencies)
-- **Cơ chế:** Sử dụng `k8sattributesprocessor` kết hợp với `kubeletstatsreceiver` trong OTel Collector.
-- **Ánh xạ phân cấp định danh:**
-  - Pod $\longrightarrow$ Node $\longrightarrow$ Cụm $\longrightarrow$ Khu vực $\longrightarrow$ Nhà cung cấp.
-  - Các thuộc tính định danh chính tắc (Canonical Resource Identity):
-    - `service.name`: Tên định danh vi dịch vụ (vd: `teastore-webui`).
-    - `service.instance.id`: ID duy nhất của instance (vd: `teastore-webui-7694f4848-x8k2l`).
-    - `k8s.pod.name`: Tên pod Kubernetes.
-    - `k8s.node.name`: Tên node máy chủ.
-    - `cloud.provider`: Định danh provider (`aws` cho Spoke 1, `azure` cho Spoke 2, `hub` cho Hub).
-    - `cloud.region`: Định danh khu vực (vd: `us-east-1`, `westeurope`).
-
----
-
-### 3.3. Tính Bất Biến Của Dữ Liệu Gốc & Quản Lý Trường Bị Thiếu (Immutability & Missing Data Tracking)
-
-#### 1. Tính bất biến của dữ liệu gốc (Raw Telemetry Immutability)
-- **Nguyên tắc:** Toàn bộ dữ liệu viễn trắc thô (raw telemetry) thu thập trong các đợt chạy thực nghiệm được lưu trữ nguyên trạng, không bị chỉnh sửa, làm mịn hoặc xóa bỏ các điểm dị biệt (outliers) để làm đẹp biểu đồ.
-- **Cơ chế lưu trữ:**
-  - Mỗi phiên chạy kiểm chuẩn được gán một định danh duy nhất: `YYYYMMDD_<workload>_<scenario>_<runNN>` (ví dụ: `20261104_teastore_baseline_run01`).
-  - Dữ liệu thô từ OTel Collector được xuất song song sang một bucket dành riêng trên MinIO (`raw-telemetry-archive`) dưới định dạng nén OTLP JSON / Parquet kèm theo mã băm checksum SHA-256.
-  - Bất kỳ tập dữ liệu phái sinh (derived dataset) nào sử dụng cho nghiên cứu đều phải ghi rõ `source_run_id` và các bước chuyển đổi (transformation steps).
-
-#### 2. Từ vựng chuẩn hóa quản lý dữ liệu thiếu (Missing-Data Vocabulary)
-Hệ thống cấm tuyệt đối việc gán giá trị mặc định là `0` hoặc `null` khi thiếu dữ liệu, vì điều này làm sai lệch các phép toán thống kê và mô hình phát hiện bất thường. Bắt buộc sử dụng bộ từ vựng chuẩn hóa:
-- `present`: Trường dữ liệu tồn tại và có giá trị hợp lệ.
-- `missing`: Nguồn phát có định nghĩa trường này nhưng không gửi dữ liệu trong bản tin cụ thể.
-- `unsupported`: Nguồn phát (hoặc phiên bản hệ điều hành/k3s) không hỗ trợ thuộc tính này (ví dụ: cAdvisor trên k3d không đo được nhiệt độ phần cứng).
-- `not_applicable`: Thuộc tính không có ý nghĩa đối với thực thể hiện tại (ví dụ: `db.statement` không thể có trên WebUI HTTP span).
-- `filtered`: Dữ liệu bị loại bỏ chủ động bởi Filter Processor tại Spoke.
-- `sampled_out`: Dữ liệu bị loại bỏ theo chính sách lấy mẫu (20% trace sampling).
-- `parse_error`: Dữ liệu có tồn tại nhưng bị lỗi cú pháp khi collector giải mã.
-- `unknown`: Trạng thái chưa xác định.
-
-Hệ thống duy trì tệp `telemetry-field-inventory.csv` để đối chiếu từng thuộc tính theo từng nhà cung cấp và đánh giá mức độ bao phủ thực tế.
-
----
-
-### 3.4. Cơ Chế Khám Phá Dịch Vụ (Service Discovery)
-
-Hệ thống thiết lập cơ chế khám phá dịch vụ hai cấp độ:
-
+**Cấu hình Native mTLS tại Hub OTel Gateway (`03-configmap.yaml`):**
+```yaml
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        tls:
+          cert_file: /etc/otel/certs/server.crt
+          key_file: /etc/otel/certs/server.key
+          client_ca_file: /etc/otel/certs/ca.crt
+          client_auth_type: RequireAndVerifyClientCert
+          min_version: "1.3"
 ```
-[Intra-Cluster Service Discovery]      <---> [Kubernetes CoreDNS & Endpoints]
-[Inter-Cluster / Multi-Cloud Discovery] <---> [Traefik Ingress Gateway + mTLS SNI Routing]
-```
-
-1. **Khám phá dịch vụ nội bộ cụm (Intra-cluster Service Discovery):**
-   - Dựa trên **Kubernetes CoreDNS** chuẩn. Các vi dịch vụ trong cùng cụm gọi nhau qua cú pháp DNS: `<service-name>.<namespace>.svc.cluster.local`.
-   - OTel Collector sử dụng cơ chế `kubernetes_sd_configs` của Prometheus Receiver để tự động quét toàn bộ Pods, Nodes và Endpoints thông qua API Server mà không cần khai báo địa chỉ IP tĩnh.
-2. **Khám phá dịch vụ xuyên cụm / WAN (Cross-cluster Service Discovery):**
-   - Khi `teastore-webui` (tại `aws-k3d`) cần gọi `teastore-persistence` (tại `azure-k3d`), request không thể dùng IP nội bộ của cụm kia.
-   - **Giải pháp:** Sử dụng **Traefik Ingress Controller** làm Gateway tại mỗi Spoke.
-   - Dịch vụ Persistence được công khai qua một Ingress Route với tên miền nội bộ mạng giả lập: `persistence.azure.local`.
-   - WebUI tại Spoke 1 được cấu hình trỏ tới `https://persistence.azure.local:8443` thông qua cấu hình DNS bổ sung trong CoreDNS (`hosts` plugin) hoặc Docker network DNS.
-   - Kết nối xuyên cụm này bắt buộc đi qua mTLS: Traefik xác thực client certificate của WebUI trước khi chuyển tiếp vào pod Persistence.
+Nhờ cơ chế `RequireAndVerifyClientCert` và `min_version: "1.3"`, bất kỳ kết nối nào không xuất trình chứng chỉ hợp lệ hoặc sử dụng phiên bản TLS cũ (1.0, 1.1, 1.2) đều bị nhân Go từ chối ngay lập tức ở mức socket TCP.
 
 ---
 
-### 3.5. Quản Lý Trạng Thái Hệ Thống & Cụm (System & Cluster State Tracking)
+### 2.3. Đánh Giá Ưu / Nhược Điểm của Cơ Chế Sinh Khóa Hiện Tại & Đối Chiếu Doanh Nghiệp
 
-Hệ thống theo dõi trạng thái đa tầng nhằm đảm bảo độ tin cậy vận hành:
-
-| Tầng giám sát | Thành phần theo dõi | Chỉ số / Trạng thái ghi nhận | Ý nghĩa & Hành vi xử lý |
-|---|---|---|---|
-| **Cụm & Node K8s** | `kube-state-metrics` & `kubeletstats` | `kube_node_status_condition{condition="Ready"}`<br>`kube_node_spec_unschedulable` | Giám sát sức khỏe node máy chủ k3d. Cảnh báo ngay khi node chuyển sang trạng thái `NotReady` hoặc cạn kiệt tài nguyên. |
-| **Pod & Container** | `kube-state-metrics` | `kube_pod_status_phase` (Running, Pending, Failed)<br>`kube_pod_container_status_waiting_reason` (CrashLoopBackOff, ImagePullBackOff) | Theo dõi vòng đời pod. Robusta tự động kích hoạt điều tra khi phát hiện `CrashLoopBackOff`. |
-| **Ứng dụng TeaStore** | Kubernetes Probes & Spring Boot Actuator | `http_get :8080/actuator/health`<br>- Liveness Probe (kiểm tra tiến trình sống)<br>- Readiness Probe (sẵn sàng nhận tải) | Tự động cô lập pod khỏi service endpoint nếu probe thất bại; tự động restart container nếu dead-lock. |
-| **Cơ sở dữ liệu** | `mysqlreceiver` & `mysqld_exporter` | `mysql_up` (0 hoặc 1)<br>`mysql_global_status_threads_connected`<br>`mysql_global_status_slow_queries` | Theo dõi tính sẵn sàng của MySQL, cảnh báo nghẽn connection pool và truy vấn chậm làm nghẽn Persistence service. |
-| **Pipeline Viễn trắc** | OTel Collector Internal Metrics | `otelcol_receiver_accepted_spans`<br>`otelcol_receiver_refused_spans`<br>`otelcol_processor_dropped_spans`<br>`otelcol_exporter_enqueue_failed_spans` | Đảm bảo tính toàn vẹn của hệ thống giám sát. Cảnh báo ngay khi collector bị quá tải bộ nhớ hoặc nghẽn hàng đợi (queue backpressure). |
+| Tiêu Chí Đánh Giá | Cơ Chế Lab Hiện Tại (`generate_certs.sh` + K8s Secret) | Tiêu Chuẩn Thực Tế Doanh Nghiệp (Production Enterprise) |
+| :--- | :--- | :--- |
+| **Công cụ Khởi tạo** | Script OpenSSL tự động kết hợp Ansible nạp K8s Secret tĩnh. | **cert-manager** (K8s Operator), **HashiCorp Vault PKI**, hoặc **SPIFFE/SPIRE**. |
+| **Ưu Điểm** | - Siêu nhẹ, độc lập tuyệt đối, không tiêu tốn RAM của cụm.<br>- Khởi tạo tức thời, kiểm soát trực tiếp tên miền SAN.<br>- Tái lập môi trường 100% chỉ bằng 1 dòng lệnh `make certs`. | - Tự động hóa hoàn toàn từ phát hành, ký duyệt đến thu hồi.<br>- Phân quyền truy cập khóa nghiêm ngặt theo chính sách IAM.<br>- Bảo vệ khóa gốc trong thiết bị bảo mật phần cứng chuyên dụng (HSM). |
+| **Nhược Điểm / Rủi Ro** | - Khóa gốc `ca.key` lưu trữ trên máy trạm khởi tạo.<br>- Thiếu cơ chế tự động xoay vòng chứng chỉ trước khi hết hạn.<br>- Không có danh sách thu hồi chứng chỉ động (**CRL/OCSP**). | - Cấu hình phức tạp, đòi hỏi hạ tầng máy chủ quản lý khóa riêng.<br>- Tiêu tốn thêm tài nguyên tính toán (CPU/RAM) để vận hành các Daemon/Sidecar. |
+| **Giải Pháp Khắc Phục Trong Tương Lai** | Sử dụng Makefile mã hóa file `.key` qua Ansible Vault trước khi lưu trữ; giới hạn thời hạn chứng chỉ máy khách xuống 30 ngày. | Triển khai **cert-manager** kết hợp Let's Encrypt cho endpoint công khai, hoặc **SPIFFE/SPIRE Workload Identity** cho mTLS nội bộ. |
 
 ---
 
-### 3.6. Tính Toán Dung Lượng Lưu Trữ & Chiến Lược Retention (Storage Sizing & Retention)
+## PHẦN 3: ĐƯỜNG ỐNG XỬ LÝ VIỄN TRẮC XUYÊN SUỐT (SPOKE EDGE & HUB GATEWAY PIPELINE)
 
-#### 1. Mô hình tính toán dung lượng dữ liệu phát sinh (Data Volume Sizing)
+Toàn bộ luồng dữ liệu từ khi sinh ra tại các vi dịch vụ đến khi lưu trữ an toàn trong các cơ sở dữ liệu viễn trắc chuyên dụng được mô tả chi tiết trong sơ đồ hợp nhất dưới đây:
 
-Dựa trên cấu hình thí nghiệm gồm 100 containers/pods viễn trắc hoạt động liên tục:
-- **Metrics (Prometheus / Thanos):**
-  - Số lượng chuỗi thời gian hoạt động (Active Time Series): $100 \text{ pods} \times 50 \text{ metrics/pod} = 5,000 \text{ series}$.
-  - Tần suất cào dữ liệu (Scrape interval): 15 giây $\longrightarrow 4 \text{ samples/phút/series}$.
-  - Dung lượng mỗi mẫu sau nén TSDB (Gorilla chunk compression): $\approx 1.5 \text{ bytes/sample}$.
-  - *Tốc độ phát sinh:* $5,000 \times 4 \times 1.5 = 30,000 \text{ bytes/phút} \approx 1.8 \text{ MB/giờ} \approx 1.3 \text{ GB/tháng}$.
-- **Logs (Grafana Loki):**
-  - Tần suất log trung bình: $100 \text{ logs/giây}$ trên toàn hệ thống.
-  - Kích thước trung bình mỗi dòng log thô: $500 \text{ bytes}$.
-  - Nén Snappy trong chunk của Loki: tỷ lệ nén $\approx 1:5$ ($\approx 100 \text{ bytes/log}$).
-  - *Tốc độ phát sinh:* $100 \text{ logs/s} \times 100 \text{ bytes} = 10 \text{ KB/s} \approx 864 \text{ MB/ngày} \approx 26 \text{ GB/tháng}$.
-- **Traces (Grafana Tempo với chính sách lấy mẫu 20%):**
-  - Tần suất request ứng dụng: $200 \text{ requests/giây}$ (RPS).
-  - Số lượng spans trung bình mỗi trace: $8 \text{ spans/trace}$.
-  - Kích thước mỗi span đã nén ZSTD: $\approx 400 \text{ bytes}$.
-  - **Áp dụng chính sách lấy mẫu 20%:** Chỉ lưu trữ $200 \times 0.20 = 40 \text{ traces/giây}$ (giảm được 80% dung lượng WAN và lưu trữ!).
-  - *Tốc độ phát sinh:* $40 \text{ traces/s} \times 8 \text{ spans} \times 400 \text{ bytes} \approx 128 \text{ KB/giây} \approx 11 \text{ GB/ngày}$.
 
-#### 2. Chiến lược phân tầng lưu trữ (Storage Tiering & Retention Policies)
+> **Sơ Đồ 4 — Đường Ống Xử Lý Viễn Trắc Xuyên Suốt Hợp Nhất (Spoke Edge to Central Hub):**
 
-Hệ thống kết hợp bộ nhớ đệm tốc độ cao và MinIO Object Storage theo 2 tầng:
+> 
+> ![Sơ đồ 4: Đường ống Xử lý Viễn trắc Xuyên suốt Hợp nhất](../diagram/04_end_to_end_telemetry_pipeline.png)
 
-```
-[Hot Tier: RAM & SSD Cục Bộ]  --- (Sau 2 giờ) --->  [Warm/Cold Tier: MinIO S3 Object Storage]
-- Thanos Receive (TSDB 2h)                          - thanos-bucket (Retention: 30 ngày lab, downsample 5m/1h)
-- Loki Ingester (Chunk Memory 2h)                   - loki-bucket (Retention: 14 ngày lab)
-- Tempo Ingester (Block Memory 1h)                  - tempo-bucket (Retention: 7 ngày lab)
-```
-
-- **Downsampling tự động của Thanos:** Sau 40 giờ, dữ liệu thô 15s được Thanos Compact nén thành mẫu 5 phút; sau 14 ngày được nén thành mẫu 1 giờ, giúp tiết kiệm hơn 85% dung lượng lưu trữ dài hạn mà vẫn bảo toàn xu hướng biểu đồ.
-
----
-
-### 3.7. Thiết Kế Telemetry Schema Chi Tiết (Web App vs Instance)
-
-Để đảm bảo dữ liệu thu thập có cấu trúc chuẩn mực và tránh bùng nổ nhãn (cardinality explosion), hệ thống phân tách schema cho 2 đối tượng theo chuẩn OpenTelemetry Semantic Conventions:
-
-#### 1. Schema Theo Dõi Web Application (Theo phương pháp RED: Rate, Errors, Duration)
-
-| Nhóm thuộc tính | Tên thuộc tính chính tắc (Canonical Name) | Kiểu dữ liệu | Ý nghĩa & Ví dụ giá trị |
-|---|---|---|---|
-| **Resource** | `service.name`<br>`service.version`<br>`service.instance.id`<br>`deployment.environment` | string | `teastore-webui`<br>`v1.4.0`<br>`teastore-webui-7694f4848-x8k2l`<br>`production` |
-| **HTTP Request** | `http.request.method`<br>`http.response.status_code`<br>`http.route`<br>`http.url` | string<br>int<br>string<br>string | `GET`<br>`200`, `500`<br>`/tools.descartes.teastore.webui/cart`<br>(Chỉ lưu trên Traces, không làm metric label!) |
-| **Database Call** | `db.system`<br>`db.name`<br>`db.statement`<br>`db.operation` | string<br>string<br>string<br>string | `mysql`<br>`teastore`<br>`SELECT * FROM products WHERE id = ?`<br>`SELECT` |
-| **RED Metrics** | `http.server.request.count`<br>`http.server.response.5xx.count`<br>`http.server.duration` | counter<br>counter<br>histogram | Tần suất request (Rate)<br>Tần suất lỗi phía server (Errors)<br>Độ trễ phân bổ theo buckets (Duration: p50, p90, p99) |
-
-> [!WARNING] **Kiểm soát Cardinality rủi ro cao:**
-> Tuyệt đối không đưa các giá trị động không giới hạn (unbounded values) như URL đầy đủ chứa query param, Session ID, User ID, hoặc nội dung câu thông báo lỗi chi tiết vào Metric Labels. Các trường này chỉ được phép xuất hiện trong **Trace Attributes** hoặc **Log Body**.
-
-#### 2. Schema Theo Dõi Instance / Node / Container (Theo phương pháp USE: Utilization, Saturation, Errors)
-
-| Nhóm thuộc tính | Tên thuộc tính chính tắc (Canonical Name) | Kiểu dữ liệu | Đơn vị | Ý nghĩa & Phương pháp USE |
-|---|---|---|---|---|
-| **Resource** | `host.id`<br>`host.name`<br>`k8s.node.name`<br>`k8s.pod.name`<br>`k8s.container.name`<br>`cloud.provider`<br>`cloud.region` | string | - | Định danh tài nguyên hạ tầng và đám mây (`aws`, `azure`, `hub`). |
-| **Utilization (Sử dụng)** | `system.cpu.utilization`<br>`system.memory.usage`<br>`container.cpu.utilization`<br>`container.memory.working_set_bytes` | double<br>int<br>double<br>int | 1 (tỉ lệ)<br>Bytes<br>1 (tỉ lệ)<br>Bytes | Tỷ lệ % CPU đang bận.<br>Dung lượng RAM đang tiêu thụ thực tế. |
-| **Saturation (Bão hòa)** | `system.cpu.load_average.15m`<br>`container.cpu.cfs.throttled_time`<br>`system.memory.paging.faults` | double<br>double<br>counter | 1<br>Seconds<br>1 | Hàng đợi CPU chờ xử lý.<br>Thời gian container bị kernel kẹp bóp CPU quota.<br>Tần suất lỗi trang bộ nhớ (thiếu RAM). |
-| **Errors (Lỗi)** | `system.network.errors`<br>`system.disk.io.errors`<br>`container.restart_count` | counter<br>counter<br>counter | 1<br>1<br>1 | Số gói tin mạng bị lỗi interface.<br>Số lỗi đọc/ghi ổ cứng.<br>Số lần container bị Crash/OOMKilled. |
-
----
-
-### 3.8. Đánh Giá Độ Bao Phủ & Độ Chính Xác (Coverage & Accuracy Evaluation)
-
-#### 1. Đánh giá độ bao phủ (Coverage Evaluation)
-Độ bao phủ được đo lường dựa trên tỷ lệ giữa số thuộc tính/thực thể quan sát được thực tế so với danh mục kỳ vọng trong `telemetry-field-inventory.csv`:
-$$\text{Coverage}_{\text{Signal}} = \frac{N_{\text{observed}}}{N_{\text{expected}}} \times 100\%$$
-
-- **Độ bao phủ hạ tầng:** Tỷ lệ số node, container, disk interface phát sinh metric đầy đủ.
-- **Độ bao phủ ứng dụng:** Tỷ lệ các API endpoints của TeaStore được bọc trace spans và log tương ứng.
-- Mọi trường dữ liệu thiếu đều phải có lý do minh bạch trong báo cáo (xem Mục 3.3).
-
-#### 2. Đánh giá độ chính xác (Accuracy Evaluation so với Ground Truth)
-Để chứng minh dữ liệu viễn trắc phản ánh đúng thực tế khách quan chứ không bị bóp méo qua collector:
-- **Số lượng giao dịch (Request Count):**
-  - *Giá trị gốc (Ground Truth):* Số lượng HTTP requests do Load Generator (Locust) ghi nhận tại client ($Y_{\text{real}}$).
-  - *Giá trị quan sát (Observed):* Tổng số span HTTP nhận được tại Tempo + Tổng số request count ghi nhận tại Prometheus ($Y_{\text{observed}}$).
-  - *Sai số tương đối (Mean Absolute Percentage Error - MAPE):*
-    $$\text{MAPE} = \frac{|Y_{\text{real}} - Y_{\text{observed}}|}{Y_{\text{real}}} \times 100\%$$
-    *Mục tiêu nghiệm thu:* $\text{MAPE} \le 1.0\%$ khi không áp dụng sampling, và sai số tỷ lệ đúng $\approx 80\% \pm 1.5\%$ khi áp dụng 20% sampling.
-- **Mức tiêu thụ CPU/RAM:**
-  - *Giá trị gốc:* Đo đạc trực tiếp từ Linux Kernel cgroups của host container qua `/proc/stat` và `/sys/fs/cgroup`.
-  - *Giá trị quan sát:* Metric `container_cpu_usage_seconds_total` từ cAdvisor/OTel KubeletStats.
-  - *Mục tiêu nghiệm thu:* $\text{MAPE} \le 2.0\%$.
-
----
-
-### 3.9. Độ Trễ Telemetry & Phương Pháp Đo Lường Độ Trễ Sau Khi Mã Hóa
-
-#### 1. Độ trễ toàn trình viễn trắc (End-to-End Telemetry Latency)
-Độ trễ từ thời điểm sự kiện xảy ra trong ứng dụng cho đến khi hiển thị trên bảng điều khiển Grafana được xác định bởi công thức:
-$$L_{\text{e2e}} = T_{\text{grafana\_render}} - T_{\text{source\_event}}$$
-
-Phân rã chi tiết luồng xử lý:
-$$L_{\text{e2e}} = L_{\text{agent\_buffer}} + L_{\text{edge\_batch}} + L_{\text{wan\_transit}} + L_{\text{hub\_pipeline}} + L_{\text{tsdb\_index}} + L_{\text{query\_refresh}}$$
-- $L_{\text{agent\_buffer}}$: Thời gian đệm span trong Java Agent (mặc định 100ms - 500ms).
-- $L_{\text{edge\_batch}}$: Thời gian gom mẻ trong OTel Collector Batch Processor (cấu hình `timeout: 1s`, `send_batch_size: 512`).
-- $L_{\text{wan\_transit}}$: Thời gian truyền gói qua mạng WAN giả lập ($10\text{ms} \pm 2\text{ms}$).
-- $L_{\text{hub\_pipeline}}$: Thời gian chạy qua Transform OTTL tại Hub Gateway ($\approx 5\text{ms}$).
-- $L_{\text{tsdb\_index}}$: Thời gian ghi dữ liệu vào Thanos/Loki/Tempo WAL ($\approx 100\text{ms} - 500\text{ms}$).
-- $L_{\text{query\_refresh}}$: Chu kỳ làm mới của dashboard Grafana (cấu hình 5s hoặc 10s).
-- **Kết luận:** Độ trễ hiển thị thực tế trên Grafana dao động từ **3 giây đến 8 giây**, hoàn toàn đáp ứng tiêu chuẩn giám sát vận hành thời gian thực (Near Real-Time).
-
-#### 2. Phương pháp đo lường độ trễ mã hóa (Post-Encryption / mTLS Overhead Measurement)
-
-Để đánh giá chính xác cái giá phải trả về độ trễ và tài nguyên khi bật mã hóa mTLS trên WAN, hệ thống thực hiện thí nghiệm đối chứng ghép cặp (**Matched Pair A/B Experiment**):
-
-```
-Kịch bản A (Baseline - Plaintext):
-[Spoke Collector] === (OTLP gRPC Plaintext / Không mã hóa) ===> [Hub Ingress]
-
-Kịch bản B (Treatment - mTLS 1.3):
-[Spoke Collector] === (OTLP gRPC over mTLS 1.3 / AES-256-GCM) ===> [Hub Ingress]
-```
-
-**Các tiêu chí đo lường định lượng bắt buộc:**
-1. **Thời gian bắt tay bảo mật (Handshake Setup Latency):** Đo thời gian thiết lập phiên TLS 1.3 ban đầu (gồm trao đổi khóa ECDHE, chứng chỉ x509 và client certificate verification).
-2. **Độ trễ truyền gói tin ổn định (Steady-State Packet Latency):** Sử dụng các gói ping viễn trắc có gắn timestamp để đo $\Delta t_{\text{transit}}$ trong kịch bản A so với kịch bản B. Độ trễ do thuật toán mã hóa đối xứng AES-256-GCM dự kiến chỉ tăng $< 1.5\text{ms}$ nhờ tập lệnh phần cứng Intel AES-NI.
-3. **Phụ phí CPU Collector (CPU Utilization Overhead):** Đo mức tăng tiêu thụ CPU của OTel Collector pod khi phải liên tục mã hóa/giải mã các mẻ OTLP:
-   $$\Delta \text{CPU}_{\text{overhead}} = \text{CPU}_{\text{mTLS}} - \text{CPU}_{\text{plaintext}}$$
-4. **Phụ phí kích thước gói tin (Network Framing Overhead):** Bổ sung TLS Record Layer Header (5 bytes) + Initialization Vector + Authentication Tag (16 bytes) trên mỗi bản tin TLS record.
-
----
-
-### 3.10. Khả Năng Mở Rộng Hệ Thống Khi Bổ Sung Cloud Provider Mới (Extensibility)
-
-> [!IMPORTANT] **Câu hỏi cốt lõi:**  
-> *"Nếu có thêm 1 provider khác tích hợp vào hệ thống (ví dụ bổ sung thêm Google Cloud Platform - GCP Spoke `gcp-k3d`), thì hệ thống có bị ảnh hưởng gì không?"*
-
-**Câu trả lời khẳng định:** **Hoàn toàn KHÔNG bị ảnh hưởng tiêu cực hay phá vỡ kiến trúc.**  
-Hệ thống được thiết kế theo nguyên lý **Decoupled Hub-Spoke**, cho phép mở rộng tuyến tính (horizontal scalability) theo chiều ngang khi thêm Spoke mới.
 
 ```mermaid
 flowchart LR
-    Spoke1["Spoke 1: AWS (aws-k3d)"] -->|OTLP / mTLS| HubGateway["Hub OTel Gateway"]
-    Spoke2["Spoke 2: Azure (azure-k3d)"] -->|OTLP / mTLS| HubGateway
-    Spoke3["Spoke 3: GCP (gcp-k3d)\n[MỞ RỘNG MỚI]"] -.->|OTLP / mTLS| HubGateway
-    
-    HubGateway --> ThanosRecv["Thanos Receive (Hashring)"]
-    HubGateway --> Loki["Grafana Loki"]
-    HubGateway --> Tempo["Grafana Tempo"]
-```
+  subgraph Spoke_Edge ["TẦNG BIÊN: Spoke Edge OTel Collector (aws-k3d / azure-k3d)"]
+    direction TB
+    subgraph Sources ["Nguồn Thu Thập"]
+      App["Java App (OTel Java Agent v2.10)"]
+      Kubelet["Kubelet API (:10250)"]
+      Host["Linux Kernel (/proc, /sys)"]
+      Files["MySQL Logs (/var/log/mysql)"]
+    end
 
-#### Bằng chứng kiến trúc đảm bảo khả năng mở rộng (Architectural Proof):
-1. **Tính độc lập hoàn toàn của Spoke (Spoke Decoupling):**
-   - Mỗi Spoke là một đơn vị tự trị (autonomous cluster). Cụm Spoke 3 (`gcp-k3d`) chỉ cần cài đặt OTel Edge Collector nội bộ.
-   - Collector tại Spoke 3 chỉ cần gán thêm nhãn metadata: `cloud.provider = "gcp"`, `cloud.region = "asia-southeast1"`.
-   - Không cần sửa đổi bất kỳ dòng code hay cấu hình nào của Spoke 1 và Spoke 2.
-2. **Khả năng tiếp nhận không chạm tại Central Hub (Zero-Code Hub Ingestion):**
-   - Central Hub sử dụng Traefik Ingress Controller hỗ trợ xác thực mTLS dựa trên Certificate Authority (CA) dùng chung. Khi Spoke mới được cấp chứng chỉ x509 hợp lệ từ CA, Hub tự động chấp nhận kết nối mà không cần khởi động lại Ingress.
-   - OTel Collector Gateway tại Hub xử lý dữ liệu dựa trên **Canonical Schema chuẩn hóa**; nó tiếp nhận mọi luồng OTLP chuẩn mà không phụ thuộc vào tên nhà cung cấp đám mây.
-3. **Mở rộng tuyến tính tầng lưu trữ (Storage Scalability):**
-   - **Thanos Receive** hỗ trợ cơ chế băm nhất quán (**Consistent Hashing / Hashring**). Khi lưu lượng metrics tăng do có thêm Spoke, ta chỉ việc tăng số lượng replica của Thanos Receive trong Hashring mà không làm gián đoạn việc ghi dữ liệu.
-   - **Loki & Tempo** ghi trực tiếp dữ liệu dạng chunk/block vào MinIO Object Storage. Do MinIO mở rộng dung lượng theo mô hình lưu trữ đối tượng không trạng thái (stateless storage architecture), dung lượng lưu trữ chỉ đơn giản là tăng dung lượng đĩa của MinIO mà không gặp hiện tượng thắt cổ chai về metadata như các cơ sở dữ liệu quan hệ.
-4. **Phân tách trên Bảng Điều Khiển (Dashboard Multi-Tenancy):**
-   - Toàn bộ dashboard Grafana được thiết kế với biến động (template variable) `$cloud_provider`. Khi Spoke 3 gia nhập, Grafana tự động nhận diện giá trị `gcp` trong biến dropdown thông qua câu truy vấn PromQL:
-     `label_values(up, cloud.provider)`
-   - Người quản trị có thể lọc xem riêng Spoke AWS, Azure, GCP hoặc xem biểu đồ so sánh chéo hiệu năng giữa 3 đám mây trên cùng một màn hình.
+    subgraph Receivers ["1. Receivers"]
+      R_otlp["otlp (gRPC :4317, HTTP :4318)"]
+      R_host["hostmetrics (7 scrapers: cpu, mem, disk, fs, net, load, paging)"]
+      R_kube["kubeletstats (node, pod, container metrics)"]
+      R_file["filelog (regex parse MySQL slow/error logs)"]
+    end
+    App --> R_otlp
+    Kubelet --> R_kube
+    Host --> R_host
+    Files --> R_file
+
+    subgraph Spoke_Processors ["2. Chuỗi Processors Bắt Buộc Tại Biên"]
+      direction TB
+      P_mem["memory_limiter (check: 1s, limit: 80%, spike: 20%)"]
+      P_filter["filter/drop_noise (drop /healthz, actuator, kube-probe)"]
+      P_sample["probabilistic_sampler (chỉ lấy 20% traces thành công)"]
+      P_k8s["k8sattributes (gắn pod_uid, node_name, namespace)"]
+      P_trans["transform/spoke (OTTL: gán cloud.provider, k8s.cluster.name)"]
+      P_batch["batch (send_batch_size: 1024, timeout: 5s)"]
+      
+      P_mem --> P_filter --> P_sample --> P_k8s --> P_trans --> P_batch
+    end
+    Receivers --> P_mem
+
+    subgraph Spoke_Exporters ["3. Exporters"]
+      E_otlp["otlp/hub (mTLS 1.3 Client -> 172.28.0.4:4317)"]
+    end
+    P_batch --> E_otlp
+  end
+
+  E_otlp ==>|"Mạng WAN mc-monitoring-net (mTLS 1.3 - RTT 10ms)"| H_Recv
+
+  subgraph Hub_Platform ["TẦNG TRUNG TÂM: Hub OTel Gateway & Multi-Tier Storage (hub-k3d)"]
+    direction TB
+    H_Recv["1. Receiver: otlp (:4317 Native mTLS Server)"]
+    
+    subgraph Hub_Processors ["2. Hub Processors & Connectors Pipeline"]
+      direction TB
+      H_mem["memory_limiter (limit: 85%)"]
+      H_ottl["transform/hub (OTTL Normalizer: Chuẩn hóa nhãn v1.45, sửa k8s_cluster_name)"]
+      H_tail["tail_sampling (Giữ 100% traces lỗi HTTP 5xx & P99 > 1500ms)"]
+      H_conn["servicegraphconnector (Phân tích span sinh traces_service_graph_*)"]
+      H_batch["batch (send_batch_size: 8192, timeout: 2s)"]
+      
+      H_mem --> H_ottl --> H_tail --> H_conn --> H_batch
+    end
+    H_Recv --> H_mem
+
+    subgraph Backends ["3. Storage Backends & Visualizers"]
+      Thanos["Thanos Receive (:10901) -> Metrics TSDB"]
+      Loki["Grafana Loki (:3100) -> Logs Storage"]
+      Tempo["Grafana Tempo (:4317) -> Traces Storage"]
+      MinIO[("MinIO S3 Bucket\n(Cold Tier: thanos-metrics, loki-data, tempo-traces)")]
+    end
+    H_batch -->|Metrics + ServiceGraph| Thanos
+    H_batch -->|Logs| Loki
+    H_batch -->|Traces| Tempo
+    Thanos & Loki & Tempo -.->|Block Compaction & Cold Egress| MinIO
+  end
+```
 
 ---
 
-## 4. Kiến Trúc AI Anomaly Detection Engine V3 & Vòng Lặp Closed-Loop AIOps
+### 3.1. Luồng Thu Thập & Tiền Xử Lý Tại Cụm Spoke (`aws-k3d`, `azure-k3d`)
 
-Nhằm nâng cấp nền tảng từ mức độ giám sát phản ứng thụ động (Reactive Monitoring) lên mức chủ động dự báo sự cố (Proactive AIOps), hệ sinh thái đã tích hợp hoàn thiện module học sâu phát hiện bất thường và bóc tách nguyên nhân gốc rễ tự động:
+Tại các cụm Spoke, tiến trình **OpenTelemetry Edge Collector** hoạt động như một trạm thanh lọc và đóng gói dữ liệu:
+1. **4 Bộ Thu Nhận (Receivers):**
+   - `otlp`: Lắng nghe trên cổng `:4317` (gRPC) và `:4318` (HTTP) để tiếp nhận spans và metrics tự động đẩy ra từ OTel Java Agent tích hợp trong các container TeaStore.
+   - `hostmetrics`: Thu thập thông số phần cứng của máy chủ Linux thông qua 7 trình cạo (scrapers): `cpu`, `memory`, `disk`, `filesystem`, `network`, `load`, và `paging`.
+   - `kubeletstats`: Truy vấn trực tiếp API Kubelet cục bộ (`:10250`) để lấy số đo hiệu năng chi tiết của từng Pod và Container.
+   - `filelog` (chỉ có trên `azure-k3d`): Quét và phân tích cú pháp dòng nhật ký của MySQL (`/var/log/mysql/*.log`) qua biểu thức chính quy.
+2. **Thứ Tự Thực Thi Nghiêm Ngặt Của Chuỗi Xử Lý (Processor Execution Order):**
+   > [!IMPORTANT]
+   > Thứ tự sắp xếp các processor trong pipeline tuân thủ nguyên tắc tối ưu hóa tài nguyên phần cứng:
+   > **`memory_limiter` $\longrightarrow$ `filter` $\longrightarrow$ `probabilistic_sampler` $\longrightarrow$ `k8sattributes` $\longrightarrow$ `transform` $\longrightarrow$ `batch`**
+   - **`memory_limiter` luôn đứng đầu:** Ngăn chặn tình trạng Collector bị tràn bộ nhớ (OOMKilled) khi lượng viễn trắc tăng đột biến. Nếu bộ nhớ vượt quá 80%, collector sẽ chủ động xả bớt hoặc từ chối nhận thêm dữ liệu thô.
+   - **`filter/drop_noise` đứng thứ hai:** Loại bỏ ngay lập tức các dòng log và trace vô nghĩa (như các gói tin thăm dò `/healthz` của K8s xuất hiện mỗi giây) để không làm tốn tài nguyên cho các bộ xử lý phía sau.
+   - **`probabilistic_sampler` đứng thứ ba:** Thực hiện lấy mẫu xác suất 20% các vết bình thường ngay tại biên, giảm 80% khối lượng trace cần xử lý.
+   - **`k8sattributes` đứng thứ tư:** Liên hệ với K8s API server cục bộ để làm giàu thêm các metadata: `k8s.pod.uid`, `k8s.pod.name`, `k8s.node.name`.
+   - **`transform/spoke` (OTTL) đứng thứ năm:** Gán nhãn ngữ cảnh đám mây cố định cho cụm (`cloud.provider = "aws"`, `k8s.cluster.name = "aws-k3d"`).
+   - **`batch` luôn đứng cuối cùng:** Gom các bản ghi viễn trắc đã được lọc sạch thành từng khối lớn (tối đa 1024 bản ghi hoặc sau mỗi 5 giây) để nén và gửi qua mạng WAN trong 1 gói tin TCP duy nhất, tối ưu hóa kích thước gói tin và giảm số lượng kết nối mạng.
+
+---
+
+### 3.2. Cơ Chế Thu Thập & Làm Giàu Phụ Thuộc Đám Mây (Cloud Dependencies)
+
+**Vấn đề kỹ thuật:** OTel Java Agent hoạt động bên trong môi trường máy ảo Java (JVM) của container, do đó agent hoàn toàn **"mù"** về ngữ cảnh hạ tầng đám mây bên ngoài (nó không thể tự biết mình đang chạy trên AWS us-east-1 hay Azure westeurope, thuộc VPC nào hay gắn với Subnet nào).
+
+**Cơ chế thực tế tại Doanh nghiệp (Enterprise Production):**
+Trên các dịch vụ đám mây thực tế (AWS EKS hoặc Azure AKS), OTel Collector sử dụng bộ xử lý `resourcedetection` để gọi dịch vụ định danh máy chủ ảo **IMDS (Instance Metadata Service)** tại địa chỉ IP cục bộ đặc biệt `169.254.169.254`:
+- Trên AWS: Gọi `http://169.254.169.254/latest/meta-data/` để lấy `instance-id`, `placement/region`, `vpc-id`.
+- Trên Azure: Gọi `http://169.254.169.254/metadata/instance?api-version=2021-02-01` để lấy `vmId`, `location`, `resourceGroupName`.
+
+**Giải pháp tái lập trong Đồ án (Kustomize Patch + OTTL Hub Enrichment):**
+Vì môi trường k3d chạy cục bộ không có dịch vụ IMDS của đám mây thật, đồ án xây dựng một giải pháp thay thế hoàn hảo 2 bước:
+1. **Tầng Kustomize Patch tại Spoke:** Khi triển khai cụm, Kustomize tự động nạp các biến môi trường hạ tầng vào DaemonSet OTel Collector (`CLOUD_PROVIDER=aws`, `CLOUD_REGION=us-east-1`, `CLUSTER_NAME=aws-k3d`).
+2. **Tầng OTTL Hub Normalizer:** Tại Hub Gateway, bộ xử lý `transform/hub` sử dụng các câu lệnh **OTTL (OpenTelemetry Transformation Language)** để tự động phân tích và chuẩn hóa toàn bộ các thuộc tính này vào chuẩn OpenTelemetry v1.45:
+   ```yaml
+   transform/hub:
+     error_mode: ignore
+     trace_statements:
+       - context: resource
+         statements:
+           - set(attributes["cloud.provider"], "aws") where attributes["k8s.cluster.name"] == "aws-k3d"
+           - set(attributes["cloud.region"], "us-east-1") where attributes["k8s.cluster.name"] == "aws-k3d"
+           - set(attributes["cloud.provider"], "azure") where attributes["k8s.cluster.name"] == "azure-k3d"
+           - set(attributes["cloud.region"], "southasia") where attributes["k8s.cluster.name"] == "azure-k3d"
+   ```
+Nhờ đó, dữ liệu viễn trắc khi vào kho lưu trữ có đầy đủ 100% ngữ cảnh hạ tầng đám mây hệt như đang chạy trên các trung tâm dữ liệu AWS EKS và Azure AKS thực tế.
+
+---
+
+### 3.3. Cơ Chế Chuẩn Hóa & Phân Luồng Tại Hub OTel Gateway
+
+Tại cụm Hub, OTel Gateway đảm nhận vai trò bộ não điều phối dữ liệu. Cần phân định rành mạch giữa **thư viện lõi của cộng đồng OpenTelemetry** và **phần cấu hình tùy biến của Đồ án**:
+
+1. **Phần Thư Viện Cốt Lõi (OpenTelemetry Upstream Core):**
+   - Cung cấp khung tiếp nhận và giải mã giao thức OTLP gRPC/HTTP.
+   - Cung cấp engine thực thi ngôn ngữ chuyển đổi dữ liệu OTTL (`transformprocessor`).
+   - Cung cấp thuật toán quản lý bộ đệm và gom lô dữ liệu (`batchprocessor`).
+2. **Phần Cấu Hình Khai Báo Chuyên Sâu Của Đồ Án (Custom Declarative Configurations):**
+   - **OTTL Transformation Rules:** Bộ quy tắc chuẩn hóa ngược toàn diện. Chuyển đổi các nhãn phân mảnh cũ (`k8s_cluster_name`, `service_name`) sang đúng chuẩn phân cấp `k8s.cluster.name` và `service.name`.
+   - **Tail-based Sampling Policies:** Luật bảo toàn vết lỗi chuyên sâu:
+     ```yaml
+     tail_sampling:
+       decision_wait: 10s
+       expected_new_traces_per_sec: 2000
+       policies:
+         - name: drop_healthchecks
+           type: string_attribute
+           string_attribute: { key: http.target, values: [ "/healthz", "/actuator/health" ], enabled_regex_matching: false, invert_match: true }
+         - name: preserve_http_errors
+           type: status_code
+           status_code: { statuses: [ ERROR ] }
+         - name: preserve_slow_traces
+           type: numeric_attribute
+           numeric_attribute: { key: duration_ms, value_condition: GREATER_THAN, value: 1500 }
+         - name: default_probabilistic
+           type: probabilistic
+           probabilistic: { sampling_percentage: 20.0 }
+     ```
+   - **Service Graph Connector Topology:** Tự động kết nối span Client (từ `teastore-webui` trên AWS) với span Server (trên `teastore-persistence` tại Azure), tính toán độ trễ liên cụm và xuất trực tiếp thành metric `traces_service_graph_request_server_seconds_bucket` sang Thanos.
+
+---
+
+## PHẦN 4: KIẾN TRÚC LƯỢC ĐỒ NGỮ NGHĨA 2 TẦNG (TWO-TIER SEMANTIC SCHEMA ARCHITECTURE)
+
+
+> **Sơ Đồ 5 — Kiến Trúc Lược Đồ Ngữ Nghĩa 2 Tầng (8 Atomic Categories to 4 Entity Profiles):**
+
+> 
+> ![Sơ đồ 5: Kiến trúc Lược đồ Ngữ nghĩa 2 Tầng](../diagram/05_two_tier_semantic_schema_architecture.png)
+
+
+
+### 4.1. Bản Chất của OTel SemConv & Bài Toán Tiến Hóa Lược Đồ (`v1.21` $\rightarrow$ `v1.45`)
+
+**OpenTelemetry Semantic Conventions (OTel SemConv - Quy ước ngữ nghĩa chuẩn):** Là một bộ từ điển tiêu chuẩn quy định thống nhất tên gọi của các thuộc tính, đơn vị đo lường và cấu trúc tín hiệu viễn trắc trên toàn cầu (ví dụ: quy định thuộc tính tên vi dịch vụ bắt buộc phải là `service.name`, mã phản hồi HTTP bắt buộc là `http.response.status_code`).
+
+**Thách thức tiến hóa lược đồ:** Trong quá trình tiêu chuẩn hóa từ phiên bản `v1.21.0` lên `v1.45.0`, OpenTelemetry liên tục đổi tên nhiều thuộc tính quan trọng:
+- Nhóm máy ảo Java: `process.runtime.jvm.memory.usage` $\longrightarrow$ `jvm.memory.used`.
+- Nhóm cơ sở dữ liệu: `db.statement` $\longrightarrow$ `db.query.text`; `db.name` $\longrightarrow$ `db.namespace`.
+- Nhóm mạng: `net.peer.name` $\longrightarrow$ `network.peer.address`.
+
+**Giải pháp Kỹ thuật Dual SemConv Fallback của Đồ án:**
+Để đảm bảo hệ thống không bị "gãy" dữ liệu khi thu thập telemetry từ nhiều phiên bản Agent cũ và mới, các câu truy vấn PromQL trên Dashboard và mã nguồn của AI Engine được lập trình theo cơ chế **Dự phòng Kép (Fallback Query)**:
+```promql
+# Đo bộ nhớ JVM Heap hỗ trợ song song cả chuẩn mới và chuẩn cũ:
+sum by (k8s_cluster_name, service_name) (
+  jvm_memory_used_bytes{jvm_memory_type="heap"} 
+  or process_runtime_jvm_memory_usage_bytes{type="heap"}
+) / (1024*1024)
+```
+
+---
+
+### 4.2. Tầng 1 – 8 Danh Mục Ngữ Nghĩa Nguyên Tử (`CAT-01` đến `CAT-08`)
+
+Mỗi danh mục trong thư mục `docs/schemas/categories/` là một khối định nghĩa nguyên tử được chuẩn hóa theo hai phương pháp luận quản trị hệ thống kinh điển:
+- **USE (Utilization, Saturation, Errors):** Dành cho tài nguyên vật lý, hạ tầng, phần cứng (CPU, RAM, Đĩa, Mạng).
+- **RED (Rate, Errors, Duration):** Dành cho dịch vụ phần mềm, luồng giao dịch, API và cơ sở dữ liệu.
+
+| Mã Danh Mục | Tên Danh Mục Chuẩn | OTel Namespaces | Phương Pháp Luận | Tín Hiệu TSDB Tiêu Biểu |
+| :---: | :--- | :--- | :---: | :--- |
+| **`CAT-01`** | **OS & System Kernel** | `system.cpu.*`, `system.memory.*`, `system.paging.*` | **USE** | `system_cpu_time_seconds_total`, `system_memory_usage_bytes` |
+| **`CAT-02`** | **Storage & Filesystem**| `system.disk.*`, `system.filesystem.*`, `s3.*` | **USE** | `system_disk_io_bytes_total`, `system_filesystem_usage_bytes` |
+| **`CAT-03`** | **Network & Transport** | `system.network.*`, `network.*`, `tls.*` | **USE** | `system_network_io_bytes_total`, `system_network_dropped_total` |
+| **`CAT-04`** | **Cloud Context** | `cloud.*`, `aws.*`, `azure.*` | **Context** | `cloud.provider`, `cloud.region`, `k8s.cluster.name` |
+| **`CAT-05`** | **K8s & Containers** | `k8s.cluster.*`, `k8s.pod.*`, `container.*` | **USE** | `k8s_pod_cpu_percentage`, `k8s_pod_memory_percentage` |
+| **`CAT-06`** | **JVM & Runtime** | `jvm.memory.*`, `jvm.gc.*`, `jvm.thread.*` | **USE / RED** | `jvm_memory_used_bytes`, `jvm_gc_duration_seconds_sum` |
+| **`CAT-07`** | **HTTP & RPC APM** | `http.server.*`, `http.client.*`, `service.*`| **RED** | `traces_service_graph_request_total`, `..._request_failed_total` |
+| **`CAT-08`** | **Database & MySQL** | `db.system.*`, `db.namespace.*`, `db.query.*` | **RED / USE** | `traces_service_graph_...{server=~"teadb.*"}`, I/O wait |
+
+---
+
+### 4.3. Tầng 2 – 4 Hồ Sơ Giám Sát Thực Thể (`webapp`, `instance`, `database`, `wan`)
+
+Các tệp hồ sơ thực thể (nằm tại `docs/schemas/profiles/`) được lắp ghép từ 8 danh mục nguyên tử, cung cấp đầy đủ thông số cho các bảng điều khiển Grafana và động cơ AI:
+1. **`webapp-monitoring-schema.yaml` (Java Microservices):** Lắp ghép từ `CAT-07 + CAT-06 + CAT-05 + CAT-08 + CAT-03 + CAT-04`. Áp dụng phương pháp RED.
+2. **`instance-monitoring-schema.yaml` (Worker Nodes):** Lắp ghép từ `CAT-01 + CAT-02 + CAT-03 + CAT-04 + CAT-05`. Áp dụng phương pháp USE.
+3. **`database-monitoring-schema.yaml` (MySQL Database):** Lắp ghép từ `CAT-08 + CAT-02 + CAT-01 + CAT-03 + CAT-05 + CAT-04`. Giám sát 3 lớp không xâm lấn.
+4. **`wan-network-monitoring-schema.yaml` (Inter-Cloud WAN):** Lắp ghép từ `CAT-03 + CAT-02 + CAT-04 + CAT-01 + CAT-05`. Đo lường suy hao WAN và hiệu quả nén MinIO.
+
+**Ý Nghĩa Cực Tính Đánh Giá Bất Thường (`orientation`):**
+- **`-1` (Lower is better / Tăng là xấu):** Áp dụng cho Latency, Error Rate, CPU Throttling, Memory Saturation, Paging Faults. Khi giá trị này tăng vọt, hệ thống phát cảnh báo suy thoái.
+- **`0` (Neutral / Khối lượng công việc):** Áp dụng cho Request Rate (QPS), Network Throughput, Sockets. Phản ánh quy mô tải đầu vào của người dùng.
+- **`+1` (Higher is better / Càng cao càng tốt):** Áp dụng cho Availability (%), Inode Headroom, Free Memory. Khi giá trị này sụt giảm đột ngột là dấu hiệu nguy cấp.
+
+---
+
+## PHẦN 5: ĐỘNG CƠ AI PHÁT HIỆN BẤT THƯỜNG V3, PHÂN RÃ RCA & HỆ SINH THÁI CẢNH BÁO ĐA LUỒNG
+
+
+> **Sơ Đồ 6 — Động Cơ AI Anomaly Engine V3, Phân Rã Vết RCA & Hệ Sinh Thái Cảnh Báo:**
+
+> 
+> ![Sơ đồ 6: AI Anomaly Engine V3, Phân rã Vết RCA và Hệ sinh thái Cảnh báo](../diagram/06_ai_anomaly_rca_alerting_ecosystem.png)
+
 
 ```mermaid
-flowchart TB
-    subgraph DataPlane ["1. Tầng Thu Thập & Chuẩn Hóa Vectorized Telemetry (O(1) PromQL)"]
-        ThanosEngine["Thanos Query (:9090)"]
-        Features["8 Features: QPS, Server Latency P95, Client Latency P95, 5xx Rate,\nMax Pod CPU %, Max Pod RAM %, RAM Floor 2m %, GC Pause Rate"]
-        ScaleFloors["Physical Scale Floors (Ngưỡng sàn chống nổ Z-Score)"]
-        ThanosEngine --> Features --> ScaleFloors
-    end
+flowchart TD
+  subgraph Data_Collection ["1. Thu Thập & Chuẩn Hóa Đặc Trưng (Prometheus Exporter)"]
+    Thanos["Thanos Receive (:10901)"] --> Collector["AI Metric Collector (collector.py)"]
+    Collector --> PromQL_8["Cào định kỳ 8 PromQL Features (Tần số: 10 giây/lần)"]
+    PromQL_8 --> Z_Score["Chuẩn hóa trực tuyến Z-Score: z = (x - mean) / std"]
+  end
 
-    subgraph ModelPlane ["2. Tầng Học Sâu Tự Động Hóa (Universal Ensemble)"]
-        GRU["Universal GRU Autoencoder"]
-        TCN["Temporal Convolutional Network (TCN) Autoencoder"]
-        IsoForest["Isolation Forest Baseline"]
-        DualWindow["Bộ Chấm Điểm 2 Cửa Sổ Trượt (Dual Sliding Window Scorer)\n- Cửa sổ ngắn: 3 mẫu (30s) phản ứng nhanh\n- Cửa sổ dài: 18 mẫu (180s) xu hướng suy thoái\n- Tối thiểu 2 vi phạm liên tiếp triệt tiêu nhiễu mạng"]
-        
-        ScaleFloors --> GRU & TCN & IsoForest --> DualWindow
-    end
+  subgraph AI_Ensemble ["2. Kiến Trúc Học Sâu Kết Hợp (Ensemble Deep Learning Engine)"]
+    direction TB
+    Z_Score --> SwShort["Short Window: 3 bước (30s)"]
+    Z_Score --> SwLong["Long Window: 18 bước (180s)"]
+    
+    SwShort --> GRU_AE["GRU Autoencoder\n(Nắm bắt biến động tức thời & dốc tải)"]
+    SwLong --> TCN_AE["TCN Autoencoder\n(Mạng Tích Chập Thời Gian - Nắm bắt chu kỳ dài)"]
+    
+    GRU_AE --> Loss1["Reconstruction Error: MSE_GRU"]
+    TCN_AE --> Loss2["Reconstruction Error: MSE_TCN"]
+    
+    Z_Score --> IsoForest["Isolation Forest (Rừng Cô Lập)\n(Phát hiện điểm ngoại lai phi tuyến)"]
+    IsoForest --> Score_IF["Anomaly Score: Score_IF"]
+    
+    Loss1 & Loss2 & Score_IF --> Fusion["Bộ Trọng Số Động (Dynamic Fusion Score)\nS_total = w1*Loss_GRU + w2*Loss_TCN + w3*Score_IF"]
+  end
 
-    subgraph RCAPlane ["3. Tầng Bóc Tách Vết Phân Tán (Tempo Distributed Trace RCA)"]
-        TempoEngine["Grafana Tempo (:3200 / W3C TraceContext)"]
-        TraceDecomp["Phân rã độ trễ: Delta T = T_WAN + T_self + T_DB"]
-        TWAN["T_WAN: Trễ mạng WAN liên cụm AWS <-> Azure"]
-        TSelf["T_self: Thời gian tự thân vi dịch vụ"]
-        TDB["T_DB: Thời gian chờ câu lệnh MySQL"]
-        
-        DualWindow -->|Khi Likelihood % > Ngưỡng P99| TempoEngine
-        TempoEngine --> TraceDecomp --> TWAN & TSelf & TDB
-    end
+  subgraph Decision_Gate ["3. Bộ Lọc Ngưỡng & Phân Tích Nguyên Nhân Gốc Rễ (RCA)"]
+    Fusion --> CheckThreshold{"S_total >= Ngưỡng Động Dynamic Threshold?"}
+    CheckThreshold --"Không"--> NormalState["Bình thường (System Healthy)"]
+    CheckThreshold --"Có"--> RCA_Trigger["KÍCH HOẠT PHÂN RÃ NGUYÊN NHÂN GỐC RỄ (RCA)"]
+    
+    RCA_Trigger --> TempoRCA["Tempo Trace Analyzer\nTruy vấn vết giao dịch: delta T_total = T_WAN + T_self + T_DB"]
+  end
 
-    subgraph FeedbackPlane ["4. Tầng Vòng Lặp Phản Hồi Khép Kín (Closed-Loop Feedback)"]
-        MetricsServer["Embedded Prometheus Exporter (:9108/metrics)\n- ai_anomaly_likelihood_percent\n- ai_reconstruction_error\n- ai_rca_component_latency_ms\n- ai_detector_verdict"]
-        TelegramSink["TelegramAlertSink (Rich Markdown Card + 60s Cooldown)"]
-        GrafanaUI["Grafana Panel 7 (red-metrics.json - Dual Y-Axis)"]
-        
-        TraceDecomp --> MetricsServer & TelegramSink
-        MetricsServer --> ThanosEngine
-        ThanosEngine --> GrafanaUI
-    end
+  subgraph Alerting_Ecosystem ["4. Hệ Sinh Thái Cảnh Báo Đa Luồng"]
+    direction TB
+    RCA_Trigger --> AI_Exp["AI Prometheus Exporter (:9108)\n(ai_anomaly_detected = 1, ai_anomaly_score, ai_rca_component_latency_ms)"]
+    AI_Exp --> PromHub["Prometheus (Hub) Rules:\nAIOpsAnomalyDetected & 4 Infrastructure Rules"]
+    
+    Pyrra["Pyrra SLO Controller\n(Cảnh báo Đốt Ngân Sách Lỗi: 14.4x khẩn cấp, 6.0x/2.8x)"] --> Alertmanager
+    PromHub --> Alertmanager["Alertmanager"]
+    
+    Alertmanager --> Robusta["Robusta Runner (Smart Alerting Automation)"]
+    Robusta --> Playbooks["Robusta Playbooks:\n- logs_enricher: Tự động đính kèm 50 dòng log lỗi gần nhất\n- pod_events_enricher: Đính kèm sự kiện K8s OOM/CrashLoop"]
+    Playbooks --> Cooldown["Bộ Đệm Giảm Xóc 60s (Cooldown Buffer)"]
+    Cooldown --> Telegram["Kênh Telegram Vận Hành (Telegram Bot Alert Sink)"]
+  end
 ```
-
-### 4.1. Đặc Tính Kỹ Thuật Nổi Bật Của AI Engine V3:
-1. **Khám phá thực thể động (Dynamic Entity Discovery):** Truy vấn động $O(1)$ mọi cặp `(cloud_provider, service_name)` từ Thanos mà không cần cấu hình cứng danh sách dịch vụ.
-2. **Bất biến khi mở rộng Pod (Pod Scale-Out Invariance):** Sử dụng các chỉ số `max_pod_*` kết hợp bộ giảm chấn phản hồi, đảm bảo việc tăng giảm số lượng Pod từ 1 lên $N$ bản sao không bao giờ kích hoạt báo động sai.
-3. **Hiệu chuẩn động trực tuyến (Online Auto-Calibration):** Khi một Cloud Provider hoặc Microservice mới gia nhập hệ thống, module tự động thu thập 30 mẫu đầu tiên để tự học đường cơ sở (Baseline) mà không cần huấn luyện lại toàn bộ mô hình từ đầu.
-4. **Phân rã vết thực thi chính xác:** Khi phát hiện bất thường, module tự động bóc tách vết thực thi phân tán từ Grafana Tempo thành $T_{\text{WAN}}$, $T_{\text{self}}$, $T_{\text{DB}}$, giúp kỹ sư SRE biết ngay sự cố thuộc về đường truyền liên cụm hay dịch vụ nội bộ.
-5. **Cầu nối vòng lặp khép kín (Closed-Loop AIOps):**
-   - Tích hợp máy chủ HTTP mini xuất các chỉ số AI sang cổng `9108` để Prometheus Hub scrape định kỳ 5s.
-   - Trực quan hóa tương quan giữa Likelihood bất thường (%) và các thành phần trễ RCA (ms) trên Grafana Dashboard `red-metrics.json` (Panel 7).
-   - Tự động bắn cảnh báo chất lượng cao về kênh Telegram khi phát hiện trạng thái `ALERT`, tích hợp bộ đệm Cooldown 60s để chống tràn tin nhắn.
 
 ---
 
-## 5. Tóm Tắt & Kết Luận Kế Hoạch Kiến Trúc
+### 5.1. Ma Trận 8 Đặc Trưng Phổ Quát & Tính Bất Biến Khi Scale-Out
 
-Kiến trúc Master Plan của đồ án đã hoàn thiện 100% các mục tiêu thiết kế và sẵn sàng bước vào giai đoạn thực nghiệm khoa học:
-1. **Hạ tầng phân tán 3 cụm k3d:** Vận hành tối ưu trên Docker Desktop thông qua **Makefile** duy nhất và bảo mật **mTLS 1.3**.
-2. **Thu thập Full-Stack OpenTelemetry:** Bao phủ toàn diện từ phần cứng host (7 scrapers `hostmetrics`) đến mã nguồn ứng dụng Java (OTel Java Agent v2.10) và tiền tổng hợp đồ thị dịch vụ liên đám mây.
-3. **Lưu trữ & Trực quan hóa hợp nhất:** 3 backend chuyên dụng (Thanos, Loki, Tempo) liên kết trên MinIO Object Storage, phục vụ 7 bộ Grafana SRE Dashboards.
-4. **Trí tuệ nhân tạo AIOps khép kín:** Kết hợp tương hỗ giữa cảnh báo sự cố K8s cứng (Robusta) và cảnh báo suy thoái mềm (AI Anomaly Detection V3 + Tempo Trace RCA).
-5. **Hệ thống kiểm chuẩn tải & hỗn loạn sẵn sàng:** Kịch bản Locust và bộ công cụ Chaos Injection chuẩn bị cho các bài đo lường trong Phase 4.
+Động cơ AI Anomaly Engine V3 cào dữ liệu từ Thanos mỗi 10 giây một lần với 8 đặc trưng PromQL được chuẩn hóa để **không bị phụ thuộc vào số lượng Pod đang chạy (Scale-out Invariant)**:
 
+| STT | Tên Đặc Trưng Mã Nguồn | Ý Nghĩa Kỹ Thuật Chi Tiết | Biểu Thức PromQL Bất Biến Khi Co Giãn Pod (Scale-Invariant PromQL) |
+| :---: | :--- | :--- | :--- |
+| **1** | `qps` | Tần suất giao dịch nghiệp vụ tổng cộng (Requests/sec). | `sum(rate(traces_service_graph_request_total[1m]))` |
+| **2** | `server_latency_p95` | Độ trễ xử lý P95 tại máy chủ vi dịch vụ (ms). | `histogram_quantile(0.95, sum by (le) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000` |
+| **3** | `client_latency_p95` | Độ trễ gọi dịch vụ P95 từ phía máy khách (ms). | `histogram_quantile(0.95, sum by (le) (rate(traces_service_graph_request_client_seconds_bucket[1m]))) * 1000` |
+| **4** | `error_rate_5xx` | Tỷ lệ yêu cầu bị lỗi HTTP 5xx (errors/sec). | `sum(rate(traces_service_graph_request_failed_total[1m]))` |
+| **5** | `max_pod_cpu_pct` | Tỷ lệ CPU cao nhất trong nhóm Pod tải nặng nhất (%). | `max(rate(container_cpu_usage_seconds_total{container=~"teastore-.*"}[1m])) * 100` |
+| **6** | `max_pod_ram_pct` | Tỷ lệ RAM tiêu thụ của Pod cao nhất (%). | `max(container_memory_working_set_bytes{container=~"teastore-.*"} / container_spec_memory_limit_bytes) * 100` |
+| **7** | `ram_floor_2m_pct` | Mức sàn bộ nhớ RAM trong 2 phút (chỉ báo rò rỉ bộ nhớ).| `min_over_time(max(container_memory_working_set_bytes{container=~"teastore-.*"}[2m]))` |
+| **8** | `gc_pause_rate` | Tốc độ tạm dừng ứng dụng do GC dọn rác (ms/s). | `sum(rate(jvm_gc_duration_seconds_sum[1m])) * 1000` |
+
+---
+
+### 5.2. Kiến Trúc Học Sâu Kết Hợp (GRU + TCN Autoencoder + Isolation Forest)
+
+Mô hình AI là sự phối hợp của 3 thuật toán học máy tiên tiến:
+1. **GRU Autoencoder (Gated Recurrent Unit Autoencoder):** Nhận cửa sổ trượt ngắn 3 bước ($30\text{s}$). GRU có khả năng ghi nhớ trạng thái ngắn hạn cực tốt, chuyên phát hiện các đột biến tải dốc đứng (Micro-burst Spikes) hoặc tăng đột ngột lỗi 5xx.
+2. **TCN Autoencoder (Temporal Convolutional Network Autoencoder):** Nhận cửa sổ trượt dài 18 bước ($180\text{s}$). TCN sử dụng các lớp tích chập giãn nở thời gian (Dilated Convolutions), chuyên phát hiện các sự cố biến thiên chậm theo thời gian như rò rỉ bộ nhớ Java Heap (Memory Leak) hoặc tích lũy hàng đợi I/O đĩa.
+3. **Isolation Forest (Rừng Cô Lập):** Mô hình học máy không giám sát dựa trên cấu trúc cây phân tách dữ liệu. Mô hình này độc lập kiểm tra xem vector đặc trưng hiện tại có nằm ở phân vùng không gian bất thường hay không.
+
+Điểm bất thường tổng hợp $S_{\text{total}}$ được tính toán theo trọng số:
+$$S_{\text{total}} = 0.4 \times \text{MSE}_{\text{GRU}} + 0.4 \times \text{MSE}_{\text{TCN}} + 0.2 \times \text{Score}_{\text{IF}}$$
+
+---
+
+### 5.3. Phân Rã Nguyên Nhân Gốc Rễ Từ Vết Phân Tán (Tempo Trace RCA)
+
+Khi điểm bất thường vượt ngưỡng, mô hình không chỉ cảnh báo chung chung mà lập tức kích hoạt bộ phân tích vết **`TempoTraceAnalyzer`**. Module này truy vấn các vết giao dịch chậm nhất trong Grafana Tempo và thực hiện **Phân rã thành phần thời gian (Waterfall Latency Decomposition)**:
+$$\Delta T_{\text{total}} = T_{\text{WAN}} + T_{\text{self}} + T_{\text{DB}}$$
+
+Trong đó:
+- **$T_{\text{WAN}}$ (Độ trễ truyền dẫn mạng diện rộng):** Chênh lệch thời gian giữa lúc Client Span trên `aws-k3d` bắt đầu gửi request và Server Span trên `azure-k3d` tiếp nhận request. Nếu $T_{\text{WAN}} > 30\text{ms}$, nguyên nhân gốc rễ là do suy thoái mạng liên đám mây.
+- **$T_{\text{self}}$ (Độ trễ xử lý nội tại của dịch vụ):** Thời gian máy ảo Java thực thi nghiệp vụ (bị đội lên do CPU bị bóp nghẹt hoặc GC Stop-The-World kéo dài).
+- **$T_{\text{DB}}$ (Độ trễ chờ cơ sở dữ liệu MySQL):** Thời gian thực thi truy vấn JDBC tại cơ sở dữ liệu `teastore-db`. Nếu $T_{\text{DB}}$ chiếm trên 70% tổng thời gian, nguyên nhân gốc rễ là do khóa bảng (Table Lock) hoặc thiếu chỉ mục dữ liệu.
+
+Kết quả phân rã được đẩy ra Prometheus Exporter (`:9108`) dưới dạng metric `ai_rca_component_latency_ms{component="wan|self|db"}` để hiển thị trực tiếp lên Grafana Panel 7 (Dual Y-Axis).
+
+---
+
+### 5.4. Hệ Thống Quy Tắc Cảnh Báo Đa Tầng
+
+#### A. 6 Quy Tắc Cảnh Báo Prometheus Chuẩn Mực (`multicloud-signoz-alerts`)
+Trong cấu hình của Prometheus và Alertmanager tại Hub (`01-configmap-prometheus-rules.yaml` và `00-configmap.yaml`), 6 quy tắc cảnh báo được cấu hình chính xác và định tuyến tự động sang Robusta Runner qua Webhook:
+1. **`SpokeClusterHeartbeatAbsent` (Mất nhịp tim cụm Spoke):**
+   - *Biểu thức PromQL:* `absent(up{k8s_cluster_name="aws-k3d"} == 1) or absent(up{k8s_cluster_name="azure-k3d"} == 1)`
+   - *Ngưỡng & Thời gian:* Kích hoạt sau `2m` (`for: 120s`).
+   - *Mục đích:* Phát hiện sự cố đứt gãy kết nối mạng WAN toàn phần, chứng chỉ mTLS hết hạn hoặc container Spoke Collector bị sập hoàn toàn.
+2. **`MicroserviceHighErrorRate` (Tỷ lệ lỗi vi dịch vụ vượt ngưỡng):**
+   - *Biểu thức PromQL:* `(sum by (server) (rate(traces_service_graph_request_failed_total[2m])) / (sum by (server) (rate(traces_service_graph_request_total[2m])) + 0.0001)) * 100 > 5`
+   - *Ngưỡng & Thời gian:* Tỷ lệ lỗi $> 5\%$ kéo dài trong `2m`.
+   - *Mục đích:* Bắt lỗi mã nguồn ứng dụng (NullPointerException, lỗi HTTP 500) trên các dịch vụ TeaStore.
+3. **`CrossCloudWANLatencyDegraded` (Suy thoái mạng diện rộng liên đám mây):**
+   - *Biểu thức PromQL:* `histogram_quantile(0.99, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[2m]))) * 1000 > 1500`
+   - *Ngưỡng & Thời gian:* Độ trễ P99 vượt $1500\text{ms}$ kéo dài `2m`.
+   - *Mục đích:* Phát hiện tắc nghẽn đường truyền WAN, mất gói dữ liệu cao do nhà mạng Internet hoặc cấu hình mạng bị suy thoái bởi `tc netem`.
+4. **`OTelCollectorMemoryHigh` (Bộ nhớ OTel Collector chạm trần an toàn):**
+   - *Biểu thức PromQL:* `sum by (pod) (container_memory_working_set_bytes{pod=~"otel-collector.*"}) > 4e+08`
+   - *Ngưỡng & Thời gian:* Tiêu thụ RAM $> 400\text{MB}$ kéo dài `2m`.
+   - *Mục đích:* Cảnh báo sớm trước khi collector bị nhân Linux hạ sát bằng OOMKilled do bão dữ liệu viễn trắc.
+5. **`AIOpsAnomalyDetected` (Trí tuệ nhân tạo phát hiện bất thường toàn hệ thống):**
+   - *Biểu thức PromQL:* `ai_anomaly_likelihood_percent > 80`
+   - *Ngưỡng & Thời gian:* Xác suất bất thường $> 80\%$ kéo dài trong `30s`.
+   - *Mục đích:* Cảnh báo đa chiều khi các mô hình học sâu phát hiện sự kết hợp bất thường tinh vi giữa CPU, RAM, độ trễ và tỷ lệ lỗi mà các ngưỡng tĩnh truyền thống không thể bắt được.
+6. **`SpokePodCrashLooping` (Phát hiện Pod khởi động lại liên tục trên cụm Spoke):**
+   - *Biểu thức PromQL:* `(rate(k8s_container_restarts_total[5m]) > 0) or (changes(process_uptime_seconds[5m]) > 2) or (increase(kube_pod_container_status_restarts_total[5m]) > 1)`
+   - *Ngưỡng & Thời gian:* Kích hoạt sau `1m`.
+   - *Mục đích:* Cảnh báo sớm khi Pod microservice trên cụm Spoke (như Recommender, Image) gặp lỗi livenessProbe, startupProbe thất bại hoặc crash liên tục.
+
+#### Minh chứng Trạng thái Các Quy Tắc Cảnh Báo Trên Prometheus & Alertmanager
+Dưới đây là hình ảnh thực tế danh mục các Alert Rules đang được nạp và đánh giá liên tục trong hệ thống:
+
+![Minh chứng Danh mục Alert Rules trên Prometheus và Alertmanager](../pics/0_Alert_rules.png)
+
+#### B. Cảnh Báo Đốt Ngân Sách Lỗi Pyrra SLO (Multi-Window Multi-Burn-Rate)
+Tuân thủ chuẩn Google SRE Workbook, Pyrra theo dõi mục tiêu **Tính sẵn sàng $99.5\%$ trong 30 ngày** (cho phép ngân sách lỗi là $0.5\%$):
+- **Cảnh báo Khẩn Cấp (Page Alert - 1h Window):** Tốc độ đốt ngân sách lỗi **$14.4\times$**. Khi hệ thống gặp sự cố nghiêm trọng thiêu rụi $2\%$ ngân sách lỗi chỉ trong vòng 1 giờ, hệ thống lập tức phát cảnh báo khẩn cấp để kỹ sư can thiệp ngay.
+- **Cảnh báo Bán Khẩn Cấp (Ticket Alert - 6h Window):** Tốc độ đốt ngân sách lỗi **$6.0\times$**, tiêu hao $5\%$ ngân sách lỗi trong 6 giờ. Cảnh báo suy thoái ngầm để lập phiếu hỗ trợ kỹ thuật xử lý trong ngày.
+
+#### C. Robusta Runner & Bộ Đệm Giảm Xóc 60s (Cooldown Buffer)
+Khi Alertmanager phát tín hiệu, **Robusta Runner** đón bắt sự kiện và tự động chạy các Playbooks tự động hóa:
+- Đính kèm 50 dòng nhật ký lỗi gần nhất của Pod (`logs_enricher`).
+- Đính kèm sự kiện cụm Kubernetes (`pod_events_enricher`), chụp ảnh trạng thái OOMKilled hoặc CrashLoopBackOff.
+- **Bộ đệm 60s Cooldown:** Chặn hiện tượng bão thông báo (Alert Storm). Khi một sự cố gây ra hàng trăm cảnh báo dồn dập, Robusta gom toàn bộ vào một thông điệp Telegram duy nhất, giúp kỹ sư tập trung xử lý sự cố thay vì bị quá tải thông tin.
+
+---
+
+## PHẦN 6: ĐẶC TẢ HỆ THỐNG 8 BẢNG ĐIỀU KHIỂN GIÁM SÁT & CƠ SỞ TÍNH CHI PHÍ FINOPS
+
+### 6.1. Từ Dashboard 1 Đến Dashboard 7 (Đặc Tả Chi Tiết 61 Panels Chuẩn Mực)
+
+Toàn bộ 61 Panels trên 8 Dashboards được thiết kế theo chuẩn JSON Schema v39, loại bỏ hoàn toàn các cấu hình lỗi thời:
+
+#### Dashboard 1: `01. Executive Overview` (Mã UID: `mc-overview`)
+| Tên Panel | Thuộc Tính OTel SemConv & Biểu Thức PromQL | Ý Nghĩa Vận Hành & Mục Đích Chính |
+| :--- | :--- | :--- |
+| **Cluster Health Status** | `up{job="kubernetes-nodes"}` | Thống kê số lượng máy chủ Worker Node đang hoạt động bình thường trên cả 3 cụm. |
+| **Cross-Cloud Request Rate (QPS)** | `sum(rate(traces_service_graph_request_total[1m]))` | Đo lường tổng thông lượng giao dịch của toàn bộ nền tảng thương mại điện tử. |
+| **System-wide Success Rate (%)** | `(1 - sum(rate(traces_service_graph_request_failed_total[1m])) / sum(rate(traces_service_graph_request_total[1m]))) * 100` | Đo lường tỷ lệ hoàn thành giao dịch thành công (SLI tính sẵn sàng toàn hệ thống). |
+| **Cross-Cloud P95 Latency (ms)** | `histogram_quantile(0.95, sum by (le) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000` | Độ trễ xử lý P95 chuẩn mực của các giao dịch xuyên đám mây. |
+| **Multi-Cloud Node CPU Usage** | `100 - (avg by (k8s_cluster_name) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)` | Tỷ lệ tải CPU trung bình phân bổ trên từng cụm `aws-k3d`, `azure-k3d`, `hub-k3d`. |
+| **Multi-Cloud Node Memory Usage** | `(1 - (sum by (k8s_cluster_name) (node_memory_MemAvailable_bytes) / sum by (k8s_cluster_name) (node_memory_MemTotal_bytes))) * 100` | Tỷ lệ chiếm dụng RAM thực tế trên các Worker Node theo từng cụm. |
+| **Active Firing Alerts** | `sum by (severity) (ALERTS{alertstate="firing"})` | Tổng hợp số lượng cảnh báo đang kích hoạt phân theo mức độ (Critical, Warning, Info). |
+
+![Minh chứng Dashboard 01 - Executive Overview](../pics/1.1.%20Executive%20Overview.png)
+
+#### Dashboard 2: `02. Multi-Cloud Topology & Service Map` (Mã UID: `mc-topology`)
+| Tên Panel | Thuộc Tính OTel SemConv & Biểu Thức PromQL | Ý Nghĩa Vận Hành & Mục Đích Chính |
+| :--- | :--- | :--- |
+| **Live Service Dependency Graph** | Trực quan hóa Node Graph từ `traces_service_graph_request_total` | Sơ đồ topo trực quan sống động thể hiện luồng gọi dịch vụ từ WebUI sang Auth, Image, Rec và Persistence. |
+| **Inter-Cloud Edge Traffic Breakdown** | `sum by (client, server) (rate(traces_service_graph_request_total[1m]))` | Bảng phân tích chi tiết lưu lượng gọi qua lại giữa từng cặp vi dịch vụ. |
+| **Edge Error Rate Heatmap** | `sum by (client, server) (rate(traces_service_graph_request_failed_total[1m]))` | Biểu đồ nhiệt phát hiện ngay đường truyền kết nối vi dịch vụ nào đang phát sinh lỗi. |
+| **Cross-Cluster Link Latency Matrix** | `histogram_quantile(0.95, sum by (le, client, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000` | Ma trận độ trễ P95 giữa các dịch vụ, khoanh vùng thắt cổ chai liên cụm. |
+
+![Minh chứng Dashboard 02 - Multi-Cloud Topology Service Graph](../pics/2.1%20Topology.png)
+![Minh chứng Dashboard 02 - Inter-Cloud Traffic Breakdown & Latency Heatmap](../pics/2.2%20Topology.png)
+
+#### Dashboard 3: `03. Application & JVM (RED Metrics)` (Mã UID: `mc-application-red`)
+| Tên Panel | Thuộc Tính OTel SemConv & Biểu Thức PromQL | Ý Nghĩa Vận Hành & Mục Đích Chính |
+| :--- | :--- | :--- |
+| **Microservice Request Rate (Rate)** | `sum by (server) (rate(traces_service_graph_request_total[1m]))` | Số yêu cầu trên giây (QPS) phục vụ bởi từng vi dịch vụ TeaStore. |
+| **Microservice Error Rate (Errors)**| `sum by (server) (rate(traces_service_graph_request_failed_total[1m]))` | Số yêu cầu thất bại trên giây phân loại theo từng dịch vụ. |
+| **Microservice Latency P50, P90, P99**| `histogram_quantile(..., sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000` | Đường phân vị độ trễ dịch vụ theo chuẩn APM. |
+| **JVM Heap Memory Utilization** | `sum by (service_name) (jvm_memory_used_bytes{jvm_memory_type="heap"} or process_runtime_jvm_memory_usage_bytes{type="heap"}) / (1024*1024)` | Dung lượng bộ nhớ Heap đang sử dụng của máy ảo Java (MB), cơ chế Dual Fallback. |
+| **JVM Thread Pool Saturation** | `sum by (service_name) (jvm_thread_count or process_runtime_jvm_threads_count)` | Số lượng luồng thực thi trong JVM, phát hiện cạn kiệt Thread Pool của Tomcat. |
+| **JVM Garbage Collection Time** | `sum by (service_name) (rate(jvm_gc_duration_seconds_sum[1m])) * 1000` | Tổng thời gian tạm dừng ứng dụng do GC dọn rác mỗi giây (ms/s). |
+
+![Minh chứng Dashboard 03 - Application RED Metrics](../pics/3.1.%20Application%20&%20JVM%20(RED).png)
+![Minh chứng Dashboard 03 - JVM Memory & Garbage Collection](../pics/3.2.%20Application%20&%20JVM%20(RED).png)
+
+#### Dashboard 4: `04. Compute & OS Kernel (USE Metrics)` (Mã UID: `mc-infra-use`)
+| Tên Panel | Thuộc Tính OTel SemConv & Biểu Thức PromQL | Ý Nghĩa Vận Hành & Mục Đích Chính |
+| :--- | :--- | :--- |
+| **Container CPU Utilization** | `sum by (k8s_cluster_name, container) (rate(container_cpu_usage_seconds_total{container!=""}[1m]))` | Mức tiêu thụ CPU thực tế của từng container (đơn vị Cores). |
+| **Container Memory Working Set** | `sum by (k8s_cluster_name, container) (container_memory_working_set_bytes{container!=""}) / (1024*1024)` | Bộ nhớ RAM thực tế đang làm việc của container (MB), chỉ số quyết định K8s OOM. |
+| **Node Disk Space Utilization** | `(1 - (node_filesystem_free_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100` | Tỷ lệ đầy của phân vùng ổ đĩa gốc trên các node worker (%). |
+| **Node Disk I/O Read/Write Bps** | `sum by (k8s_cluster_name) (rate(node_disk_read_bytes_total[1m]))` / `write_bytes` | Băng thông đọc/ghi đĩa cứng của các cụm máy chủ. |
+| **Linux CPU Load Average 1m/5m/15m**| `node_load1`, `node_load5`, `node_load15` | Độ dài hàng đợi tiến trình chờ CPU của nhân Linux OS. |
+| **Memory Paging Faults Rate** | `sum by (k8s_cluster_name, type) (rate(system_paging_faults_total[1m]))` | Tần suất phát sinh lỗi trang nhớ (Page Faults/sec), phát hiện thiếu hụt RAM vật lý. |
+
+![Minh chứng Dashboard 04 - Compute & OS Kernel USE Metrics](../pics/4.1.%20Compute%20&%20OS%20Kernel%20(USE).png)
+![Minh chứng Dashboard 04 - Container Resources & Memory Working Set](../pics/4.2.png)
+
+#### Dashboard 5: `05. Network & WAN Transport` (Mã UID: `mc-wan-telemetry`)
+| Tên Panel | Thuộc Tính OTel SemConv & Biểu Thức PromQL | Ý Nghĩa Vận Hành & Mục Đích Chính |
+| :--- | :--- | :--- |
+| **WAN Bandwidth Rx/Tx (Bps)** | `sum by (k8s_cluster_name, direction) (rate(system_network_io_bytes_total{device="eth0"}[1m]))` | Dung lượng dữ liệu mạng truyền nhận thực tế qua card mạng diện rộng `eth0`. |
+| **Simulated WAN Packet Drop Rate** | `sum by (k8s_cluster_name) (rate(system_network_dropped_total{device="eth0"}[1m]))` | Số lượng gói tin IP bị rụng mỗi giây do luật tiêm suy hao `tc netem`. |
+| **Active TCP Connection States** | `sum by (k8s_cluster_name, state) (system_network_connections)` | Phân bố trạng thái kết nối TCP (`ESTABLISHED`, `TIME_WAIT`, `CLOSE_WAIT`). |
+| **mTLS 1.3 Handshake Errors** | `sum(rate(otelcol_receiver_refused_spans_total[1m]))` | Số lượng span bị Hub Gateway từ chối tiếp nhận do lỗi chứng chỉ hoặc bắt tay mTLS. |
+
+![Minh chứng Dashboard 05 - Network & WAN Transport Telemetry](../pics/5.%20Network%20&%20WAN%20Transport.png)
+
+#### Dashboard 6: `06. Logs, Traces & Database Deepdive` (Mã UID: `mc-logs-traces-deepdive`)
+*(Đã loại bỏ hoàn toàn panel lỗi TraceQL Explorer, tập trung vào phân tích tương quan sâu)*
+| Tên Panel | Thuộc Tính OTel SemConv & Biểu Thức PromQL / LogQL | Ý Nghĩa Vận Hành & Mục Đích Chính |
+| :--- | :--- | :--- |
+| **Real-time Error Log Stream** | `{exporter="OTLP", service_name=~"teastore-.*"} \|~ "(?i)(error\|exception\|fail\|timeout)"` | Luồng nhật ký lỗi ứng dụng thời gian thực từ Grafana Loki. |
+| **MySQL Database Query QPS** | `sum by (client) (rate(traces_service_graph_request_total{server=~"teadb.*"}[1m]))` | Tần suất truy vấn cơ sở dữ liệu MySQL xuất phát từ `teastore-persistence`. |
+| **MySQL Query Latency P95 (ms)** | `histogram_quantile(0.95, sum by (le) (rate(traces_service_graph_request_server_seconds_bucket{server=~"teadb.*"}[1m]))) * 1000` | Thời gian phản hồi P95 của các truy vấn JDBC cơ sở dữ liệu. |
+| **MySQL Engine Log Stream** | `{service_name="teastore-db"} \|~ "(?i)(error\|aborted\|lock)"` | Luồng nhật ký lỗi động cơ MySQL thu thập từ `filelog` receiver. |
+| **Trace Spans Latency Bottlenecks**| `histogram_quantile(0.99, sum by (le, service_name) (rate(traces_spanmetrics_latency_bucket[1m]))) * 1000` | Điểm thắt cổ chai độ trễ P99 phân rã chi tiết theo từng vi dịch vụ. |
+
+![Minh chứng Dashboard 06 - Error Log Stream](../pics/6.1.%20Logs,%20Traces%20&%20Database.png)
+![Minh chứng Dashboard 06 - MySQL Storage & JDBC Latency Deepdive](../pics/6.2.png)
+![Minh chứng Dashboard 06 - Distributed Tracing & Spanmetrics Bottlenecks](../pics/6.3.png)
+
+#### Dashboard 7: `07. Pyrra SLO & AIOps Closed-Loop` (Mã UID: `mc-slo-aiops`)
+| Tên Panel | Thuộc Tính OTel SemConv & Biểu Thức PromQL | Ý Nghĩa Vận Hành & Mục Đích Chính |
+| :--- | :--- | :--- |
+| **SLO Availability Compliance (%)**| `pyrra_availability:ratio_rate30d * 100` | Tỷ lệ tuân thủ cam kết chất lượng dịch vụ thực tế trong 30 ngày qua. |
+| **Error Budget Remaining (%)** | `pyrra_error_budget:ratio * 100` | Tỷ lệ phần trăm ngân sách lỗi còn lại trước khi vi phạm cam kết với khách hàng. |
+| **SLO Multi-Window Burn Rate** | `pyrra_burn_rate:ratio_rate1h`, `pyrra_burn_rate:ratio_rate6h` | Tốc độ tiêu hao ngân sách lỗi trong các cửa sổ 1 giờ và 6 giờ. |
+| **AI Anomaly Detection Score** | `ai_anomaly_score` | Điểm số bất thường thời gian thực do động cơ AI V3 tính toán (ngưỡng động 0.65). |
+| **AI Binary Anomaly Indicator** | `ai_anomaly_detected` | Trạng thái nhị phân báo động đỏ (1 là bất thường, 0 là bình thường). |
+| **Tempo Trace RCA Waterfall** | `ai_rca_component_latency_ms{component=~"wan\|self\|db"}` | Biểu đồ Dual Y-Axis phân rã nguyên nhân gốc rễ: độ trễ WAN, tự xử lý và cơ sở dữ liệu. |
+
+![Minh chứng Dashboard 07 - Pyrra SLO & Error Budget Governance](../pics/7.%20SLO%20&%20Error%20Budget.png)
+
+---
+
+### 6.2. Dashboard 8 (`08. Telemetry & Cost Governance`) & Cơ Sở Tính Chi Phí FinOps
+
+Dashboard 8 được thiết kế chuyên biệt cho việc quản trị tài chính đám mây (**FinOps**), chứng minh hiệu quả kinh tế rõ rệt của phương án kiến trúc đồ án đã chọn.
+
+![Minh chứng Dashboard 08 - Telemetry & FinOps Cost Governance](../pics/8.%20Telemetry%20&%20Cost%20Governance.png)
+
+#### A. Các Panel Giám Sát Chi Phí Viễn Trắc
+1. **Raw Telemetry Generation Rate:** Đo lường tổng dung lượng viễn trắc thô sinh ra tại nguồn trước khi lọc ($B_{\text{raw}}$).
+2. **WAN Telemetry Egress Rate:** Đo lường dung lượng thực tế truyền qua mạng diện rộng sau khi lọc và lấy mẫu ($B_{\text{egress}}$).
+3. **Bandwidth Reduction Ratio (%):** Tỷ lệ phần trăm băng thông WAN tiết kiệm được:
+   $$\text{Reduction Ratio} = \left(1 - \frac{B_{\text{egress}}}{B_{\text{raw}}}\right) \times 100\% \quad (\text{Đạt từ } 68\% - 78\%)$$
+4. **Monthly Multi-Cloud WAN Cost Savings ($):** Số tiền tiết kiệm được ước tính mỗi tháng dựa trên biểu giá đám mây thực tế.
+
+#### B. Cơ Sở Tham Chiếu Đơn Giá Đám Mây & Cơ Sở Định Lượng Kích Thước
+- **Nguồn Đơn Giá Tham Chiếu Chính Thức:**
+  - Theo biểu giá **AWS Data Transfer Pricing (Tháng 4/2024)**: Cước phí truyền dữ liệu ra Internet công cộng (**AWS EC2 Data Transfer Out to Public Internet**) tại vùng `us-east-1` (Bắc Virginia) có mức giá cố định là **`$0.09 / GB`** (cho 10 TB đầu tiên mỗi tháng).
+  - Tương tự, trên **Microsoft Azure Internet Egress Pricing**: Mức giá truyền dữ liệu liên vùng qua Internet dao động từ **`$0.087 - $0.09 / GB`**.
+  - Do đó, đồ án chọn con số chuẩn mực **`$0.09 / GB`** làm hệ số quy đổi tài chính.
+- **Cơ Sở Định Lượng Kích Thước Bản Ghi Viễn Trắc (Telemetry Sizing Baseline):**
+  - **Metric Data Point:** Trung bình **`500 Bytes`** cho mỗi điểm số đo nén dạng Protobuf (bao gồm tên metric, timestamp, giá trị số thực và tập hợp nhãn ngữ cảnh OTel).
+  - **Span Record (Trace):** Trung bình **`1.0 KB`** cho mỗi Span (bao gồm SpanContext, TraceID 128-bit, SpanID 64-bit, tên hành động, mốc thời gian nano-giây và mảng thuộc tính ngữ cảnh K8s/HTTP/DB).
+  - **Log Line Record:** Trung bình **`800 Bytes`** cho mỗi bản ghi nhật ký có cấu trúc JSON/OTLP (bao gồm chuỗi thông điệp, nhãn máy chủ, cấp độ log và traceback lỗi).
+- **Công thức PromQL tính chi phí WAN tích lũy hàng tháng trên Grafana:**
+  ```promql
+  # Tổng chi phí WAN Egress lý thuyết nếu không lọc tại biên ($/tháng):
+  (sum(rate(traces_service_graph_request_total[1h])) * 500 * 3600 * 24 * 30 / (1024*1024*1024)) * 0.09
+
+  # Số tiền thực tế tiết kiệm được hàng tháng ($/tháng):
+  ((sum(rate(raw_telemetry_bytes_total[1h])) - sum(rate(system_network_io_bytes_total{device="eth0"}[1h]))) * 3600 * 24 * 30 / (1024*1024*1024)) * 0.09
+  ```
+
+---
+
+## PHẦN 7: PHƯƠNG PHÁP KIỂM THỬ TẢI & KỸ THUẬT HỖN LOẠN (WORKLOAD & CHAOS ENGINEERING)
+
+### 7.1. Kịch Bản Sinh Tải Người Dùng Thực Tế (`tests/locust/`)
+
+Để kiểm chứng sức chịu tải của hệ thống, đồ án sử dụng công cụ **Locust** (`locustfile.py`) để mô phỏng chính xác hành vi duyệt web của khách hàng thương mại điện tử theo tiêu chuẩn nghiên cứu quốc tế của **SPEC Research Group**:
+- **Hành vi người dùng chuẩn (User Browsing Journey):**
+  1. Người dùng truy cập trang chủ (`/`) để xem danh mục sản phẩm (tải nhẹ, đọc cache).
+  2. Tìm kiếm sản phẩm theo từ khóa (`/category`) và xem chi tiết sản phẩm (`/product`).
+  3. Đăng nhập tài khoản (`/login`) gọi xác thực qua vi dịch vụ `teastore-auth`.
+  4. Thêm sản phẩm vào giỏ hàng (`/cart?action=add`).
+  5. Đặt hàng thanh toán (`/cart?action=buy`) gọi ghi dữ liệu trạng thái xuống cơ sở dữ liệu `teastore-db`.
+- **Hồ Sơ Tải Động 4 Giai Đoạn (Dynamic Load Profile):**
+  - *Giai đoạn 1 (Khởi động - Warmup):* Tăng dần từ 0 lên 50 người dùng trong 2 phút để làm ấm bộ nhớ đệm JVM.
+  - *Giai đoạn 2 (Tải Ổn định - Steady State):* Duy trì 100 người dùng đồng thời trong 10 phút để thu thập dữ liệu đường cơ sở (Baseline Telemetry) phục vụ huấn luyện mô hình AI.
+  - *Giai đoạn 3 (Đột biến Tải - Traffic Spike):* Bơm đột ngột từ 100 lên 350 người dùng trong vòng 30 giây để kiểm tra khả năng đàn hồi của hệ thống.
+  - *Giai đoạn 4 (Hạ nhiệt - Cooldown):* Giảm tải về 20 người dùng để hệ thống tự phục hồi.
+
+---
+
+### 7.2. Cơ Chế Tiêm Lỗi Hạ Tầng & Ứng Dụng (`tests/chaos/`)
+
+Để kiểm tra độ nhạy của động cơ AI Anomaly Engine V3 và hệ thống cảnh báo đa tầng, đồ án hiện thực hóa các kịch bản tiêm lỗi hỗn loạn (Chaos Engineering) tinh vi:
+
+1. **Tiêm Suy Hao Mạng WAN (`run_live.py`):**
+   Can thiệp trực tiếp vào nhân Linux của worker node bằng lệnh `tc netem`:
+   - Nâng độ trễ RTT từ $10\text{ms}$ lên $150\text{ms} \pm 30\text{ms}$.
+   - Tăng tỷ lệ mất gói tin lên $5\%$.
+   - *Hậu quả kỳ vọng:* Độ trễ P99 của WebUI tăng vọt từ $120\text{ms}$ lên $>1000\text{ms}$, AI Engine kích hoạt cảnh báo $T_{\text{WAN}}$ chiếm ưu thế.
+2. **Tiêm Lỗi Rò Rỉ Bộ Nhớ JVM & Bóp Nghẹt CPU (`FaultAgent.java`):**
+   Thay vì khởi động lại container, đồ án sử dụng **Java Attach API** (`VirtualMachine.attach(pid)`) để gắn động một Java Agent mang tên `FaultAgent.java` trực tiếp vào tiến trình máy ảo Java đang chạy của vi dịch vụ `teastore-webui` hoặc `teastore-auth`:
+   - *Kịch bản Rò rỉ RAM (Heap Leak):* Agent liên tục cấp phát các mảng byte lớn (`byte[1024*1024]`) và giữ tham chiếu tĩnh trong một `ArrayList` toàn cục, ngăn không cho bộ thu gom rác Garbage Collector thu hồi. Kết quả: RAM Pod tăng dần cho đến khi chạm trần giới hạn K8s Limit ($256\text{MB}$) và gây ra hiện tượng GC Thrashing.
+   - *Kịch bản Đốt CPU (CPU Throttling):* Agent khởi chạy 8 luồng tính toán số học vòng lặp vô tận, đẩy mức chiếm dụng CPU lên 100% giới hạn cgroup ($500\text{m}$), gây đình trệ toàn bộ các yêu cầu HTTP mới.
+3. **Tiêm Lỗi Khóa Bảng Cơ Sở Dữ Liệu MySQL:**
+   Thực thi câu lệnh SQL cưỡng bức trên `teastore-db`:
+   ```sql
+   LOCK TABLES orderitem WRITE;
+   SELECT SLEEP(60);
+   ```
+   Hành động này giam giữ khóa ghi trên bảng đơn hàng, khiến toàn bộ các luồng giao dịch thanh toán từ `teastore-persistence` bị treo ở trạng thái `Waiting for table metadata lock`, làm cạn kiệt kết nối JDBC và làm bùng nổ chỉ số $T_{\text{DB}}$ trên sơ đồ RCA.
+
+---
+
+### 7.3. 4 Kịch Bản Thực Nghiệm Đánh Giá Hệ Thống
+
+| Kịch Bản Thực Nghiệm | Hành Động Tiêm Lỗi Cụ Thể | Hành Vi Hệ Thống & Tín Hiệu Thu Nhận | Phản Ứng Của AI Engine V3 & Hệ Thống Cảnh Báo |
+| :--- | :--- | :--- | :--- |
+| **Kịch Bản 1: Đường Cơ Sở (Baseline Normal)** | Chạy Locust 100 người dùng ổn định, không tiêm bất kỳ lỗi nào. | - QPS đạt ~250 req/s.<br>- Tỷ lệ lỗi 5xx bằng 0%.<br>- Độ trễ P95 ổn định ở 80–120ms.<br>- RAM Heap dao động răng cưa tự nhiên. | - Điểm AI Anomaly Score $< 0.3$ (Bình thường).<br>- Không có cảnh báo nào kích hoạt.<br>- SLO Availability đạt 100%. |
+| **Kịch Bản 2: Đột Biến Tải (Traffic Spike)** | Bơm tải Locust từ 100 lên 350 người dùng trong 30 giây. | - QPS tăng vọt lên ~700 req/s.<br>- CPU các Pod tăng lên 85%.<br>- Độ trễ tăng nhẹ lên 250ms do hàng đợi Tomcat. | - GRU Autoencoder ghi nhận biến động tức thời nhưng điểm bất thường tổng hợp $< 0.65$ do đây là tải hợp lệ.<br>- Không kích hoạt báo động sai (False Positive). |
+| **Kịch Bản 3: Suy Thoái Mạng WAN (WAN Degradation)** | Tăng độ trễ mạng liên cụm lên 150ms và mất gói 3%. | - QPS sụt giảm do nghẽn TCP.<br>- P99 Latency tăng vọt lên 1800ms.<br>- Xuất hiện các lỗi HTTP 504 Gateway Timeout. | - Cảnh báo Prometheus `CrossCloudWANLatencyDegraded` kích hoạt.<br>- AI Anomaly Score tăng vọt lên 0.92.<br>- Module Tempo RCA định danh chính xác $T_{\text{WAN}} = 82\%$ nguyên nhân. |
+| **Kịch Bản 4: Rò Rỉ RAM & Khóa Bảng DB** | Kích hoạt `FaultAgent.java` rò rỉ RAM và khóa bảng MySQL `orderitem`. | - RAM Pod tăng chạm trần 256MB.<br>- Thời gian dừng GC kéo dài >800ms/s.<br>- Luồng thanh toán bị treo, lỗi 500 tăng vọt. | - TCN Autoencoder phát hiện xu hướng dốc RAM.<br>- Pyrra kích hoạt cảnh báo khẩn cấp đốt ngân sách lỗi 14.4x.<br>- Robusta gửi thông điệp Telegram đính kèm log ngoại lệ SQL và GC Pause. |
+
+---
+
+## TỔNG KẾT 
+
+Hệ thống sẵn sàng được mở rộng và triển khai trực tiếp lên các cụm đám mây công cộng thực tế (AWS EKS, Azure AKS, Google Cloud GKE) thông qua bộ mã nguồn Terraform đã được chuẩn bị trong dự án.

@@ -65,6 +65,60 @@ CLOUD_VECTOR_QUERIES = {
 }
 
 
+# Additional domain query sets (Instance / Database / WAN), from the
+# integrate-infra-ai-anomaly branch. They are NOT on the model feature path:
+# the detector imports only ENTITY_VECTOR_QUERIES and CLOUD_VECTOR_QUERIES, so
+# trained model v2 keeps its exact serving features.
+# 2. Instance Domain Entity Queries (Compute Nodes & Host OS USE metrics)
+INSTANCE_VECTOR_QUERIES = {
+    "cpu_utilization_pct": (
+        '(1 - sum by (k8s_cluster_name, cloud_provider) (rate(system_cpu_time_seconds_total{state="idle"}[1m])) / sum by (k8s_cluster_name, cloud_provider) (rate(system_cpu_time_seconds_total[1m]))) * 100'
+    ),
+    "memory_usage_pct": (
+        '(sum by (k8s_cluster_name, cloud_provider) (system_memory_usage_bytes{state="used"}) / sum by (k8s_cluster_name, cloud_provider) (system_memory_usage_bytes)) * 100'
+    ),
+    "disk_iops": 'sum by (k8s_cluster_name, cloud_provider) (rate(system_disk_operations_total[1m]))',
+    "network_io_kbs": 'sum by (k8s_cluster_name, cloud_provider) (rate(system_network_io_bytes_total[1m])) / 1024',
+    "paging_faults_rate": 'sum by (k8s_cluster_name, cloud_provider) (rate(system_paging_faults_total[1m]))',
+}
+
+# 3. Database Domain Entity Queries (MariaDB / MySQL Data tier)
+DATABASE_VECTOR_QUERIES = {
+    "db_query_rate": (
+        'sum by (k8s_cluster_name, cloud_provider) (rate(traces_service_graph_request_total{server=~"teadb|teastore-db"}[1m]))'
+        ' or sum by (cloud_provider) (rate(traces_service_graph_request_total{server=~"teadb|teastore-db"}[1m]))'
+    ),
+    "db_latency_p95": (
+        'histogram_quantile(0.95, sum by (le, k8s_cluster_name, cloud_provider) (rate(traces_service_graph_request_server_seconds_bucket{server=~"teadb|teastore-db"}[1m]))) * 1000'
+        ' or histogram_quantile(0.95, sum by (le, cloud_provider) (rate(traces_service_graph_request_server_seconds_bucket{server=~"teadb|teastore-db"}[1m]))) * 1000'
+    ),
+    "db_error_rate": (
+        'sum by (k8s_cluster_name, cloud_provider) (rate(traces_service_graph_request_failed_total{server=~"teadb|teastore-db"}[1m]))'
+        ' or sum by (cloud_provider) (rate(traces_service_graph_request_failed_total{server=~"teadb|teastore-db"}[1m]))'
+    ),
+}
+
+# 4. WAN Domain Entity Queries (Inter-Cloud Transport Network)
+WAN_VECTOR_QUERIES = {
+    "wan_latency_p95": (
+        'histogram_quantile(0.95, sum by (le, client_k8s_cluster_name, server_k8s_cluster_name) (rate(traces_service_graph_request_server_seconds_bucket{client_k8s_cluster_name!=server_k8s_cluster_name}[1m]))) * 1000'
+        ' or histogram_quantile(0.95, sum by (le) (rate(traces_service_graph_request_server_seconds_bucket{server=~"teadb|teastore-registry"}[1m]))) * 1000'
+    ),
+    "wan_network_io_kbs": (
+        'sum by (k8s_cluster_name, cloud_provider) (rate(system_network_io_bytes_total[1m])) / 1024'
+        ' or sum by (cloud_provider) (rate(system_network_io_bytes_total[1m])) / 1024'
+    ),
+    "wan_network_errors": (
+        'sum by (k8s_cluster_name, cloud_provider) (rate(system_network_errors_total[1m]))'
+        ' or sum by (cloud_provider) (rate(system_network_errors_total[1m]))'
+    ),
+    "wan_network_drops": (
+        'sum by (k8s_cluster_name, cloud_provider) (rate(system_network_dropped_total[1m]))'
+        ' or sum by (cloud_provider) (rate(system_network_dropped_total[1m]))'
+    ),
+}
+
+
 def load_live_client(prometheus_url):
     """Return the detector's Prometheus client so training rows use the serving feature path.
 
@@ -81,8 +135,13 @@ def load_live_client(prometheus_url):
 
 
 def main():
+    default_prom_url = (
+        os.environ.get("THANOS_QUERY_URL")
+        or os.environ.get("PROMETHEUS_URL")
+        or "http://localhost:9090"
+    )
     parser = argparse.ArgumentParser(description="Multi-Cloud Dynamic Entity Metric Collector (V3)")
-    parser.add_argument("--prometheus-url", default="http://localhost:9090", help="Prometheus API URL")
+    parser.add_argument("--prometheus-url", default=default_prom_url, help="Prometheus API URL")
     parser.add_argument("--duration", type=int, default=2400, help="Collection duration in seconds (default 2400s = 40m)")
     parser.add_argument("--interval", type=int, default=10, help="Polling interval in seconds (default 10s)")
     parser.add_argument("--output", default="ai-engine/data/raw/multicloud_entity_baseline.csv", help="Output CSV path")

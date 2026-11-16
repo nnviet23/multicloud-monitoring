@@ -52,6 +52,12 @@ spec:
               mountPath: /etc/tempo
             - name: wal
               mountPath: /var/tempo/wal
+          startupProbe:
+            httpGet:
+              path: /ready
+              port: 3200
+            failureThreshold: 30
+            periodSeconds: 5
           readinessProbe:
             httpGet:
               path: /ready

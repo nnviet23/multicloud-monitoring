@@ -6,6 +6,8 @@ metadata:
   labels:
     app: teastore-webui
     tier: compute
+    k8s_cluster_name: aws-k3d
+    cloud_provider: aws
 spec:
   target: "99.5"
   window: "28d"

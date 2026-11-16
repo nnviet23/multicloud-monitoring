@@ -6,13 +6,14 @@ methodology: "USE_METHOD"
 included_categories:
   - "CAT-01: OS & System Kernel"
   - "CAT-02: Storage & Filesystem"
-  - "CAT-03: Network & Transport (L3/L4 & WAN)"
-  - "CAT-05: Containers & Kubernetes Orchestration"
-  - "CAT-04: Cloud Infrastructure & Perimeter Context"
+  - "CAT-03: Network & Transport"
+  - "CAT-04: Cloud Context & Perimeter"
+  - "CAT-05: Kubernetes & Containers"
 
 identity_attributes:
   cluster_name:
-    canonical_name: "k8s_cluster_name"
+    canonical_name: "k8s.cluster.name"
+    prometheus_label: "k8s_cluster_name"
     type: "string"
     allowed_values:
       - "aws-k3d"
@@ -116,7 +117,7 @@ telemetry_signals:
         type: "counter"
         unit: "faults/s"
         orientation: -1
-        promql: "sum by (k8s_cluster_name, type) (rate(system_paging_faults_total[1m])) or sum by (k8s_cluster_name, type) (rate(system_paging_operations_total[1m]))"
+        promql: "sum by (k8s_cluster_name, type) (rate(system_paging_faults_total[1m]))"
 
     disk_and_storage:
       utilization_throughput:

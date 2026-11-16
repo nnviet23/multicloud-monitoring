@@ -78,6 +78,8 @@ data:
               - set(attributes["cloud.identity.arn"], Concat(["/subscriptions/4b8f3a21-9e6c-4f80-b753-2d9a6e1c84f5/resourceGroups/rg-teastore-southasia/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-", attributes["service.name"]], "")) where attributes["cloud.provider"] == "azure" and attributes["service.name"] != nil
               - set(attributes["cloud.resource_id"], Concat(["arn:aws:eks:us-east-1:851725492014:pod/teastore-cluster/", attributes["k8s.namespace.name"], "/", attributes["k8s.pod.name"]], "")) where attributes["cloud.provider"] == "aws" and attributes["k8s.pod.name"] != nil
               - set(attributes["cloud.resource_id"], Concat(["/subscriptions/4b8f3a21-9e6c-4f80-b753-2d9a6e1c84f5/resourceGroups/rg-teastore-southasia/providers/Microsoft.ContainerService/managedClusters/teastore-aks/pods/", attributes["k8s.pod.name"]], "")) where attributes["cloud.provider"] == "azure" and attributes["k8s.pod.name"] != nil
+              - set(attributes["k8s_cluster_name"], attributes["k8s.cluster.name"])
+              - set(attributes["cloud_provider"], attributes["cloud.provider"])
               - set(attributes["telemetry.hub.received_time"], UnixMilli(Now()))
         trace_statements:
           - context: resource
@@ -106,6 +108,8 @@ data:
               - set(attributes["cloud.identity.arn"], Concat(["/subscriptions/4b8f3a21-9e6c-4f80-b753-2d9a6e1c84f5/resourceGroups/rg-teastore-southasia/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-", attributes["service.name"]], "")) where attributes["cloud.provider"] == "azure" and attributes["service.name"] != nil
               - set(attributes["cloud.resource_id"], Concat(["arn:aws:eks:us-east-1:851725492014:pod/teastore-cluster/", attributes["k8s.namespace.name"], "/", attributes["k8s.pod.name"]], "")) where attributes["cloud.provider"] == "aws" and attributes["k8s.pod.name"] != nil
               - set(attributes["cloud.resource_id"], Concat(["/subscriptions/4b8f3a21-9e6c-4f80-b753-2d9a6e1c84f5/resourceGroups/rg-teastore-southasia/providers/Microsoft.ContainerService/managedClusters/teastore-aks/pods/", attributes["k8s.pod.name"]], "")) where attributes["cloud.provider"] == "azure" and attributes["k8s.pod.name"] != nil
+              - set(attributes["k8s_cluster_name"], attributes["k8s.cluster.name"])
+              - set(attributes["cloud_provider"], attributes["cloud.provider"])
               - set(attributes["telemetry.hub.received_time"], UnixMilli(Now()))
           - context: span
             statements:
@@ -146,11 +150,7 @@ data:
               - set(attributes["cloud.platform"], "aws_eks") where attributes["cloud.provider"] == "aws"
               - set(attributes["cloud.platform"], "azure_aks") where attributes["cloud.provider"] == "azure"
               - set(attributes["cloud.platform"], "gcp_kubernetes_engine") where attributes["cloud.provider"] == "gcp"
-              - set(attributes["cluster"], attributes["k8s.cluster.name"])
-              - set(attributes["cloud"], attributes["cloud.provider"])
-              - set(attributes["region"], attributes["cloud.region"])
               - set(attributes["deployment.environment.name"], "production")
-              - set(attributes["telemetry.hub.received_time"], UnixMilli(Now()))
 
       tail_sampling:
         decision_wait: 10s
@@ -208,6 +208,9 @@ data:
         marshaler: otlp_json
 
     service:
+      telemetry:
+        metrics:
+          address: 0.0.0.0:8888
       pipelines:
         traces:
           receivers: [otlp]

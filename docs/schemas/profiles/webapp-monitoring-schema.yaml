@@ -4,12 +4,12 @@ target_system: "TeaStore Microservices"
 methodology: "RED_GOLDEN_SIGNALS"
 
 included_categories:
-  - "CAT-07: Web / HTTP / RPC Microservices (APM)"
-  - "CAT-06: Application Runtime & Virtual Machine (JVM)"
-  - "CAT-05: Containers & Kubernetes Orchestration"
-  - "CAT-08: Data Stores & Relational Databases (Client Dependency)"
-  - "CAT-03: Network & Transport (L3/L4 & WAN)"
-  - "CAT-04: Cloud Infrastructure & Perimeter Context"
+  - "CAT-07: HTTP & RPC APM"
+  - "CAT-06: JVM & Process Runtime"
+  - "CAT-05: Kubernetes & Containers"
+  - "CAT-08: Database Client & Storage"
+  - "CAT-03: Network & Transport"
+  - "CAT-04: Cloud Context & Perimeter"
 
 identity_attributes:
   service_name:
@@ -27,7 +27,9 @@ identity_attributes:
     type: "string"
     default: "1.4.1"
   orchestration:
-    cluster_name: "k8s_cluster_name"
+    cluster_name:
+      canonical_name: "k8s.cluster.name"
+      prometheus_label: "k8s_cluster_name"
     namespace: "k8s.namespace.name"
     pod_name: "k8s.pod.name"
     node_name: "k8s.node.name"
@@ -98,24 +100,24 @@ telemetry_signals:
       type: "counter"
       unit: "reqps"
       orientation: 0
-      promql: "sum by (server) (rate(traces_service_graph_request_total[1m]))"
+      promql: "sum by (k8s_cluster_name, server) (rate(traces_service_graph_request_total[1m]))"
     errors:
       category_ref: "CAT-07"
       metric_name: "traces_service_graph_request_failed_total"
       type: "counter"
       unit: "reqps"
       orientation: -1
-      promql: "sum by (server) (rate(traces_service_graph_request_failed_total[1m]))"
+      promql: "sum by (k8s_cluster_name, server) (rate(traces_service_graph_request_failed_total[1m]))"
     duration:
       category_ref: "CAT-07"
       metric_name: "traces_service_graph_request_server_seconds_bucket"
       type: "histogram"
       unit: "ms"
       orientation: -1
-      promql_p50: "histogram_quantile(0.50, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000"
-      promql_p90: "histogram_quantile(0.90, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000"
-      promql_p95: "histogram_quantile(0.95, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000"
-      promql_p99: "histogram_quantile(0.99, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000"
+      promql_p50: "histogram_quantile(0.50, sum by (le, k8s_cluster_name, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000"
+      promql_p90: "histogram_quantile(0.90, sum by (le, k8s_cluster_name, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000"
+      promql_p95: "histogram_quantile(0.95, sum by (le, k8s_cluster_name, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000"
+      promql_p99: "histogram_quantile(0.99, sum by (le, k8s_cluster_name, server) (rate(traces_service_graph_request_server_seconds_bucket[1m]))) * 1000"
     saturation:
       jvm_heap_used_mb:
         category_ref: "CAT-06"
@@ -124,7 +126,7 @@ telemetry_signals:
         type: "gauge"
         unit: "MBytes"
         orientation: -1
-        promql: "sum by (service_name) (jvm_memory_used_bytes{jvm_memory_type=\"heap\"} or process_runtime_jvm_memory_usage_bytes{type=\"heap\"}) / (1024*1024)"
+        promql: "sum by (k8s_cluster_name, service_name) (jvm_memory_used_bytes{jvm_memory_type=\"heap\"} or process_runtime_jvm_memory_usage_bytes{type=\"heap\"}) / (1024*1024)"
       jvm_threads:
         category_ref: "CAT-06"
         metric_name: "jvm_thread_count"
@@ -132,14 +134,14 @@ telemetry_signals:
         type: "gauge"
         unit: "count"
         orientation: -1
-        promql: "sum by (service_name) (jvm_thread_count or process_runtime_jvm_threads_count)"
+        promql: "sum by (k8s_cluster_name, service_name) (jvm_thread_count or process_runtime_jvm_threads_count)"
       jvm_gc_time:
         category_ref: "CAT-06"
         metric_name: "jvm_gc_duration_seconds_sum"
         type: "counter"
         unit: "seconds"
         orientation: -1
-        promql: "sum by (service_name) (rate(jvm_gc_duration_seconds_sum[1m]))"
+        promql: "sum by (k8s_cluster_name, service_name) (rate(jvm_gc_duration_seconds_sum[1m]))"
 
   logs:
     category_ref: "CAT-07"

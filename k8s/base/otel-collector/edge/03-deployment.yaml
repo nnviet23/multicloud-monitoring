@@ -40,6 +40,8 @@ spec:
               name: otlp-grpc
             - containerPort: 4318
               name: otlp-http
+            - containerPort: 8888
+              name: internal-prom
             - containerPort: 8889
               name: metrics
           resources:

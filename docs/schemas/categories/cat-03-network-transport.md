@@ -25,7 +25,7 @@ Trong đồ án nghiên cứu nền tảng giám sát đa đám mây, `CAT-03` l
 | `system.network.interface` | `device` / `interface` | Stable | Required | string | Tên giao diện mạng (Network interface name). [1] | `eth0`, `lo`, `docker0` |
 | `network.io.direction` | `direction` | Stable | Required | string | Chiều truyền thông mạng. [2] | `receive`, `transmit` |
 | `system.network.state` | `state` | Stable | Conditionally Required [3] | string | Trạng thái của socket kết nối TCP (theo `/proc/net/tcp`). | `ESTABLISHED`, `TIME_WAIT`, `CLOSE_WAIT`, `LISTEN` |
-| `network.peer.address` | `net.peer.ip` / `peer_ip` | Stable | Recommended | string | Địa chỉ IP của đối tác mạng ở đầu kết nối bên kia. | `172.18.0.2`, `172.18.0.3` |
+| `network.peer.address` | `net.peer.ip` / `peer_ip` | Stable | Recommended | string | Địa chỉ IP của đối tác mạng ở đầu kết nối bên kia. | `172.28.0.2`, `172.28.0.3` |
 | `network.peer.port` | `net.peer.port` / `peer_port` | Stable | Recommended | int | Cổng mạng TCP/UDP của đối tác mạng. | `4317`, `3306`, `1099` |
 | `network.transport` | `network_transport` | Stable | Recommended | string | Giao thức tầng vận chuyển L4. | `tcp`, `udp` |
 | `tls.protocol.version` | `tls_version` | Experimental | Required | string | Phiên bản giao thức bảo mật Transport Layer Security. [4] | `1.3`, `1.2` |

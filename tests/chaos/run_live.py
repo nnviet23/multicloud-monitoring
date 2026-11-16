@@ -24,6 +24,32 @@ FAULTS = {
 }
 
 
+def resolve_context(cluster: str, custom_context: str = None) -> str:
+    """Safely resolve kubectl context with dynamic detection."""
+    if custom_context:
+        return custom_context
+    env_key = f"{cluster.upper().replace('-', '_')}_CONTEXT"
+    if env_key in os.environ and os.environ[env_key]:
+        return os.environ[env_key]
+    if "KUBE_CONTEXT" in os.environ and os.environ["KUBE_CONTEXT"]:
+        return os.environ["KUBE_CONTEXT"]
+    candidates = [f"k3d-{cluster}-k3d", f"k3d-{cluster}", f"{cluster}-k3d", cluster]
+    try:
+        res = subprocess.run(["kubectl", "config", "get-contexts", "-o", "name"],
+                             capture_output=True, text=True, timeout=5)
+        if res.returncode == 0:
+            existing = [c.strip() for c in res.stdout.splitlines() if c.strip()]
+            for cand in candidates:
+                if cand in existing:
+                    return cand
+            for c in existing:
+                if cluster in c:
+                    return c
+    except Exception:
+        pass
+    return f"k3d-{cluster}-k3d"
+
+
 def command(args, **kwargs):
     return subprocess.run(args, check=True, text=True, capture_output=True, timeout=30, **kwargs).stdout
 
@@ -173,6 +199,10 @@ def main():
                         help="Baseline WAN netem profile on spoke nodes to restore after each fault ('' if unshaped)")
     parser.add_argument("--users", type=int, default=6)
     parser.add_argument("--output", default="tests/benchmarks/results/live")
+    parser.add_argument("--hub-context", default=None, help="Kubectl context for Hub cluster")
+    parser.add_argument("--aws-context", default=None, help="Kubectl context for AWS Spoke cluster")
+    parser.add_argument("--azure-context", default=None, help="Kubectl context for Azure Spoke cluster")
+    parser.add_argument("--gcp-context", default=None, help="Kubectl context for GCP Spoke cluster")
     args = parser.parse_args()
     if (args.interval < 1 or args.users < 1 or args.users > 20 or args.settle < 0
             or min(args.baseline, args.fault, args.recovery) < args.settle + 3 * args.interval):
@@ -219,9 +249,10 @@ def main():
             original = qdisc(args.tc_image, cloud)
             if not is_restored(original, args.baseline_netem):
                 raise RuntimeError(f"{cloud}: WAN shaping differs from baseline '{args.baseline_netem}': {original}")
-        command(["kubectl", "--context", "k3d-hub-k3d", "--request-timeout=10s",
+        hub_ctx = resolve_context("hub", args.hub_context)
+        command(["kubectl", "--context", hub_ctx, "--request-timeout=10s",
                  "-n", "monitoring", "get", "service/prometheus", "service/tempo"])
-        command(["kubectl", "--context", "k3d-hub-k3d", "--request-timeout=10s",
+        command(["kubectl", "--context", hub_ctx, "--request-timeout=10s",
                  "-n", "monitoring", "wait", "--for=condition=Ready", "pod",
                  "-l", "app=tempo", "--timeout=10s"])
         with urllib.request.urlopen("http://localhost:8080/tools.descartes.teastore.webui/product?id=7",

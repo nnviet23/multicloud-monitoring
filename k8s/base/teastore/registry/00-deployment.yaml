@@ -70,7 +70,7 @@ spec:
               path: /tools.descartes.teastore.registry/rest/services/isalive
               port: 8080
             failureThreshold: 30
-            periodSeconds: 5
+            periodSeconds: 10
           readinessProbe:
             httpGet:
               path: /tools.descartes.teastore.registry/rest/services/isalive

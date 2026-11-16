@@ -9,6 +9,7 @@ resources:
   - ../../../base/visualization-grafana
   - ../../../base/slo-pyrra
   - ../../../base/smart-alerting-robusta
+  - ../../../base/alertmanager
   - ../../../base/otel-collector/gateway
 
 secretGenerator:
@@ -36,8 +37,21 @@ secretGenerator:
       - .env
     options:
       disableNameSuffixHash: true
+  - name: thanos-s3-creds
+    namespace: monitoring
+    envs:
+      - .env
+    options:
+      disableNameSuffixHash: true
+  - name: otel-s3-creds
+    namespace: monitoring
+    envs:
+      - .env
+    options:
+      disableNameSuffixHash: true
   - name: robusta-secrets
     namespace: monitoring
+    behavior: replace
     envs:
       - .env
     options:
