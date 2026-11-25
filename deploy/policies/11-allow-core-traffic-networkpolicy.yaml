@@ -17,7 +17,9 @@ spec:
     - Egress
   ingress:
     # 1. Allow internal microservice HTTP traffic (8080) and external ingress/loadgen
-    - ports:
+    - from:
+        - namespaceSelector: {}
+      ports:
         - protocol: TCP
           port: 8080
     # 2. Allow intra-namespace MySQL database traffic (3306) and Spoke OTel Collector monitoring
@@ -67,7 +69,9 @@ spec:
         - protocol: TCP
           port: 4317
     # 5. Cross-cluster Spoke-to-Spoke WAN communication (Registry 31112, Persistence 31111)
-    - ports:
+    - to:
+        - namespaceSelector: {}
+      ports:
         - protocol: TCP
           port: 31111
         - protocol: TCP

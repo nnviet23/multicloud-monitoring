@@ -421,7 +421,7 @@ def sync_hosts_cmd(
 
     for container in containers:
         inspect_res = run_cmd(
-            ["docker", "inspect", "--format", "{{range $net, $conf := .NetworkSettings.Networks}}{{$conf.IPAddress}} {{end}}", container]
+            ["docker", "inspect", "--format", f"{{{{(index .NetworkSettings.Networks \"{NETWORK_NAME}\").IPAddress}}}}", container]
         )
         raw_ips = inspect_res.stdout.strip().split()
         ip = raw_ips[0] if raw_ips else ""
@@ -454,8 +454,12 @@ def sync_hosts_cmd(
             console.print(f"[yellow][WARN] CoreDNS patch on {name}: {patch_res.stderr.strip()}[/yellow]")
 
         # Restart rollout
-        run_cmd(["kubectl", "--context", ctx, "-n", "kube-system", "rollout", "restart", "deployment", "coredns"])
-        run_cmd(["kubectl", "--context", ctx, "-n", "kube-system", "rollout", "status", "deployment", "coredns", "--timeout=60s"])
+        restart_res = run_cmd(["kubectl", "--context", ctx, "-n", "kube-system", "rollout", "restart", "deployment", "coredns"])
+        if restart_res.returncode != 0:
+            console.print(f"[yellow][WARN] CoreDNS rollout restart on {name}: {restart_res.stderr.strip()}[/yellow]")
+        status_res = run_cmd(["kubectl", "--context", ctx, "-n", "kube-system", "rollout", "status", "deployment", "coredns", "--timeout=60s"])
+        if status_res.returncode != 0:
+            console.print(f"[yellow][WARN] CoreDNS rollout status on {name}: {status_res.stderr.strip()}[/yellow]")
 
     console.print("[bold green]CoreDNS NodeHosts synchronized across all 3 clusters![/bold green]")
 
