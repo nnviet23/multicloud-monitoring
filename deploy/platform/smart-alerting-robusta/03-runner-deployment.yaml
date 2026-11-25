@@ -21,6 +21,8 @@ spec:
           image: robustadev/robusta-runner:0.53.0
           imagePullPolicy: IfNotPresent
           securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:

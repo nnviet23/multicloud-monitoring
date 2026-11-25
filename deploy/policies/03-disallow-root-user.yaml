@@ -20,6 +20,8 @@ spec:
                 - Pod
               namespaces:
                 - teastore
+                - monitoring
+                - storage
       validate:
         message: "Container trong namespace teastore không được chạy dưới quyền root (runAsNonRoot phải là true hoặc runAsUser > 0)."
         pattern:
