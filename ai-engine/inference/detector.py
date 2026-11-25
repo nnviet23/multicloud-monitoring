@@ -28,6 +28,7 @@ import math
 import time
 import json
 import yaml
+import html
 import signal
 import threading
 import http.server
@@ -36,7 +37,6 @@ import urllib.error
 import urllib.parse
 import subprocess
 import argparse
-import joblib
 import numpy as np
 import torch
 
@@ -756,7 +756,8 @@ class PrometheusMetricsServer:
     Lightweight, embedded HTTP server serving Prometheus metrics at /metrics
     Zero additional third-party dependencies required.
     """
-    def __init__(self, port=9108):
+    def __init__(self, host="127.0.0.1", port=9108):
+        self.host = host
         self.port = port
         self.server = None
         self.thread = None
@@ -793,12 +794,12 @@ class PrometheusMetricsServer:
                 pass  # Suppress HTTP access logging
 
         try:
-            self.server = http.server.ThreadingHTTPServer(("0.0.0.0", self.port), MetricsHandler)
+            self.server = http.server.ThreadingHTTPServer((self.host, self.port), MetricsHandler)
             self.thread = threading.Thread(target=self.server.serve_forever, daemon=True, name="PrometheusMetricsServer")
             self.thread.start()
-            print(f"[AIOps-Metrics] Prometheus Exporter active at http://0.0.0.0:{self.port}/metrics", flush=True)
+            print(f"[AIOps-Metrics] Prometheus Exporter active at http://{self.host}:{self.port}/metrics", flush=True)
         except Exception as err:
-            print(f"[Warning] Failed to start Prometheus Metrics Server on port {self.port}: {err}", flush=True)
+            print(f"[Warning] Failed to start Prometheus Metrics Server on {self.host}:{self.port}: {err}", flush=True)
 
     def close(self):
         if self.server:
@@ -899,15 +900,15 @@ class TelegramAlertSink:
         self.token = token or os.environ.get("TELEGRAM_BOT_TOKEN")
         self.chat_id = chat_id or os.environ.get("TELEGRAM_CHAT_ID")
         env_cooldown = os.environ.get("TELEGRAM_COOLDOWN_SECONDS")
-        self.cooldown_seconds = cooldown_seconds if cooldown_seconds is not None else (int(env_cooldown) if env_cooldown else 30)
+        self.cooldown_seconds = cooldown_seconds if cooldown_seconds is not None else (float(env_cooldown) if env_cooldown else 60.0)
         self.last_sent = {}
 
-        if not self.token or self.token.startswith("CHANGE_ME"):
+        if not self.token or "CHANGE_ME" in self.token:
             self._load_env_fallback()
 
         self.configured = bool(self.token and self.chat_id
-                               and not self.token.startswith("CHANGE_ME")
-                               and not str(self.chat_id).startswith("CHANGE_ME"))
+                               and "CHANGE_ME" not in self.token
+                               and "CHANGE_ME" not in str(self.chat_id))
         if self.configured:
             print(f"[AIOps-Telegram] Alert Sink configured (Chat ID: {self.chat_id})", flush=True)
         else:
@@ -935,26 +936,30 @@ class TelegramAlertSink:
         if now - last < self.cooldown_seconds:
             return
 
-        causes_text = "\n".join(f"  • {c}" for c in causes) if causes else "  • Soft degradation / Uncorrelated deviation"
+        causes_items = [f"  • {html.escape(c)}" for c in causes] if causes else ["  • Soft degradation / Uncorrelated deviation"]
+        causes_text = "\n".join(causes_items)
         wan_links = trace_summary.get("wan_links", {})
         top_wan = max(wan_links.values()) if wan_links else 0.0
         self_times = trace_summary.get("self_times", {})
         top_self = self_times.get(entity_id, 0.0)
         db_ms = trace_summary.get("db_time_ms", 0.0)
 
+        safe_entity = html.escape(str(entity_id))
+        safe_verdict = html.escape(str(verdict))
+
         msg = (
-            "🚨 *[AI-OPS ALERT] Multi-Cloud Anomaly Detected*\n"
+            "🚨 <b>[AI-OPS ALERT] Multi-Cloud Anomaly Detected</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📍 *Target Entity*: `{entity_id}`\n"
-            f"📊 *Likelihood*: `{likelihood_pct:.1f}%` (MSE: `{mse:.4f}`)\n"
-            f"⚡ *Verdict*: `{verdict}` (Sustained Anomaly)\n\n"
-            f"🔍 *Root Cause Evidence (RCA)*:\n{causes_text}\n\n"
-            "⏱️ *Tempo Trace Decomposition*:\n"
-            f"  • Cross-Cloud WAN Lag: `{top_wan:.1f}ms`\n"
-            f"  • Microservice Self-Exec: `{top_self:.1f}ms`\n"
-            f"  • Database Query Time: `{db_ms:.1f}ms`\n"
+            f"📍 <b>Target Entity</b>: <code>{safe_entity}</code>\n"
+            f"📊 <b>Likelihood</b>: <code>{likelihood_pct:.1f}%</code> (MSE: <code>{mse:.4f}</code>)\n"
+            f"⚡ <b>Verdict</b>: <code>{safe_verdict}</code> (Sustained Anomaly)\n\n"
+            f"🔍 <b>Root Cause Evidence (RCA)</b>:\n{causes_text}\n\n"
+            "⏱️ <b>Tempo Trace Decomposition</b>:\n"
+            f"  • Cross-Cloud WAN Lag: <code>{top_wan:.1f}ms</code>\n"
+            f"  • Microservice Self-Exec: <code>{top_self:.1f}ms</code>\n"
+            f"  • Database Query Time: <code>{db_ms:.1f}ms</code>\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "💡 *Recommendation*: Inspect edge WAN shaping or database slow queries."
+            "💡 <i>Recommendation</i>: Inspect edge WAN shaping or database slow queries."
         )
 
         try:
@@ -962,7 +967,7 @@ class TelegramAlertSink:
             payload = json.dumps({
                 "chat_id": self.chat_id,
                 "text": msg,
-                "parse_mode": "Markdown",
+                "parse_mode": "HTML",
             }).encode("utf-8")
             req = urllib.request.Request(
                 url, data=payload,
@@ -973,7 +978,8 @@ class TelegramAlertSink:
                     self.last_sent[entity_id] = now
                     print(f"[AIOps-Telegram] Alert dispatched successfully for {entity_id}", flush=True)
         except Exception as e:
-            print(f"[AIOps-Telegram] Failed to send Telegram alert: {e}", flush=True)
+            safe_err = str(e).replace(self.token, "***") if self.token else str(e)
+            print(f"[AIOps-Telegram] Failed to send Telegram alert: {safe_err}", flush=True)
 
     def reset_all(self):
         """Clears cooldown records when cluster returns to HEALTHY."""
@@ -990,11 +996,15 @@ def parse_args():
     parser.add_argument("--interval", type=int, default=6, help="Inference polling interval in seconds")
     parser.add_argument("--max-samples", type=int, default=0, help="Stop automatically after N cycles (0 = infinite)")
     parser.add_argument("--summary-out", default="", help="Optional path to save JSON test summary")
+    parser.add_argument("--metrics-host", default="127.0.0.1", help="Prometheus metrics exporter bind host (default 127.0.0.1)")
     parser.add_argument("--metrics-port", type=int, default=9108, help="Prometheus metrics exporter port (default 9108, 0 to disable)")
-    parser.add_argument("--telegram-token", default="", help="Telegram Bot Token for alerts")
     parser.add_argument("--telegram-chat-id", default="", help="Telegram Chat ID for alerts")
-    parser.add_argument("--telegram-cooldown", type=int, default=30, help="Cooldown in seconds between alerts for same entity (default 30s)")
+    parser.add_argument("--telegram-cooldown", type=float, default=60.0, help="Cooldown in seconds between alerts for same entity (default 60.0s)")
     return parser.parse_args()
+
+
+def _safe_torch_load(ckpt_path, device):
+    return torch.load(ckpt_path, map_location=device, weights_only=True)
 
 
 def main():
@@ -1007,7 +1017,6 @@ def main():
     tcn_ckpt_path = os.path.join(models_dir, "tcn_autoencoder.pt")
     baselines_path = os.path.join(models_dir, "entity_baselines.json")
     threshold_path = os.path.join(models_dir, "threshold_config.json")
-    iso_path = cfg["baseline"]["isolation_forest"]["save_path"]
 
     for p in [gru_ckpt_path, baselines_path, threshold_path]:
         if not os.path.isfile(p):
@@ -1022,7 +1031,6 @@ def main():
     err_dist = threshold_meta["error_distribution"]
     dw_cfg = threshold_meta.get("dual_sliding_window", {})
 
-    iso_forest = joblib.load(iso_path) if os.path.isfile(iso_path) else None
     features = cfg["data"]["features"]
     window_size = int(cfg["data"]["window_size"])
     scale_floors = cfg["data"].get("physical_scale_floors", cfg["data"].get("scale_floors", {}))
@@ -1042,7 +1050,7 @@ def main():
         latent_dim=cfg["model"].get("latent_dim", 16),
         num_layers=cfg["model"].get("num_layers", 2),
     ).to(device)
-    gru_ckpt = torch.load(gru_ckpt_path, map_location=device, weights_only=False)
+    gru_ckpt = _safe_torch_load(gru_ckpt_path, device)
     gru_model.load_state_dict(gru_ckpt["model_state_dict"])
     gru_model.eval()
 
@@ -1053,7 +1061,7 @@ def main():
             hidden_dim=cfg["model"].get("hidden_dim", 64),
             latent_dim=cfg["model"].get("latent_dim", 16),
         ).to(device)
-        tcn_ckpt = torch.load(tcn_ckpt_path, map_location=device, weights_only=False)
+        tcn_ckpt = _safe_torch_load(tcn_ckpt_path, device)
         tcn_model.load_state_dict(tcn_ckpt["model_state_dict"])
         tcn_model.eval()
 
@@ -1083,9 +1091,8 @@ def main():
     endpoints = cfg.get("observability_endpoints", {})
     prom_client = PrometheusVectorClient(endpoints.get("prometheus_url", "http://localhost:9090"))
     tempo_analyzer = TempoTraceAnalyzer(endpoints.get("tempo_url", "http://localhost:3200"))
-    metrics_server = PrometheusMetricsServer(port=args.metrics_port) if args.metrics_port > 0 else None
+    metrics_server = PrometheusMetricsServer(host=args.metrics_host, port=args.metrics_port) if args.metrics_port > 0 else None
     alert_sink = TelegramAlertSink(
-        token=args.telegram_token,
         chat_id=args.telegram_chat_id,
         cooldown_seconds=args.telegram_cooldown,
     )

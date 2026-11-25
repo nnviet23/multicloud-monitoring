@@ -112,8 +112,8 @@ DATABASE_VECTOR_QUERIES = {
 # 4. WAN Domain Entity Queries (Inter-Cloud Transport Network)
 WAN_VECTOR_QUERIES = {
     "wan_latency_p95": (
-        'histogram_quantile(0.95, sum by (le, client_k8s_cluster_name, server_k8s_cluster_name) (rate(traces_service_graph_request_server_seconds_bucket{client_k8s_cluster_name!=server_k8s_cluster_name}[1m]))) * 1000'
-        ' or histogram_quantile(0.95, sum by (le) (rate(traces_service_graph_request_server_seconds_bucket{server=~"teadb|teastore-registry"}[1m]))) * 1000'
+        'histogram_quantile(0.95, sum by (le, cloud_provider, client_k8s_cluster_name, server_k8s_cluster_name) (rate(traces_service_graph_request_server_seconds_bucket{client_k8s_cluster_name!=server_k8s_cluster_name}[1m]))) * 1000'
+        ' or histogram_quantile(0.95, sum by (le, cloud_provider) (rate(traces_service_graph_request_server_seconds_bucket{server=~"teadb|teastore-registry"}[1m]))) * 1000'
     ),
     "wan_network_io_kbs": (
         'sum by (k8s_cluster_name, cloud_provider) (rate(system_network_io_bytes_total[1m])) / 1024'
@@ -122,10 +122,6 @@ WAN_VECTOR_QUERIES = {
     "wan_network_errors": (
         'sum by (k8s_cluster_name, cloud_provider) (rate(system_network_errors_total[1m]))'
         ' or sum by (cloud_provider) (rate(system_network_errors_total[1m]))'
-    ),
-    "wan_network_drops": (
-        'sum by (k8s_cluster_name, cloud_provider) (rate(system_network_dropped_total[1m]))'
-        ' or sum by (cloud_provider) (rate(system_network_dropped_total[1m]))'
     ),
 }
 

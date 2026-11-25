@@ -1,8 +1,0 @@
----
-# Master Playbook for Local Multi-Cloud Infrastructure & Networking Provisioning
-- import_playbook: 01_setup_host_tools.yml
-- import_playbook: 02_provision_k3d_clusters.yml
-- import_playbook: 03_emulate_wan_latency.yml
-- import_playbook: 04_sync_cluster_hosts.yml
-- import_playbook: 05_verify_clusters.yml
-- import_playbook: 06_distribute_mtls_secrets.yml

@@ -1,0 +1,47 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  # Policies
+  - ../../policies
+  # Benchmark Workloads
+  - ../../../workloads/teastore/azure-spoke
+  # Platform
+  - ../../platform/otel-collector/edge
+  - ../../platform/sealed-secrets
+  - patches/01-configmap-mysql-receiver.yaml
+
+patches:
+  - path: patches/patch-cluster-identity.yaml
+
+secretGenerator:
+  - name: teastore-mysql-secret
+    namespace: monitoring
+    literals:
+      - root-password=teastore
+    options:
+      disableNameSuffixHash: true
+  - name: teastore-mysql-secret
+    namespace: teastore
+    literals:
+      - root-password=teastore
+    options:
+      disableNameSuffixHash: true
+
+# Release Pointers - Managed via release-images.yaml (ADR-0001 & ADR-0002)
+images:
+  - name: descartesresearch/teastore-db
+    newName: descartesresearch/teastore-db
+    newTag: "1.4.1"
+  - name: descartesresearch/teastore-persistence
+    newName: descartesresearch/teastore-persistence
+    newTag: "1.4.1"
+  - name: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java
+    newName: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java
+    newTag: "2.10.0"
+  - name: otel/opentelemetry-collector-contrib
+    newName: otel/opentelemetry-collector-contrib
+    newTag: "0.114.0"
+  - name: bitnami/sealed-secrets-controller
+    newName: bitnami/sealed-secrets-controller
+    newTag: "v0.24.5"

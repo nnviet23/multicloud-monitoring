@@ -1,0 +1,117 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: teastore-persistence
+  namespace: teastore
+  labels:
+    app: teastore-persistence
+    tier: compute
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: teastore-persistence
+  template:
+    metadata:
+      labels:
+        app: teastore-persistence
+        tier: compute
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      initContainers:
+        - name: opentelemetry-auto-instrumentation
+          image: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java:2.10.0
+          imagePullPolicy: IfNotPresent
+          command: ["cp", "/javaagent.jar", "/otel-auto-instrumentation/javaagent.jar"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: otel-auto-instrumentation
+              mountPath: /otel-auto-instrumentation
+      containers:
+        - name: teastore-persistence
+          image: descartesresearch/teastore-persistence:1.4.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            privileged: false
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: HOST_NAME
+              value: "k3d-azure-k3d-serverlb"
+            - name: SERVICE_PORT
+              value: "31111"
+            - name: REGISTRY_HOST
+              value: "k3d-aws-k3d-serverlb"
+            - name: REGISTRY_PORT
+              value: "31112"
+            - name: USE_POD_IP
+              value: "false"
+            - name: DB_HOST
+              value: "teastore-db.teastore.svc.cluster.local"
+            - name: DB_PORT
+              value: "3306"
+            - name: CATALINA_OPTS
+              value: "-javaagent:/otel-auto-instrumentation/javaagent.jar -Dkieker.monitoring.skipDefaultAOPConfiguration=true -Xms64m -Xmx192m -XX:+UseSerialGC"
+            - name: OTEL_SERVICE_NAME
+              value: "teastore-persistence"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector-spoke.monitoring.svc.cluster.local:4317"
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "grpc"
+            - name: OTEL_TRACES_EXPORTER
+              value: "otlp"
+            - name: OTEL_METRICS_EXPORTER
+              value: "otlp"
+            - name: OTEL_LOGS_EXPORTER
+              value: "otlp"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 384Mi
+          volumeMounts:
+            - name: otel-auto-instrumentation
+              mountPath: /otel-auto-instrumentation
+          startupProbe:
+            tcpSocket:
+              port: 8080
+            failureThreshold: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            periodSeconds: 15
+            timeoutSeconds: 3
+      volumes:
+        - name: otel-auto-instrumentation
+          emptyDir: {}

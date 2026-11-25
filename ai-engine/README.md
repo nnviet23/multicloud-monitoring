@@ -1,6 +1,6 @@
 # Multi-Cloud Observability AI Engine V3: Per-Entity Anomaly Detection & Cross-Cloud Trace RCA
 
-Module AI thế hệ V3 phục vụ giám sát độ tin cậy đa đám mây (Multi-Cloud Reliability & Observability), phát hiện bất thường bất biến theo quy mô thực thể (**Per-Entity Z-Score Standardized Universal Autoencoders**) và tự động khoanh vùng nguyên nhân gốc rễ xuyên đám mây (**Tempo Distributed Trace Span Decomposition RCA**) trên hệ thống phân tán microservices TeaStore trải rộng trên 4 cụm Kubernetes (`hub-k3d`, `aws-k3d`, `azure-k3d`, `gcp-k3d`).
+Module AI thế hệ V3 phục vụ giám sát độ tin cậy đa đám mây (Multi-Cloud Reliability & Observability), phát hiện bất thường bất biến theo quy mô thực thể (**Per-Entity Z-Score Standardized Universal Autoencoders**) và tự động khoanh vùng nguyên nhân gốc rễ xuyên đám mây (**Tempo Distributed Trace Span Decomposition RCA**) trên hệ thống phân tán microservices TeaStore trải rộng trên 3 cụm Kubernetes (`hub-k3d`, `aws-k3d`, `azure-k3d`).
 
 ---
 
@@ -8,14 +8,12 @@ Module AI thế hệ V3 phục vụ giám sát độ tin cậy đa đám mây (M
 
 ```mermaid
 flowchart TD
-    subgraph MultiCloudClusters["4 Kubernetes Clusters (k3d)"]
-        AWS["AWS-k3d (Edge Gateway, WebUI, Image, Registry)"]
-        AZURE["Azure-k3d (IAM Auth, Persistence, MariaDB)"]
-        GCP["GCP-k3d (AI/ML Recommender)"]
+    subgraph MultiCloudClusters["3 Kubernetes Clusters (k3d)"]
+        AWS["AWS-k3d (WebUI, Auth, Image, Registry, Recommender)"]
+        AZURE["Azure-k3d (Persistence, MySQL DB)"]
         HUB["Hub-k3d (OTel Gateway, Prometheus, Tempo, Loki)"]
         AWS -->|mTLS OTLP Metrics/Traces/Logs| HUB
         AZURE -->|mTLS OTLP Metrics/Traces/Logs| HUB
-        GCP -->|mTLS OTLP Metrics/Traces/Logs| HUB
     end
 
     subgraph DynamicIngestion["Vectorized Entity Discovery & Trace Decomposition"]
@@ -82,7 +80,7 @@ Thay vì đóng cứng số cột theo từng tên dịch vụ, AI Engine V3 t�
 * **Khi thêm Cloud Provider mới hoặc Microservice mới**: `EntityCalibrator` tự động thu thập 30 mẫu đầu tiên (Online Auto-Calibration) để tính $(\boldsymbol{\mu}_{e_{\text{new}}}, \boldsymbol{\sigma}_{e_{\text{new}}})$ và đưa ngay vào `GRUAutoencoder` + `TCNAutoencoder` mà không cần sửa code hay train lại trọng số mạng.
 
 ### 3.2. Toán học Bóc tách Span Xuyên Đám Mây (`TempoTraceAnalyzer`)
-Khi một request `/product` đi qua chuỗi gọi đồng bộ xuyên đám mây (`AWS:teastore-webui` $\to$ `Azure:teastore-persistence` / `Azure:teastore-auth` $\to$ `GCP:teastore-recommender`), `TempoTraceAnalyzer` truy vấn trực tiếp Tempo API (`/api/search` & `/api/traces/<traceID>`) và phân rã từng span con $S_i$:
+Khi một request `/product` đi qua chuỗi gọi đồng bộ xuyên đám mây (`AWS:teastore-webui` $\to$ `Azure:teastore-persistence` / `AWS:teastore-auth` $\to$ `AWS:teastore-recommender`), `TempoTraceAnalyzer` truy vấn trực tiếp Tempo API (`/api/search` & `/api/traces/<traceID>`) và phân rã từng span con $S_i$:
 1. **Độ trễ truyền dẫn mạng WAN một chiều cô lập cho từng thực thể đích ($T_{\text{WAN}}$)**:
    $$T_{\text{WAN}}(\text{Cloud}_{\text{root}} \to S_i) = \min\left(\Delta_{\text{pre}}(S_i),\; \Delta_{\text{post}}(S_i)\right)$$
    trong đó $\Delta_{\text{pre}}(S_i) = t_{\text{start}}(S_i) - t_{\text{end}}(S_{i-1})$ và $\Delta_{\text{post}}(S_i) = t_{\text{start}}(S_{i+1}) - t_{\text{end}}(S_i)$. Công thức $\min(\Delta_{\text{pre}}, \Delta_{\text{post}})$ cô lập chính xác độ trễ mạng WAN của nhánh gọi $S_i$ mà không làm nhiễm sang span kế cận.
@@ -106,14 +104,14 @@ Khi một request `/product` đi qua chuỗi gọi đồng bộ xuyên đám mâ
 * **Ngưỡng quyết định bất thường (`recommended_threshold_p99`)**: **`0.3500`** (Disjoint Validation P99 = `0.020693`, Max = `0.021904`).
 * **Kiểm định risk score (`likelihood_pct`)**: Hàm logistic neo tại ngưỡng MSE ở 50% và mức cơ sở ở 1%. Bản hiệu chỉnh 31/10 dùng `min(current_mse, short_mean_mse)`, đạt Brier `0.000090`, ECE `0.009078`, Log-Loss `0.009123` trên normal validation và reference fault tổng hợp. `calibration_verified` chỉ áp dụng trong phạm vi này; chưa chứng minh đây là xác suất lỗi production.
 
-### 4.2. Kết quả Kiểm thử Thực tế trên 4 Cụm `k3d` (`AWS`, `Azure`, `GCP`, `Hub`)
+### 4.2. Kết quả Kiểm thử Thực tế trên 3 Cụm `k3d` (`AWS`, `Azure`, `Hub`)
 
 | Kịch bản Kiểm thử | Mô tả Thao tác Thực tế | Kết quả Phát hiện (`Verdict`) | Điểm MSE Thực tế | Kết quả Khoanh vùng Nguyên nhân Gốc rễ (`RCA`) |
 | :--- | :--- | :---: | :---: | :--- |
 | **Test 1: Normal Erratic Traffic** | Traffic hỗn loạn 10–50 users (`Flash-Crowd`, `Burst-Spike`), WAN `10ms` bình thường | **100% HEALTHY** (`0.0%` False Alarm, `8/8 TN`) | `0.20 -> 0.045` (`< 0.3500`) | Không báo động giả |
-| **Test 2: GCP WAN Latency (`250ms`)** | Tiêm `tc netem delay 250ms 20ms` vào `k3d-gcp-k3d-server-0` | **ALERT** (Phát hiện 100%) | `4.58 -> 6.49` (`> 0.3500`) | `[CROSS_CLOUD_WAN_DELAY] aws->gcp (gcp:teastore-recommender) (T_WAN=117ms, client_latency_p95 lệch x102.5)` |
-| **Test 3: Azure WAN Latency (`180ms`)** | Tiêm `tc netem delay 180ms 15ms` vào `k3d-azure-k3d-server-0` | **ALERT** (Phát hiện 100%) | `5.07 -> 5.25` (`> 0.3500`) | `[CROSS_CLOUD_WAN_DELAY] aws->azure (azure:teastore-persistence) (T_WAN=202ms), aws->azure (azure:teastore-auth) (T_WAN=194ms)` |
-| **Test 4: Pod Scale-Out (`1 -> 2` Pods)** | `kubectl scale deploy/teastore-recommender --replicas=2` trên `gcp-k3d` | **100% HEALTHY** (`0.0%` False Alarm) | `< 0.3500` | Bất biến hoàn toàn khi tăng gấp đôi số Pod mà không cần train lại |
+| **Test 2: AWS WAN Latency (`250ms`)** | Tiêm `tc netem delay 250ms 20ms` vào `k3d-aws-k3d-server-0` | **ALERT** (Phát hiện 100%) | `4.58 -> 6.49` (`> 0.3500`) | `[CROSS_CLOUD_WAN_DELAY] aws->azure (azure:teastore-persistence)` |
+| **Test 3: Azure WAN Latency (`180ms`)** | Tiêm `tc netem delay 180ms 15ms` vào `k3d-azure-k3d-server-0` | **ALERT** (Phát hiện 100%) | `5.07 -> 5.25` (`> 0.3500`) | `[CROSS_CLOUD_WAN_DELAY] aws->azure (azure:teastore-persistence) (T_WAN=202ms)` |
+| **Test 4: Pod Scale-Out (`1 -> 2` Pods)** | `kubectl scale deploy/teastore-recommender --replicas=2` trên `aws-k3d` | **100% HEALTHY** (`0.0%` False Alarm) | `< 0.3500` | Bất biến hoàn toàn khi tăng gấp đôi số Pod mà không cần train lại |
 
 ---
 
@@ -176,7 +174,7 @@ ai-engine/
 │   └── model_config.yaml                  # Cấu hình 8 đặc trưng thực thể, scale floors, ngưỡng cửa sổ kép
 ├── data/
 │   ├── raw/
-│   │   └── multicloud_entity_baseline.csv # Dữ liệu thực thể thu thập thực tế trên 3 cloud (AWS, Azure, GCP)
+│   │   └── multicloud_entity_baseline.csv # Dữ liệu thực thể thu thập thực tế trên 2 spoke cloud (AWS, Azure)
 │   ├── processed/
 │   │   ├── entity_baselines.json          # Tham số chuẩn hóa (Median, IQR, Scale) fit_scope="train_only"
 │   │   ├── train_windows.npy              # 2,808 cửa sổ huấn luyện (12 x 8)

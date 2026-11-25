@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - 01-disallow-latest-tag.yaml
+  - 02-require-resource-limits.yaml
+  - 03-disallow-root-user.yaml
+  - 04-disallow-privilege-escalation.yaml
+  - 05-require-health-probes.yaml
+  - 06-policy-exception-mysql.yaml
+  - 10-default-deny-networkpolicy.yaml
+  - 11-allow-core-traffic-networkpolicy.yaml
+  - 12-monitoring-storage-networkpolicy.yaml

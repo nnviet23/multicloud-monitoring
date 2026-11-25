@@ -1,0 +1,38 @@
+groups:
+- name: cert-manager-rules
+  rules:
+  - alert: CertManagerCertExpirySoon
+    expr: avg by (exported_namespace, namespace, name) (certmanager_certificate_expiration_timestamp_seconds
+      - time()) < (21 * 24 * 3600)
+    for: 1h
+    labels:
+      severity: warning
+      category: security
+    annotations:
+      summary: Cert-Manager certificate expiring soon (certificate {{ $labels.name
+        }})
+      description: "The certificate {{ $labels.name }} is expiring in less than 21\
+        \ days.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: CertManagerCertNotReady
+    expr: max by (name, exported_namespace, namespace, condition) (certmanager_certificate_ready_status{condition!="True"}
+      == 1)
+    for: 10m
+    labels:
+      severity: critical
+      category: security
+    annotations:
+      summary: Cert-Manager certificate not ready (certificate {{ $labels.name }})
+      description: "The certificate {{ $labels.name }} in namespace {{ $labels.exported_namespace\
+        \ }} is not ready.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: CertManagerHittingRateLimits
+    expr: sum by (host) (rate(certmanager_acme_client_request_count{status="429"}[5m]))
+      > 0
+    for: 5m
+    labels:
+      severity: critical
+      category: security
+    annotations:
+      summary: Cert-Manager hitting ACME rate limits
+      description: "Cert-Manager is being rate-limited by ACME provider (HTTP 429).\n\
+        \  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+

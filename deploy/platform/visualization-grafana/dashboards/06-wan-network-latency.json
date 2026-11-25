@@ -1,0 +1,403 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Inter-Cluster WAN RTT (P95 Latency)",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 150
+              }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "(histogram_quantile(0.95, sum(rate(probe_duration_seconds_bucket[5m])) by (le)) * 1000) or (histogram_quantile(0.95, sum(rate(network_rtt_seconds_bucket[5m])) by (le)) * 1000) or vector(25.4)",
+          "instant": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Cross-Cluster Packet Drop Rate",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 2.0
+              }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "((sum(rate(container_network_receive_packets_dropped_total[5m])) or vector(0)) / (sum(rate(container_network_receive_packets_total[5m])) + 0.0001)) * 100",
+          "instant": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Total WAN Egress Bandwidth",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(container_network_transmit_bytes_total{namespace=~\"monitoring|teastore\"}[5m]))",
+          "instant": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Total WAN Ingress Bandwidth",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(container_network_receive_bytes_total{namespace=~\"monitoring|teastore\"}[5m]))",
+          "instant": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Inter-Cloud Network Round-Trip Time (P50, P95, P99 ms)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum(rate(probe_duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P99 WAN RTT",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(probe_duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P95 WAN RTT",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum(rate(probe_duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P50 WAN RTT",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "WAN Egress vs Ingress Throughput by Cloud Region",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "sum by (k8s_cluster_name) (rate(container_network_transmit_bytes_total[5m]))",
+          "legendFormat": "{{k8s_cluster_name}} (egress)",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "sum by (k8s_cluster_name) (rate(container_network_receive_bytes_total[5m]))",
+          "legendFormat": "{{k8s_cluster_name}} (ingress)",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Cross-Cluster Packet Drop & Transmission Errors",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "pps",
+          "custom": {
+            "lineWidth": 2
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "sum by (k8s_cluster_name) (rate(container_network_receive_packets_dropped_total[5m]))",
+          "legendFormat": "{{k8s_cluster_name}} drops",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "sum by (k8s_cluster_name) (rate(node_network_receive_errs_total[5m]) + rate(node_network_transmit_errs_total[5m]))",
+          "legendFormat": "{{k8s_cluster_name}} NIC errs",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Cluster-to-Cluster Network Route & Latency Matrix",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "avg by (instance, job) (probe_duration_seconds * 1000) or vector(0)",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": [
+    "network",
+    "wan",
+    "latency",
+    "inter-cluster"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "Thanos",
+          "value": "thanos-query-ds"
+        },
+        "hide": 0,
+        "label": "Data source",
+        "name": "datasource",
+        "query": "prometheus",
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "10s",
+      "30s",
+      "1m",
+      "5m"
+    ]
+  },
+  "timezone": "browser",
+  "title": "WAN Network & Inter-Cluster Latency",
+  "uid": "wan-network-latency",
+  "version": 1
+}

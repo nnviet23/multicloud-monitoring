@@ -1,0 +1,97 @@
+groups:
+- name: jvm-rules
+  rules:
+  - alert: JvmMemoryFillingUp
+    expr: (jvm_memory_bytes_used{area="heap"} / jvm_memory_bytes_max{area="heap"})
+      > 0.85
+    for: 5m
+    labels:
+      severity: warning
+      category: jvm
+    annotations:
+      summary: JVM memory filling up (instance {{ $labels.instance }})
+      description: "JVM heap memory usage is > 85% on {{ $labels.instance }}.\n  VALUE\
+        \ = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: JvmGarbageCollectionDurationHigh
+    expr: rate(jvm_gc_collection_seconds_sum[5m]) > 0.15
+    for: 5m
+    labels:
+      severity: warning
+      category: jvm
+    annotations:
+      summary: JVM garbage collection duration high (instance {{ $labels.instance
+        }})
+      description: "JVM is spending > 15% of runtime in garbage collection on {{ $labels.instance\
+        \ }}.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: JvmThreadsDeadlocked
+    expr: jvm_threads_deadlocked > 0
+    for: 1m
+    labels:
+      severity: critical
+      category: jvm
+    annotations:
+      summary: JVM threads deadlocked (instance {{ $labels.instance }})
+      description: "Deadlocked threads detected in JVM on {{ $labels.instance }}.\n\
+        \  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: JvmOldGenGcFrequency
+    expr: rate(jvm_gc_collection_seconds_count{gc=~"G1 Old Generation|MarkSweepCompact|ConcurrentMarkSweep"}[5m])
+      > 0.05
+    for: 5m
+    labels:
+      severity: warning
+      category: jvm
+    annotations:
+      summary: JVM Old Gen GC frequency high (instance {{ $labels.instance }})
+      description: "Frequent Old Generation collections indicate impending OOM on\
+        \ {{ $labels.instance }}.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: JvmFileDescriptorsExhaustion
+    expr: (process_open_fds / process_max_fds) > 0.80
+    for: 5m
+    labels:
+      severity: warning
+      category: jvm
+    annotations:
+      summary: JVM file descriptors exhaustion (instance {{ $labels.instance }})
+      description: "JVM open file descriptors exceeded 80% limit on {{ $labels.instance\
+        \ }}.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: JvmThreadCountHigh
+    expr: jvm_threads_current > 500
+    for: 5m
+    labels:
+      severity: warning
+      category: jvm
+    annotations:
+      summary: JVM thread count high (instance {{ $labels.instance }})
+      description: "JVM thread count exceeded 500 on {{ $labels.instance }}.\n  VALUE\
+        \ = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: JvmThreadsBlocked
+    expr: (jvm_threads_state{state="blocked"} / jvm_threads_current) > 0.10
+    for: 5m
+    labels:
+      severity: warning
+      category: jvm
+    annotations:
+      summary: JVM threads blocked high (instance {{ $labels.instance }})
+      description: "More than 10% of threads are blocked on {{ $labels.instance }}.\n\
+        \  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: JvmDirectBufferPoolFillingUp
+    expr: (jvm_buffer_pool_used_bytes{pool="direct"} / (jvm_buffer_pool_total_capacity_bytes{pool="direct"}
+      + 1)) > 0.85
+    for: 5m
+    labels:
+      severity: warning
+      category: jvm
+    annotations:
+      summary: JVM direct buffer pool filling up (instance {{ $labels.instance }})
+      description: "Direct buffer pool usage is > 85% on {{ $labels.instance }}.\n\
+        \  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: JvmCompilationTimeSpike
+    expr: rate(jvm_compilation_time_ms_total[5m]) > 1000
+    for: 5m
+    labels:
+      severity: info
+      category: jvm
+    annotations:
+      summary: JVM JIT compilation spike (instance {{ $labels.instance }})
+      description: "JIT compilation is consuming substantial CPU time on {{ $labels.instance\
+        \ }}.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"

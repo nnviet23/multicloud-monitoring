@@ -1,0 +1,109 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../platform/cert-manager
+  - ../../platform/storage-minio
+  - ../../platform/metrics-thanos
+  - ../../platform/logs-loki
+  - ../../platform/traces-tempo
+  - ../../platform/visualization-grafana
+  - ../../platform/slo-pyrra
+  - ../../platform/smart-alerting-robusta
+  - ../../platform/alertmanager
+  - ../../platform/otel-collector/gateway
+  - ../../platform/sealed-secrets
+  - ../../policies
+
+# ==============================================================================
+# SEC-05: Secret Management & Sealed Secrets Migration Notice
+# In local development / CI rendering, generic decoupled placeholder literals
+# are generated to permit headless validation.
+# For production GitOps environments, replace these secretGenerators with
+# Bitnami SealedSecrets (sealed-secrets-controller) or external secret operators
+# (Vault / AWS Secrets Manager) committed as encrypted SealedSecret CRDs.
+# ==============================================================================
+secretGenerator:
+  - name: minio-creds
+    namespace: storage
+    literals:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=CHANGE_ME_MINIO_PASSWORD
+    options:
+      disableNameSuffixHash: true
+  - name: grafana-admin-creds
+    namespace: monitoring
+    literals:
+      - GRAFANA_ADMIN_USER=admin
+      - GRAFANA_ADMIN_PASSWORD=CHANGE_ME_GRAFANA_ADMIN_PASSWORD
+    options:
+      disableNameSuffixHash: true
+  - name: loki-s3-creds
+    namespace: monitoring
+    literals:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=CHANGE_ME_MINIO_PASSWORD
+    options:
+      disableNameSuffixHash: true
+  - name: tempo-s3-creds
+    namespace: monitoring
+    literals:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=CHANGE_ME_MINIO_PASSWORD
+    options:
+      disableNameSuffixHash: true
+  - name: thanos-s3-creds
+    namespace: monitoring
+    literals:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=CHANGE_ME_MINIO_PASSWORD
+    options:
+      disableNameSuffixHash: true
+  - name: robusta-secrets
+    namespace: monitoring
+    behavior: replace
+    literals:
+      - TELEGRAM_BOT_TOKEN=CHANGE_ME_TELEGRAM_BOT_TOKEN
+      - TELEGRAM_CHAT_ID=CHANGE_ME_TELEGRAM_CHAT_ID
+      - ROBUSTA_SIGNING_KEY=CHANGE_ME_ROBUSTA_SIGNING_KEY
+    options:
+      disableNameSuffixHash: true
+
+# Release Pointers - Managed via release-images.yaml (ADR-0001 & ADR-0002)
+images:
+  - name: minio/minio
+    newName: minio/minio
+    newTag: "RELEASE.2025-10-15T17-29-55Z"
+  - name: quay.io/thanos/thanos
+    newName: quay.io/thanos/thanos
+    newTag: "v0.36.1"
+  - name: grafana/loki
+    newName: grafana/loki
+    newTag: "2.9.4"
+  - name: grafana/tempo
+    newName: grafana/tempo
+    newTag: "2.4.0"
+  - name: grafana/grafana
+    newName: grafana/grafana
+    newTag: "11.5.0"
+  - name: ghcr.io/pyrra-dev/pyrra
+    newName: ghcr.io/pyrra-dev/pyrra
+    newTag: "v0.7.3"
+  - name: robustadev/robusta-runner
+    newName: robustadev/robusta-runner
+    newTag: "0.53.0"
+  - name: prom/alertmanager
+    newName: prom/alertmanager
+    newTag: "v0.27.0"
+  - name: prom/prometheus
+    newName: prom/prometheus
+    newTag: "v2.50.0"
+  - name: otel/opentelemetry-collector-contrib
+    newName: otel/opentelemetry-collector-contrib
+    newTag: "0.114.0"
+  - name: bitnami/sealed-secrets-controller
+    newName: bitnami/sealed-secrets-controller
+    newTag: "v0.24.5"
+  - name: kiwigrid/k8s-sidecar
+    newName: kiwigrid/k8s-sidecar
+    newTag: "1.28.0"

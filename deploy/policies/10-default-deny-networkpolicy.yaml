@@ -1,0 +1,16 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: teastore
+  annotations:
+    policies.kyverno.io/title: "Default Deny All Ingress and Egress"
+    policies.kyverno.io/category: "Network Security (SEC-03)"
+    policies.kyverno.io/description: >-
+      Default-Deny all ingress and egress traffic for the teastore namespace
+      to enforce zero-trust defense-in-depth isolation.
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress

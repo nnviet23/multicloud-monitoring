@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: thanos-store
+  namespace: monitoring
+  labels:
+    app: thanos-store
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: thanos-store
+  template:
+    metadata:
+      labels:
+        app: thanos-store
+    spec:
+      containers:
+        - name: thanos-store
+          image: quay.io/thanos/thanos:v0.36.1
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          args:
+            - store
+            - --data-dir=/var/thanos/store
+            - --objstore.config-file=/etc/thanos/objstore.yml
+            - --http-address=0.0.0.0:10902
+            - --grpc-address=0.0.0.0:10901
+          ports:
+            - containerPort: 10901
+              name: grpc
+            - containerPort: 10902
+              name: http
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: thanos-s3-creds
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: thanos-s3-creds
+                  key: AWS_SECRET_ACCESS_KEY
+            - name: AWS_REGION
+              value: "us-east-1"
+          resources:
+            requests:
+              cpu: 30m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 10902
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 10902
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - name: thanos-objstore
+              mountPath: /etc/thanos
+              readOnly: true
+            - name: store-data
+              mountPath: /var/thanos/store
+      volumes:
+        - name: thanos-objstore
+          secret:
+            secretName: thanos-objstore-secret
+        - name: store-data
+          emptyDir: {}

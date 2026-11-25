@@ -1,0 +1,33 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-latest-tag
+  annotations:
+    policies.kyverno.io/title: Disallow Latest Tag & Require Strict Version Pinning
+    policies.kyverno.io/category: Supply Chain Security (ADR-0002, ADR-0005)
+    policies.kyverno.io/severity: High
+    policies.kyverno.io/description: >-
+      Chặn các container sử dụng tag 'latest' hoặc không chỉ định tag cụ thể.
+      Bắt buộc ghim cứng phiên bản cụ thể hoặc sử dụng mã băm OCI digest (@sha256).
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: validate-image-tag
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - teastore
+                - monitoring
+                - storage
+      validate:
+        message: "Sử dụng tag 'latest' hoặc không có tag bị cấm theo ADR-0002. Hãy ghim phiên bản cụ thể hoặc digest."
+        pattern:
+          spec:
+            =(initContainers):
+              - image: "!*:latest"
+            containers:
+              - image: "!*:latest"

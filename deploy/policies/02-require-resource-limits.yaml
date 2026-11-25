@@ -1,0 +1,36 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-resource-limits
+  annotations:
+    policies.kyverno.io/title: Require CPU/Memory Requests and Memory Limits
+    policies.kyverno.io/category: Resource Management & SRE (ADR-0005)
+    policies.kyverno.io/severity: High
+    policies.kyverno.io/description: >-
+      Bắt buộc mọi container trong các namespace trọng yếu phải cấu hình đầy đủ
+      requests (CPU & RAM) và limits (RAM) nhằm bảo vệ ngân sách 8-10 GB RAM của máy trạm.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: validate-resources
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - teastore
+                - monitoring
+                - storage
+      validate:
+        message: "Mọi container phải khai báo resources.requests (cpu, memory) và resources.limits (memory) để tránh OOMKilled Node."
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  requests:
+                    cpu: "?*"
+                    memory: "?*"
+                  limits:
+                    memory: "?*"

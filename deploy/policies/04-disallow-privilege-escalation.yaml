@@ -1,0 +1,30 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-privilege-escalation
+  annotations:
+    policies.kyverno.io/title: Disallow Privilege Escalation
+    policies.kyverno.io/category: Pod Security Standards (ADR-0005)
+    policies.kyverno.io/severity: High
+    policies.kyverno.io/description: >-
+      Bắt buộc tắt cờ allowPrivilegeEscalation để ngăn chặn tiến trình con giành thêm đặc quyền.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: check-privilege-escalation
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - teastore
+                - monitoring
+      validate:
+        message: "allowPrivilegeEscalation bắt buộc phải được đặt là false."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  allowPrivilegeEscalation: false

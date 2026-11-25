@@ -1,0 +1,16 @@
+# release-images.yaml - Spoke 2 (Azure Data) Image Manifest
+# Con trỏ phát hành bất biến (ADR-0001 & ADR-0002).
+# Tệp này do CI/CD Bot hoặc PR Promote cập nhật digest (@sha256).
+images:
+  - name: descartesresearch/teastore-db
+    newName: descartesresearch/teastore-db
+    newTag: "1.4.1"
+  - name: descartesresearch/teastore-persistence
+    newName: descartesresearch/teastore-persistence
+    newTag: "1.4.1"
+  - name: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java
+    newName: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java
+    newTag: "2.10.0"
+  - name: otel/opentelemetry-collector-contrib
+    newName: otel/opentelemetry-collector-contrib
+    newTag: "0.114.0"

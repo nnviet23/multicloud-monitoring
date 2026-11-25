@@ -30,7 +30,7 @@ def kubectl(cloud, *args):
 
 
 def sql_command(sql, timeout=150):
-    return kubectl("azure", "exec", "deploy/teastore-db", "--", "sh", "-c",
+    return kubectl("azure", "exec", "statefulset/teastore-db", "--", "sh", "-c",
                    'export MYSQL_PWD="$MYSQL_ROOT_PASSWORD"; exec timeout "$2" mysql -uroot -N --unbuffered -e "$1"',
                    "sh", sql, str(timeout))
 

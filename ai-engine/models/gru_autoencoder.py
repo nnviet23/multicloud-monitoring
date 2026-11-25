@@ -15,7 +15,7 @@ Architecture:
      ↓
   Decoder: 2-Layer GRU (hidden=64, dropout=0.1)
      ↓
-  Projection Linear Layer (hidden=64 -> Features=14)
+  Projection Linear Layer (hidden=64 -> Features=8)
      ↓
   Output Reconstruction X_hat (Batch, Seq_Len, Features)
 """

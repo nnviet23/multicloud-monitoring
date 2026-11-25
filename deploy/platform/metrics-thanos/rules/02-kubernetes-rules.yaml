@@ -1,0 +1,233 @@
+groups:
+- name: kubernetes-rules
+  rules:
+  - alert: KubernetesNodeReady
+    expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+    for: 10m
+    labels:
+      severity: critical
+      category: kubernetes
+    annotations:
+      summary: Kubernetes Node not ready (instance {{ $labels.instance }})
+      description: "Node {{ $labels.node }} has been unready for more than 10m.\n\
+        \  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: KubernetesNodeNotReady
+    expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+    for: 5m
+    labels:
+      severity: warning
+      category: kubernetes
+    annotations:
+      summary: Kubernetes Node unready warning (instance {{ $labels.instance }})
+      description: "Node {{ $labels.node }} has been unready for more than 5m.\n \
+        \ VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: KubernetesNodeMemoryPressure
+    expr: kube_node_status_condition{condition="MemoryPressure",status="true"} ==
+      1
+    for: 2m
+    labels:
+      severity: critical
+      category: kubernetes
+    annotations:
+      summary: Kubernetes Node memory pressure (instance {{ $labels.instance }})
+      description: "Node {{ $labels.node }} has memory pressure condition.\n  VALUE\
+        \ = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: KubernetesNodeDiskPressure
+    expr: kube_node_status_condition{condition="DiskPressure",status="true"} == 1
+    for: 2m
+    labels:
+      severity: critical
+      category: kubernetes
+    annotations:
+      summary: Kubernetes Node disk pressure (instance {{ $labels.instance }})
+      description: "Node {{ $labels.node }} has disk pressure condition.\n  VALUE\
+        \ = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: KubernetesNodeNetworkUnavailable
+    expr: kube_node_status_condition{condition="NetworkUnavailable",status="true"}
+      == 1
+    for: 2m
+    labels:
+      severity: critical
+      category: kubernetes
+    annotations:
+      summary: Kubernetes Node network unavailable (instance {{ $labels.instance }})
+      description: "Node {{ $labels.node }} network is unavailable.\n  VALUE = {{\
+        \ $value }}\n  LABELS = {{ $labels }}"
+  - alert: KubernetesPodCrashLooping
+    expr: rate(kube_pod_container_status_restarts_total[5m]) * 60 * 5 > 2
+    for: 2m
+    labels:
+      severity: warning
+      category: kubernetes
+    annotations:
+      summary: Kubernetes Pod crash looping (instance {{ $labels.instance }})
+      description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is\
+        \ restarting frequently.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: SpokePodCrashLooping
+    expr: (rate(k8s_container_restarts_total[5m]) > 0) or (changes(process_uptime_seconds[5m])
+      > 2) or (increase(kube_pod_container_status_restarts_total[5m]) > 1)
+    for: 1m
+    labels:
+      severity: critical
+      category: infrastructure
+      strategy: robusta-pod-crashloop
+    annotations:
+      summary: Spoke Pod CrashLooping detected
+      description: Pod {{ $labels.pod }} on cluster {{ $labels.k8s_cluster_name }}
+        restarted multiple times in last 5m.
+  - alert: KubernetesContainerOomKilled
+    expr: kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} ==
+      1
+    for: 0m
+    labels:
+      severity: warning
+      category: kubernetes
+    annotations:
+      summary: Kubernetes Container OOM killed (instance {{ $labels.instance }})
+      description: "Container {{ $labels.container }} in pod {{ $labels.pod }} was\
+        \ OOM killed.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: KubernetesContainerOomKiller
+    expr: (kube_pod_container_status_restarts_total - kube_pod_container_status_restarts_total
+      offset 10m >= 1) and ignoring (reason) min_over_time(kube_pod_container_status_last_terminated_reason{reason="OOMKilled"}[10m])
+      == 1
+    for: 0m
+    labels:
+      severity: warning
+      category: kubernetes
+    annotations:
+      summary: Kubernetes container OOM killer (instance {{ $labels.instance }})
+      description: "Container {{ $labels.container }} in pod {{ $labels.pod }} has\
+        \ been OOM killed.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: KubernetesContainerWaiting
+    expr: sum by (namespace, pod, container) (kube_pod_container_status_waiting{reason!~"ContainerCreating|PodInitializing"})
+      > 0
+    for: 1h
+    labels:
+      severity: warning
+      category: kubernetes
+    annotations:
+      summary: Kubernetes container waiting (instance {{ $labels.instance }})
+      description: "Container {{ $labels.container }} in pod {{ $labels.pod }} is\
+        \ waiting.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: KubernetesDeploymentReplicasMismatch
+    expr: kube_deployment_spec_replicas{job="kube-state-metrics"} != kube_deployment_status_replicas_available{job="kube-state-metrics"}
+    for: 10m
+    labels:
+      severity: warning
+      category: kubernetes
+    annotations:
+      summary: Kubernetes Deployment replicas mismatch (instance {{ $labels.instance
+        }})
+      description: "Deployment {{ $labels.deployment }} has replica mismatch for >\
+        \ 10m.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: KubernetesDeploymentRolloutStuck
+    expr: max without (name) (kube_deployment_status_condition{condition="Progressing",status="false"}
+      == 1)
+    for: 15m
+    labels:
+      severity: warning
+      category: kubernetes
+    annotations:
+      summary: Kubernetes Deployment rollout stuck (instance {{ $labels.instance }})
+      description: "Deployment {{ $labels.deployment }} rollout has been stuck for\
+        \ > 15m.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: KubernetesStatefulsetDown
+    expr: (kube_statefulset_status_replicas_ready / kube_statefulset_status_replicas_current)
+      != 1
+    for: 5m
+    labels:
+      severity: critical
+      category: kubernetes
+    annotations:
+      summary: Kubernetes StatefulSet down (instance {{ $labels.instance }})
+      description: "StatefulSet {{ $labels.statefulset }} ready replicas do not match\
+        \ current.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: KubernetesStatefulsetReplicasMismatch
+    expr: kube_statefulset_status_replicas_ready != kube_statefulset_status_replicas
+    for: 15m
+    labels:
+      severity: warning
+      category: kubernetes
+    annotations:
+      summary: Kubernetes StatefulSet replicas mismatch (instance {{ $labels.instance
+        }})
+      description: "StatefulSet {{ $labels.statefulset }} ready replicas mismatch\
+        \ for > 15m.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: KubernetesDaemonsetRolloutStuck
+    expr: kube_daemonset_status_number_ready / kube_daemonset_status_desired_number_scheduled
+      * 100 < 100 or kube_daemonset_status_desired_number_scheduled - kube_daemonset_status_current_number_scheduled
+      > 0
+    for: 10m
+    labels:
+      severity: warning
+      category: kubernetes
+    annotations:
+      summary: Kubernetes DaemonSet rollout stuck (instance {{ $labels.instance }})
+      description: "DaemonSet {{ $labels.daemonset }} rollout is stuck.\n  VALUE =\
+        \ {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: KubernetesJobFailed
+    expr: kube_job_status_failed > 0
+    for: 0m
+    labels:
+      severity: warning
+      category: kubernetes
+    annotations:
+      summary: Kubernetes Job failed (instance {{ $labels.instance }})
+      description: "Job {{ $labels.job_name }} in namespace {{ $labels.namespace }}\
+        \ has failed.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: KubernetesVolumeOutOfDiskSpace
+    expr: kubelet_volume_stats_available_bytes / kubelet_volume_stats_capacity_bytes
+      * 100 < 10
+    for: 2m
+    labels:
+      severity: critical
+      category: storage
+    annotations:
+      summary: Kubernetes Volume out of disk space (instance {{ $labels.instance }})
+      description: "Volume {{ $labels.persistentvolumeclaim }} has < 10% space remaining.\n\
+        \  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: KubernetesPersistentvolumeError
+    expr: kube_persistentvolume_status_phase{phase=~"Failed|Pending"} > 0
+    for: 5m
+    labels:
+      severity: critical
+      category: storage
+    annotations:
+      summary: Kubernetes PersistentVolume error (instance {{ $labels.instance }})
+      description: "PersistentVolume {{ $labels.persistentvolume }} is in {{ $labels.phase\
+        \ }} phase.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: KubernetesApiServerLatency
+    expr: histogram_quantile(0.99, sum(rate(apiserver_request_duration_seconds_bucket{subresource!="log",verb!~"CONNECT|WATCHLIST|WATCH|PROXY"}[10m]))
+      WITHOUT (instance, resource)) > 1
+    for: 5m
+    labels:
+      severity: warning
+      category: kubernetes
+    annotations:
+      summary: Kubernetes API server latency high (instance {{ $labels.instance }})
+      description: "Kubernetes API server 99th percentile latency is > 1s.\n  VALUE\
+        \ = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: KubernetesApiServerErrors
+    expr: sum(rate(apiserver_request_total{code=~"5.."}[5m])) / sum(rate(apiserver_request_total[5m]))
+      * 100 > 3
+    for: 5m
+    labels:
+      severity: critical
+      category: kubernetes
+    annotations:
+      summary: Kubernetes API server errors high (instance {{ $labels.instance }})
+      description: "Kubernetes API server 5xx error rate is > 3%.\n  VALUE = {{ $value\
+        \ }}\n  LABELS = {{ $labels }}"
+  - alert: KubernetesClientCertificateExpiresSoon
+    expr: apiserver_client_certificate_expiration_seconds_count{job="apiserver"} >
+      0 and histogram_quantile(0.01, sum by (le) (rate(apiserver_client_certificate_expiration_seconds_bucket{job="apiserver"}[5m])))
+      < 24*3600
+    for: 0m
+    labels:
+      severity: warning
+      category: security
+    annotations:
+      summary: Kubernetes client certificate expires soon (instance {{ $labels.instance
+        }})
+      description: "A client certificate used to authenticate to apiserver expires\
+        \ in less than 24h.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"

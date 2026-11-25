@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - 00-rbac.yaml
+  - 01-config-datasources.yaml
+  - 02-config-providers.yaml
+  - 03-deployment.yaml
+  - 04-service.yaml
+
+configMapGenerator:
+  - name: grafana-dashboards
+    namespace: monitoring
+    files:
+      - dashboards/01-platform-overview-golden-signals.json
+      - dashboards/02-host-compute-node-exporter.json
+      - dashboards/03-kubernetes-cluster-overview.json
+      - dashboards/04-jvm-teastore-runtime.json
+      - dashboards/05-mysql-database-overview.json
+      - dashboards/06-wan-network-latency.json
+      - dashboards/07-cross-cluster-service-graph.json
+      - dashboards/08-slo-governance-pyrra-list.json
+      - dashboards/09-slo-governance-pyrra-detail.json
+      - dashboards/10-logs-traces-deepdive.json

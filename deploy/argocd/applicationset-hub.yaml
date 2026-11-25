@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: hub-observability-stack
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - cluster: hub-k3d
+            url: https://kubernetes.default.svc
+            path: deploy/clusters/hub
+  template:
+    metadata:
+      name: '{{cluster}}-platform'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/nnviet23/multicloud-monitoring.git
+        targetRevision: main
+        path: '{{path}}'
+      destination:
+        server: '{{url}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

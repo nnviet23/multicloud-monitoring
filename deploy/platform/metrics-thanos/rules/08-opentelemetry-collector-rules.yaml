@@ -1,0 +1,126 @@
+groups:
+- name: opentelemetry-collector-rules
+  rules:
+  - alert: OtelCollectorQueueIsFillingUp
+    expr: (otelcol_exporter_queue_size / on(instance, job, exporter) otelcol_exporter_queue_capacity)
+      > 0.8 and otelcol_exporter_queue_capacity > 0
+    for: 2m
+    labels:
+      severity: warning
+      category: telemetry
+    annotations:
+      summary: OTel Collector exporter queue filling up (> 80%)
+      description: "OTel Collector exporter {{ $labels.exporter }} queue is over 80%\
+        \ full.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: OtelCollectorDataDropped
+    expr: rate(otelcol_exporter_send_failed_spans[5m]) > 0.05 or rate(otelcol_exporter_enqueue_failed_spans_total[5m])
+      > 0.05
+    for: 5m
+    labels:
+      severity: warning
+      category: telemetry
+    annotations:
+      summary: OTel Collector data dropped
+      description: "OTel Collector exporter {{ $labels.exporter }} is dropping telemetry\
+        \ items.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: OtelCollectorReceiverRefusedData
+    expr: rate(otelcol_receiver_refused_spans[5m]) > 0.05 or rate(otelcol_receiver_refused_metric_points[5m])
+      > 0.05
+    for: 5m
+    labels:
+      severity: critical
+      category: telemetry
+    annotations:
+      summary: OTel Collector receiver refused telemetry data
+      description: "OTel Collector is refusing incoming telemetry data on receiver\
+        \ {{ $labels.receiver }}.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: OpentelemetryCollectorDown
+    expr: up{job=~".*otel.*collector.*"} == 0
+    for: 1m
+    labels:
+      severity: critical
+      category: telemetry
+    annotations:
+      summary: OpenTelemetry Collector down (instance {{ $labels.instance }})
+      description: "OpenTelemetry Collector instance has disappeared or is not being\
+        \ scraped.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: OpentelemetryCollectorHighMemoryUsage
+    expr: (otelcol_process_runtime_heap_alloc_bytes / on(instance, job) otelcol_process_runtime_total_sys_memory_bytes)
+      > 0.9
+    for: 5m
+    labels:
+      severity: warning
+      category: telemetry
+    annotations:
+      summary: OpenTelemetry Collector high memory usage (instance {{ $labels.instance
+        }})
+      description: "OpenTelemetry Collector memory usage is above 90%.\n  VALUE =\
+        \ {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: OtelCollectorMemoryHigh
+    expr: sum by (pod) (container_memory_working_set_bytes{pod=~"otel-collector.*"})
+      > 400000000
+    for: 2m
+    labels:
+      severity: warning
+      category: infrastructure
+      strategy: signoz-cardinality-buffer
+    annotations:
+      summary: OTel Collector memory pressure high (>400MB)
+      description: Pod {{ $labels.pod }} using > 400MB RSS, risk of memory_limiter
+        drop.
+  - alert: OpentelemetryCollectorOtlpReceiverErrors
+    expr: rate(otelcol_receiver_accepted_spans{receiver=~"otlp"}[5m]) == 0 and rate(otelcol_receiver_refused_spans{receiver=~"otlp"}[5m])
+      > 0
+    for: 2m
+    labels:
+      severity: critical
+      category: telemetry
+    annotations:
+      summary: OpenTelemetry Collector OTLP receiver errors (instance {{ $labels.instance
+        }})
+      description: "OpenTelemetry Collector OTLP receiver is completely failing -\
+        \ all spans refused.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: OpentelemetryCollectorReceiverRefusedMetricPoints
+    expr: rate(otelcol_receiver_refused_metric_points[5m]) > 0.05
+    for: 5m
+    labels:
+      severity: critical
+      category: telemetry
+    annotations:
+      summary: OpenTelemetry Collector receiver refused metric points (instance {{
+        $labels.instance }})
+      description: "OpenTelemetry Collector is refusing metric points on {{ $labels.receiver\
+        \ }}.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: OpentelemetryCollectorReceiverRefusedLogRecords
+    expr: rate(otelcol_receiver_refused_log_records[5m]) > 0.05
+    for: 5m
+    labels:
+      severity: critical
+      category: telemetry
+    annotations:
+      summary: OpenTelemetry Collector receiver refused log records (instance {{ $labels.instance
+        }})
+      description: "OpenTelemetry Collector is refusing log records on {{ $labels.receiver\
+        \ }}.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: OpentelemetryCollectorExporterFailedMetricPoints
+    expr: rate(otelcol_exporter_send_failed_metric_points[5m]) > 0.05
+    for: 5m
+    labels:
+      severity: warning
+      category: telemetry
+    annotations:
+      summary: OpenTelemetry Collector exporter failed metric points (instance {{
+        $labels.instance }})
+      description: "OpenTelemetry Collector failing to send metric points via {{ $labels.exporter\
+        \ }}.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: OpentelemetryCollectorExporterFailedLogRecords
+    expr: rate(otelcol_exporter_send_failed_log_records[5m]) > 0.05
+    for: 5m
+    labels:
+      severity: warning
+      category: telemetry
+    annotations:
+      summary: OpenTelemetry Collector exporter failed log records (instance {{ $labels.instance
+        }})
+      description: "OpenTelemetry Collector failing to send log records via {{ $labels.exporter\
+        \ }}.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"

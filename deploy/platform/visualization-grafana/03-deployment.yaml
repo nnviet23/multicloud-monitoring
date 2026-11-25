@@ -1,0 +1,130 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+  labels:
+    app: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      serviceAccountName: grafana
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.5.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-admin-creds
+                  key: GRAFANA_ADMIN_USER
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-admin-creds
+                  key: GRAFANA_ADMIN_PASSWORD
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+          ports:
+            - containerPort: 3000
+              name: http
+          securityContext:
+            allowPrivilegeEscalation: false
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 384Mi
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources/datasources.yaml
+              subPath: datasources.yaml
+            - name: providers
+              mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml
+              subPath: dashboards.yaml
+            - name: dashboards-static
+              mountPath: /var/lib/grafana/dashboards/static
+            - name: dashboards-integrations
+              mountPath: /var/lib/grafana/dashboards/integrations
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 5
+
+        - name: grafana-sc-dashboard
+          image: kiwigrid/k8s-sidecar:1.28.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: LABEL
+              value: "grafana_dashboard"
+            - name: LABEL_VALUE
+              value: "1"
+            - name: FOLDER
+              value: "/var/lib/grafana/dashboards/integrations"
+            - name: RESOURCE
+              value: "configmap"
+            - name: REQ_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-admin-creds
+                  key: GRAFANA_ADMIN_USER
+            - name: REQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-admin-creds
+                  key: GRAFANA_ADMIN_PASSWORD
+            - name: REQ_URL
+              value: "http://localhost:3000/api/admin/provisioning/dashboards/reload"
+            - name: REQ_METHOD
+              value: "POST"
+          securityContext:
+            allowPrivilegeEscalation: false
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          volumeMounts:
+            - name: dashboards-integrations
+              mountPath: /var/lib/grafana/dashboards/integrations
+
+      volumes:
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+        - name: providers
+          configMap:
+            name: grafana-dashboards-provider
+        - name: dashboards-static
+          configMap:
+            name: grafana-dashboards
+        - name: dashboards-integrations
+          emptyDir: {}

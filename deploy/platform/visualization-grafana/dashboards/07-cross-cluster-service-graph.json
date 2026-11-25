@@ -1,0 +1,370 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Service Graph Total QPS",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(traces_service_graph_request_total[5m]))",
+          "instant": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Service Graph Failed QPS",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.01
+              }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(traces_service_graph_request_failed_total[5m])) or vector(0)",
+          "instant": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Service Graph Error Rate",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1.0
+              },
+              {
+                "color": "red",
+                "value": 5.0
+              }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "((sum(rate(traces_service_graph_request_failed_total[5m])) or vector(0)) / (sum(rate(traces_service_graph_request_total[5m])) + 0.0001)) * 100",
+          "instant": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Active Inter-Service Edges",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "count(count by (client, server) (traces_service_graph_request_total))",
+          "instant": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Cross-Cluster Service Call Rate by Edge (Client -> Server)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "sum by (client, server) (rate(traces_service_graph_request_total[5m]))",
+          "legendFormat": "{{client}} -> {{server}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Cross-Cluster Service Call Latency P95 (ms)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "fillOpacity": 15,
+            "lineWidth": 2
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le, client, server) (rate(traces_service_graph_request_server_seconds_bucket[5m]))) * 1000",
+          "legendFormat": "{{client}} -> {{server}} P95",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Unpaired & Dropped Spans Rate",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(traces_service_graph_unpaired_spans_total[5m]))",
+          "legendFormat": "Unpaired Spans/sec",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(traces_service_graph_dropped_spans_total[5m]))",
+          "legendFormat": "Dropped Spans/sec",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Service Dependency Topology Matrix",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "thanos-query-ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "thanos-query-ds"
+          },
+          "editorMode": "code",
+          "expr": "sum by (client, server) (rate(traces_service_graph_request_total[5m]))",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": [
+    "service-graph",
+    "tempo",
+    "traces",
+    "topology"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "Thanos",
+          "value": "thanos-query-ds"
+        },
+        "hide": 0,
+        "label": "Data source",
+        "name": "datasource",
+        "query": "prometheus",
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "10s",
+      "30s",
+      "1m",
+      "5m"
+    ]
+  },
+  "timezone": "browser",
+  "title": "Cross-Cluster Service Graph",
+  "uid": "cross-cluster-service-graph",
+  "version": 1
+}

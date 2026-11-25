@@ -1,0 +1,36 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Pinned Image Tag & Digest - Managed via ADR-0001 & ADR-0002
+images:
+  - name: descartesresearch/teastore-auth
+    newName: descartesresearch/teastore-auth
+    newTag: "1.4.1"
+    digest: sha256:779bc907e5960098df4696120536c927f121d58fb4eeea206b1076b1f13b6329
+  - name: descartesresearch/teastore-image
+    newName: descartesresearch/teastore-image
+    newTag: "1.4.1"
+    digest: sha256:e9e8020584ef75a6c382103f6f3beba5e806716bc51a14115e5898d97034c264
+  - name: descartesresearch/teastore-recommender
+    newName: descartesresearch/teastore-recommender
+    newTag: "1.4.1"
+    digest: sha256:b1d830b80ad2e06180376249be54848035fb192231e679a941efba995fc08697
+  - name: descartesresearch/teastore-registry
+    newName: descartesresearch/teastore-registry
+    newTag: "1.4.1"
+    digest: sha256:4d40a02ea48e894589d9c2a86851608620807b5381fbc0363296155694a4c6a9
+  - name: descartesresearch/teastore-webui
+    newName: descartesresearch/teastore-webui
+    newTag: "1.4.1"
+    digest: sha256:4b227c86a87e504c55bc6f4063db129e1f2982d1c6827d0b3e5d38fbf547d21b
+  - name: descartesresearch/teastore-persistence
+    newName: descartesresearch/teastore-persistence
+    newTag: "1.4.1"
+    digest: sha256:48ec7ee33ec814cebf88e146eb5ef2e4141680d282361fc37f81ef694b1ef9d2
+  - name: descartesresearch/teastore-db
+    newName: descartesresearch/teastore-db
+    newTag: "1.4.1"
+    digest: sha256:39a5ec178229b3ae3dff4624479e00096ce1ee25c7980315904fc6f98f62f33f
+  - name: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java
+    newName: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java
+    newTag: "2.10.0"

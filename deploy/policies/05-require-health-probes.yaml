@@ -1,0 +1,30 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-health-probes
+  annotations:
+    policies.kyverno.io/title: Require Readiness and Liveness Probes
+    policies.kyverno.io/category: High Availability & SRE (ADR-0005, ADR-0010)
+    policies.kyverno.io/severity: High
+    policies.kyverno.io/description: >-
+      Bắt buộc các microservices phải cấu hình readinessProbe và livenessProbe
+      để đảm bảo lưu lượng chỉ gửi tới Pod khỏe mạnh.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: check-probes
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - teastore
+      validate:
+        message: "Mọi Pod trong namespace teastore bắt buộc phải có readinessProbe và livenessProbe."
+        pattern:
+          spec:
+            containers:
+              - readinessProbe: {}
+                livenessProbe: {}

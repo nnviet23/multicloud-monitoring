@@ -1,0 +1,6 @@
+type: S3
+config:
+  bucket: "thanos-metrics"
+  endpoint: "minio.storage.svc.cluster.local:9000"
+  insecure: true
+  aws_sdk_auth: true

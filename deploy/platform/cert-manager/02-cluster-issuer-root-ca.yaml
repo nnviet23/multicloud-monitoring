@@ -1,0 +1,33 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned-root-issuer
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: multicloud-root-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: multicloud-root-ca
+  secretName: multicloud-root-ca-secret
+  duration: 87600h
+  renewBefore: 8760h
+  privateKey:
+    algorithm: RSA
+    size: 4096
+  issuerRef:
+    name: selfsigned-root-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: multicloud-ca-issuer
+spec:
+  ca:
+    secretName: multicloud-root-ca-secret
