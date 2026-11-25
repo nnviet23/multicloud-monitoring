@@ -1,0 +1,25 @@
+# release-images.yaml - Spoke 1 (AWS Compute) Image Manifest
+# Con trỏ phát hành bất biến (ADR-0001 & ADR-0002).
+# Tệp này do CI/CD Bot hoặc PR Promote cập nhật digest (@sha256).
+images:
+  - name: descartesresearch/teastore-auth
+    newName: descartesresearch/teastore-auth
+    newTag: "1.4.1"
+  - name: descartesresearch/teastore-image
+    newName: descartesresearch/teastore-image
+    newTag: "1.4.1"
+  - name: descartesresearch/teastore-recommender
+    newName: descartesresearch/teastore-recommender
+    newTag: "1.4.1"
+  - name: descartesresearch/teastore-registry
+    newName: descartesresearch/teastore-registry
+    newTag: "1.4.1"
+  - name: descartesresearch/teastore-webui
+    newName: descartesresearch/teastore-webui
+    newTag: "1.4.1"
+  - name: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java
+    newName: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java
+    newTag: "2.10.0"
+  - name: otel/opentelemetry-collector-contrib
+    newName: otel/opentelemetry-collector-contrib
+    newTag: "0.114.0"

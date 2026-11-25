@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: monitoring
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Thanos (Prometheus)
+        uid: thanos-query-ds
+        type: prometheus
+        access: proxy
+        url: http://thanos-query.monitoring.svc.cluster.local:9090
+        isDefault: true
+        jsonData:
+          timeInterval: 5s
+
+      - name: Loki
+        uid: loki-ds
+        type: loki
+        access: proxy
+        url: http://loki.monitoring.svc.cluster.local:3100
+        jsonData:
+          maxLines: 1000
+          derivedFields:
+            - datasourceUid: tempo-ds
+              matcherRegex: "(?:traceID|trace_id)=(\\w+)"
+              name: TraceID
+              url: "$${__value.raw}"
+
+      - name: Tempo
+        uid: tempo-ds
+        type: tempo
+        access: proxy
+        url: http://tempo.monitoring.svc.cluster.local:3200
+        jsonData:
+          httpMethod: GET
+          nodeGraph:
+            enabled: true
+          serviceMap:
+            datasourceUid: thanos-query-ds
+          tracesToLogsV2:
+            datasourceUid: loki-ds
+            tags: ['service.name', 'k8s.pod.name', 'k8s.namespace.name']
+            filterByTraceId: true
+

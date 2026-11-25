@@ -1,51 +1,74 @@
+# Python & Environments
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.env
-.venv
-env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
 venv/
-ENV/
+.env
+*.env
+.env.*
+!.env.example
 
-# Distribution / packaging
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+# AI Engine Artifacts (datasets, tensors, weights)
+ai-engine/data/raw/*.csv
+ai-engine/data/raw/*.parquet
+!ai-engine/data/raw/.gitkeep
+ai-engine/data/processed/*.npy
+ai-engine/data/processed/*.npz
+!ai-engine/data/processed/.gitkeep
+ai-engine/models/saved/*.pt
+ai-engine/models/saved/*.pth
+ai-engine/models/saved/*.onnx
+ai-engine/models/saved/*.joblib
+ai-engine/models/saved/*.pkl
+!ai-engine/models/saved/.gitkeep
+ai-engine/inference/*_summary.json
+ai-engine/inference/test_runs/
 
-# Secrets & PKI certificates (không commit private keys)
+# Infrastructure, K8s & Terraform
+kubeconfig*
+*.kubeconfig
+.kube/
+.terraform/
+*.tfstate*
+*.tfvars*
+
+# Secrets, Keys & Logs
 *.key
 *.pem
-security/certs/*.crt
-security/certs/*.key
-security/certs/*.csr
-security/certs/*.srl
-
-# Temporary logs & test artifacts
+*.crt
+*.csr
+*.p12
+*.pfx
 *.log
+logs/
+tmp/
 tests/locust/*.csv
+tests/locust/*.html
 tests/benchmarks/results/
-data/raw/*
-data/processed/*
-!data/raw/.gitkeep
-!data/processed/.gitkeep
 
-# IDEs & OS files
+# Diagrams (keep only archify/)
+docs/diagrams/*
+!docs/diagrams/archify/
+
+# Local Tooling, Agents, Obsidian, Superpowers & References
 .idea/
 .vscode/
-*.swp
-*.swo
+.obsidian/
+.agents/
+.superpowers/
+superpowers/
+docs/superpowers/
+AGENTS.md
+PLAN.md
+docs/planning/
+docs/production-*-checklist.md
+production-*-checklist.md
+docs/reference/
+docs/research/
+.codegraphy/
+.worktrees/
 .DS_Store
 Thumbs.db

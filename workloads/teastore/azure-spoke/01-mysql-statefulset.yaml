@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: teastore-db
+  namespace: teastore
+  labels:
+    app: teastore-db
+    tier: data
+spec:
+  serviceName: teastore-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: teastore-db
+  template:
+    metadata:
+      labels:
+        app: teastore-db
+        tier: data
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        fsGroup: 999
+      containers:
+        - name: teastore-db
+          image: descartesresearch/teastore-db:1.4.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3306
+              name: mysql
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          startupProbe:
+            tcpSocket:
+              port: 3306
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            tcpSocket:
+              port: 3306
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 3306
+            periodSeconds: 15

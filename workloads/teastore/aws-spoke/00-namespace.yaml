@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: teastore
+  labels:
+    name: teastore
+    environment: production
+    managed-by: gitops

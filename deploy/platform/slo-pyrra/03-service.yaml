@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pyrra
+  namespace: monitoring
+  labels:
+    app: pyrra
+spec:
+  ports:
+    - port: 9099
+      targetPort: 9099
+      name: http
+  selector:
+    app: pyrra
+

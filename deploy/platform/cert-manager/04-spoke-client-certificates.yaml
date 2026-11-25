@@ -1,0 +1,37 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: aws-spoke-client-cert
+  namespace: monitoring
+spec:
+  secretName: aws-spoke-client-tls
+  duration: 2160h
+  renewBefore: 720h
+  commonName: aws-k3d.spoke.multicloud.local
+  usages:
+    - digital signature
+    - key encipherment
+    - client auth
+  issuerRef:
+    name: multicloud-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: azure-spoke-client-cert
+  namespace: monitoring
+spec:
+  secretName: azure-spoke-client-tls
+  duration: 2160h
+  renewBefore: 720h
+  commonName: azure-k3d.spoke.multicloud.local
+  usages:
+    - digital signature
+    - key encipherment
+    - client auth
+  issuerRef:
+    name: multicloud-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io

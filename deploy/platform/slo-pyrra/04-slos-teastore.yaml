@@ -1,0 +1,42 @@
+apiVersion: pyrra.dev/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: teastore-webui-availability
+  namespace: monitoring
+  labels:
+    app: teastore-webui
+    tier: compute
+    k8s_cluster_name: aws-k3d
+    cloud_provider: aws
+spec:
+  target: "99.5"
+  window: "28d"
+  description: "TeaStore WebUI cross-cloud request availability must be at least 99.5% over a 28-day rolling window."
+  indicator:
+    ratio:
+      errors:
+        metric: traces_service_graph_request_failed_total{server="teastore-webui"}
+      total:
+        metric: traces_service_graph_request_total{server="teastore-webui"}
+---
+apiVersion: pyrra.dev/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: teastore-webui-latency
+  namespace: monitoring
+  labels:
+    app: teastore-webui
+    tier: compute
+    k8s_cluster_name: aws-k3d
+    cloud_provider: aws
+spec:
+  target: "95"
+  window: "28d"
+  description: "TeaStore WebUI 95% of requests must complete within 500ms over a 28-day rolling window."
+  indicator:
+    latency:
+      success:
+        metric: traces_service_graph_request_server_seconds_bucket{server="teastore-webui",le="0.5"}
+      total:
+        metric: traces_service_graph_request_server_seconds_count{server="teastore-webui"}
+

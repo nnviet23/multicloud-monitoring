@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-azure-mysql-config
+  namespace: monitoring
+data:
+  mysql.yaml: |
+    receivers:
+      mysql:
+        endpoint: teastore-db.teastore.svc.cluster.local:3306
+        username: root
+        password: "${env:MYSQL_ROOT_PASSWORD}"
+        collection_interval: 15s
+    service:
+      pipelines:
+        metrics:
+          receivers: [otlp, hostmetrics, kubeletstats, prometheus/internal, mysql]

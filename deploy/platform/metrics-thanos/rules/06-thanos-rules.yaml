@@ -1,0 +1,140 @@
+groups:
+- name: thanos-rules
+  rules:
+  - alert: ThanosCompactHalted
+    expr: thanos_compact_halted == 1
+    for: 5m
+    labels:
+      severity: warning
+      category: thanos
+    annotations:
+      summary: Thanos Compact halted (instance {{ $labels.instance }})
+      description: "Thanos Compact {{ $labels.job }} has failed to run and is halted.\n\
+        \  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: ThanosCompactMultipleRunning
+    expr: sum by (job) (up{job=~".*thanos-compact.*"}) > 1
+    for: 5m
+    labels:
+      severity: warning
+      category: thanos
+    annotations:
+      summary: Thanos Compact multiple instances running
+      description: "More than one Thanos Compact instance running: {{ $value }} instances.\n\
+        \  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: ThanosQueryHighErrorRate
+    expr: (sum by (job) (rate(http_requests_total{code=~"5..", job=~".*thanos-query.*"}[5m]))
+      / sum by (job) (rate(http_requests_total{job=~".*thanos-query.*"}[5m]))) * 100
+      > 5
+    for: 5m
+    labels:
+      severity: critical
+      category: thanos
+    annotations:
+      summary: Thanos Query high error rate (instance {{ $labels.instance }})
+      description: "Thanos Query {{ $labels.job }} HTTP 5xx error rate exceeds 5%.\n\
+        \  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: ThanosQueryHttpRequestQueryErrorRateHigh
+    expr: (sum by (job) (rate(http_requests_total{code=~"5..", job=~".*thanos-query.*",
+      handler="query"}[5m])) / sum by (job) (rate(http_requests_total{job=~".*thanos-query.*",
+      handler="query"}[5m]))) * 100 > 5 and sum by (job) (rate(http_requests_total{job=~".*thanos-query.*",
+      handler="query"}[5m])) > 0
+    for: 5m
+    labels:
+      severity: critical
+      category: thanos
+    annotations:
+      summary: Thanos Query HTTP query error rate high (instance {{ $labels.instance
+        }})
+      description: "Thanos Query {{ $labels.job }} failing > 5% of query requests.\n\
+        \  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: ThanosQueryHttpRequestQueryRangeErrorRateHigh
+    expr: (sum by (job) (rate(http_requests_total{code=~"5..", job=~".*thanos-query.*",
+      handler="query_range"}[5m])) / sum by (job) (rate(http_requests_total{job=~".*thanos-query.*",
+      handler="query_range"}[5m]))) * 100 > 5 and sum by (job) (rate(http_requests_total{job=~".*thanos-query.*",
+      handler="query_range"}[5m])) > 0
+    for: 5m
+    labels:
+      severity: critical
+      category: thanos
+    annotations:
+      summary: Thanos Query HTTP query_range error rate high (instance {{ $labels.instance
+        }})
+      description: "Thanos Query {{ $labels.job }} failing > 5% of query_range requests.\n\
+        \  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: ThanosQueryOverload
+    expr: rate(thanos_query_gate_queries_in_flight[5m]) > 20
+    for: 5m
+    labels:
+      severity: warning
+      category: thanos
+    annotations:
+      summary: Thanos Query overloaded (instance {{ $labels.instance }})
+      description: "Thanos Query in-flight queries gate overloaded.\n  VALUE = {{\
+        \ $value }}\n  LABELS = {{ $labels }}"
+  - alert: ThanosCompactIsDown
+    expr: absent(up{job=~".*thanos-compact.*"} == 1)
+    for: 5m
+    labels:
+      severity: critical
+      category: thanos
+    annotations:
+      summary: Thanos Compact is down
+      description: "Thanos Compact has disappeared from monitoring.\n  VALUE = {{\
+        \ $value }}\n  LABELS = {{ $labels }}"
+  - alert: ThanosQueryIsDown
+    expr: absent(up{job=~".*thanos-query.*"} == 1)
+    for: 5m
+    labels:
+      severity: critical
+      category: thanos
+    annotations:
+      summary: Thanos Query is down
+      description: "Thanos Query has disappeared from monitoring.\n  VALUE = {{ $value\
+        \ }}\n  LABELS = {{ $labels }}"
+  - alert: ThanosStoreIsDown
+    expr: absent(up{job=~".*thanos-store.*"} == 1)
+    for: 5m
+    labels:
+      severity: critical
+      category: thanos
+    annotations:
+      summary: Thanos Store is down
+      description: "Thanos Store has disappeared from monitoring.\n  VALUE = {{ $value\
+        \ }}\n  LABELS = {{ $labels }}"
+  - alert: ThanosStoreGrpcErrorRate
+    expr: sum by (job) (rate(grpc_server_handled_total{grpc_code=~"Unknown|ResourceExhausted|Internal|Unavailable",
+      job=~".*thanos-store.*"}[5m])) / sum by (job) (rate(grpc_server_handled_total{job=~".*thanos-store.*"}[5m]))
+      * 100 > 5
+    for: 5m
+    labels:
+      severity: warning
+      category: thanos
+    annotations:
+      summary: Thanos Store gRPC error rate high (instance {{ $labels.instance }})
+      description: "Thanos Store {{ $labels.job }} gRPC error rate is > 5%.\n  VALUE\
+        \ = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: ThanosCompactBucketHighOperationFailures
+    expr: (sum by (job) (rate(thanos_objstore_bucket_operation_failures_total{job=~".*thanos-compact.*"}[5m]))
+      / sum by (job) (rate(thanos_objstore_bucket_operations_total{job=~".*thanos-compact.*"}[5m]))
+      * 100 > 5) and sum by (job) (rate(thanos_objstore_bucket_operations_total{job=~".*thanos-compact.*"}[5m]))
+      > 0
+    for: 15m
+    labels:
+      severity: warning
+      category: thanos
+    annotations:
+      summary: Thanos Compact bucket high operation failures
+      description: "Thanos Compact bucket operation failures > 5%.\n  VALUE = {{ $value\
+        \ }}\n  LABELS = {{ $labels }}"
+  - alert: ThanosCompactorHighCompactionFailures
+    expr: (sum by (job) (rate(thanos_compact_group_compactions_failures_total[5m]))
+      / sum by (job) (rate(thanos_compact_group_compactions_total[5m])) * 100 > 5)
+      and sum by (job) (rate(thanos_compact_group_compactions_total[5m])) > 0
+    for: 15m
+    labels:
+      severity: warning
+      category: thanos
+    annotations:
+      summary: Thanos Compactor high compaction failures
+      description: "Thanos Compactor is failing > 5% of compactions.\n  VALUE = {{\
+        \ $value }}\n  LABELS = {{ $labels }}"

@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: robusta-config
+  namespace: monitoring
+data:
+  active_playbooks.yaml: |
+    global_config:
+      cluster_name: hub-k3d
+      account_id: "multicloud-aiops-local-account"
+      signing_key: "{{ env.ROBUSTA_SIGNING_KEY }}"
+      prometheus_url: "http://thanos-query.monitoring.svc.cluster.local:9090"
+
+    playbook_repos:
+      robusta_default_playbooks:
+        url: "file:///etc/robusta/playbooks/defaults"
+
+    sinks_config:
+      - telegram_sink:
+          name: main_telegram_sink
+          bot_token: "{{ env.TELEGRAM_BOT_TOKEN }}"
+          chat_id: "{{ env.TELEGRAM_CHAT_ID }}"
+          send_files: true
+
+    active_playbooks:
+      - triggers:
+          - on_prometheus_alert: {}
+        actions:
+          - default_enricher:
+              alert_annotations_enrichment: true
+
+      - triggers:
+          - on_pod_crash_loop: {}
+        actions:
+          - report_crash_loop: {}
+          - pod_events_enricher: {}
+
+      - triggers:
+          - on_pod_oom_killed: {}
+        actions:
+          - pod_events_enricher: {}

@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector-spoke
+  namespace: monitoring
+spec:
+  template:
+    spec:
+      containers:
+        - name: otel-collector
+          env:
+            - name: CLUSTER_NAME
+              value: "aws-k3d"
+            - name: CLOUD_PROVIDER
+              value: "aws"
+            - name: CLOUD_REGION
+              value: "us-east-1"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "k8s.cluster.name=aws-k3d,cloud.provider=aws,cloud.region=us-east-1,deployment.environment.name=production"
+      volumes:
+        - name: certs
+          secret:
+            secretName: aws-spoke-collector-tls

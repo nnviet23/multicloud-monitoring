@@ -1,0 +1,105 @@
+groups:
+- name: wan-network-rules
+  rules:
+  - alert: WanInterClusterLatencyHigh
+    expr: histogram_quantile(0.99, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[2m])))
+      * 1000 > 1500
+    for: 2m
+    labels:
+      severity: critical
+      category: network
+    annotations:
+      summary: Wan inter-cluster latency high (> 1500ms)
+      description: "Inter-cluster service communication latency P99 exceeds 1500ms.\n\
+        \  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: WanPacketLossDetected
+    expr: sum by (instance) (rate(node_network_transmit_drop_total[2m]) + rate(node_network_receive_drop_total[2m]))
+      > 5
+    for: 2m
+    labels:
+      severity: warning
+      category: network
+    annotations:
+      summary: WAN packet loss detected (instance {{ $labels.instance }})
+      description: "Packet drop rate exceeds 5 pkts/s on instance {{ $labels.instance\
+        \ }}.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: NetworkInterfaceErrorsHigh
+    expr: sum by (instance) (rate(node_network_receive_errs_total[2m]) + rate(node_network_transmit_errs_total[2m]))
+      > 10
+    for: 2m
+    labels:
+      severity: warning
+      category: network
+    annotations:
+      summary: Network interface errors high (instance {{ $labels.instance }})
+      description: "Network interface error rate exceeds 10 errs/s on {{ $labels.instance\
+        \ }}.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: CrossCloudWANLatencyDegraded
+    expr: histogram_quantile(0.99, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket[2m])))
+      * 1000 > 1000
+    for: 2m
+    labels:
+      severity: warning
+      category: performance
+      strategy: signoz-latency-spike
+    annotations:
+      summary: Cross-cloud WAN latency degraded (> 1000ms)
+      description: "Service {{ $labels.server }} has P99 latency > 1000ms for 2m."
+  - alert: SpokeClusterHeartbeatAbsent
+    expr: absent(up{k8s_cluster_name="aws-k3d"} == 1) or absent(up{k8s_cluster_name="azure-k3d"}
+      == 1)
+    for: 2m
+    labels:
+      severity: critical
+      category: availability
+      strategy: signoz-heartbeat
+    annotations:
+      summary: Absent Spoke Cluster Heartbeat Telemetry
+      description: No telemetry received from Spoke cluster (AWS or Azure) to Central
+        Hub for > 2m.
+  - alert: MicroserviceHighErrorRate
+    expr: (sum by (server) (rate(traces_service_graph_request_failed_total[2m])) /
+      (sum by (server) (rate(traces_service_graph_request_total[2m])) + 0.0001)) *
+      100 > 5
+    for: 2m
+    labels:
+      severity: info
+      category: availability
+      strategy: signoz-diagnostic-only
+    annotations:
+      summary: Microservice error rate > 5% (Diagnostic)
+      description: Service {{ $labels.server }} error rate exceeds 5% continuously
+        for 2m.
+  - alert: AIOpsAnomalyDetected
+    expr: ai_anomaly_likelihood_percent > 80
+    for: 30s
+    labels:
+      severity: critical
+      category: aiops
+      strategy: deep-learning-ensemble
+    annotations:
+      summary: AIOps anomaly detected for service {{ $labels.service_name }}
+      description: Ensemble detected anomaly likelihood {{ $value }}% (score {{ $labels.anomaly_score
+        }}).
+  - alert: HostNetworkReceiveErrors
+    expr: rate(node_network_receive_errs_total[2m]) / rate(node_network_receive_packets_total[2m])
+      > 0.01
+    for: 2m
+    labels:
+      severity: warning
+      category: network
+    annotations:
+      summary: Host network receive errors (instance {{ $labels.instance }})
+      description: "Network interface {{ $labels.device }} receive error rate exceeds\
+        \ 1%.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: HostNetworkTransmitErrors
+    expr: rate(node_network_transmit_errs_total[2m]) / rate(node_network_transmit_packets_total[2m])
+      > 0.01
+    for: 2m
+    labels:
+      severity: warning
+      category: network
+    annotations:
+      summary: Host network transmit errors (instance {{ $labels.instance }})
+      description: "Network interface {{ $labels.device }} transmit error rate exceeds\
+        \ 1%.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"

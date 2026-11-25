@@ -1,0 +1,141 @@
+{
+  "architecture": "Per-Entity Z-Score Standardized Universal Autoencoder (V3)",
+  "split_strategy": "strict_chronological_per_entity_pre_windowing",
+  "baseline_fit_scope": "train_only",
+  "window_overlap_between_train_and_val": 0,
+  "total_raw_entity_rows": 666,
+  "train_raw_entity_rows": 534,
+  "val_raw_entity_rows": 132,
+  "discovered_entities": [
+    "aws:teastore-image",
+    "aws:teastore-registry",
+    "aws:teastore-webui",
+    "azure:teastore-auth",
+    "azure:teastore-persistence",
+    "gcp:teastore-recommender"
+  ],
+  "entity_window_counts": {
+    "aws:teastore-image": {
+      "train_windows": 78,
+      "val_windows": 11,
+      "total_windows": 89
+    },
+    "aws:teastore-registry": {
+      "train_windows": 78,
+      "val_windows": 11,
+      "total_windows": 89
+    },
+    "aws:teastore-webui": {
+      "train_windows": 78,
+      "val_windows": 11,
+      "total_windows": 89
+    },
+    "azure:teastore-auth": {
+      "train_windows": 78,
+      "val_windows": 11,
+      "total_windows": 89
+    },
+    "azure:teastore-persistence": {
+      "train_windows": 78,
+      "val_windows": 11,
+      "total_windows": 89
+    },
+    "gcp:teastore-recommender": {
+      "train_windows": 78,
+      "val_windows": 11,
+      "total_windows": 89
+    }
+  },
+  "per_entity_temporal_split": {
+    "aws:teastore-image": {
+      "total_rows": 111,
+      "train_rows": 89,
+      "val_rows": 22,
+      "train_start_ts": 1793273347.0,
+      "train_end_ts": 1793273875.0,
+      "val_start_ts": 1793273881.0,
+      "val_end_ts": 1793274007.0
+    },
+    "aws:teastore-registry": {
+      "total_rows": 111,
+      "train_rows": 89,
+      "val_rows": 22,
+      "train_start_ts": 1793273347.0,
+      "train_end_ts": 1793273875.0,
+      "val_start_ts": 1793273881.0,
+      "val_end_ts": 1793274007.0
+    },
+    "aws:teastore-webui": {
+      "total_rows": 111,
+      "train_rows": 89,
+      "val_rows": 22,
+      "train_start_ts": 1793273347.0,
+      "train_end_ts": 1793273875.0,
+      "val_start_ts": 1793273881.0,
+      "val_end_ts": 1793274007.0
+    },
+    "azure:teastore-auth": {
+      "total_rows": 111,
+      "train_rows": 89,
+      "val_rows": 22,
+      "train_start_ts": 1793273347.0,
+      "train_end_ts": 1793273875.0,
+      "val_start_ts": 1793273881.0,
+      "val_end_ts": 1793274007.0
+    },
+    "azure:teastore-persistence": {
+      "total_rows": 111,
+      "train_rows": 89,
+      "val_rows": 22,
+      "train_start_ts": 1793273347.0,
+      "train_end_ts": 1793273875.0,
+      "val_start_ts": 1793273881.0,
+      "val_end_ts": 1793274007.0
+    },
+    "gcp:teastore-recommender": {
+      "total_rows": 111,
+      "train_rows": 89,
+      "val_rows": 22,
+      "train_start_ts": 1793273347.0,
+      "train_end_ts": 1793273875.0,
+      "val_start_ts": 1793273881.0,
+      "val_end_ts": 1793274007.0
+    }
+  },
+  "num_features": 8,
+  "features": [
+    "qps",
+    "server_latency_p95",
+    "client_latency_p95",
+    "error_rate_5xx",
+    "max_pod_cpu_pct",
+    "max_pod_ram_pct",
+    "ram_floor_2m_pct",
+    "gc_pause_rate"
+  ],
+  "window_size": 12,
+  "stride": 1,
+  "base_train_windows": 468,
+  "augmented_train_windows": 2808,
+  "val_windows": 66,
+  "train_shape": [
+    2808,
+    12,
+    8
+  ],
+  "val_shape": [
+    66,
+    12,
+    8
+  ],
+  "physical_scale_floors": {
+    "qps": 5.0,
+    "server_latency_p95": 0.035,
+    "client_latency_p95": 0.035,
+    "error_rate_5xx": 0.1,
+    "max_pod_cpu_pct": 12.0,
+    "max_pod_ram_pct": 12.0,
+    "ram_floor_2m_pct": 10.0,
+    "gc_pause_rate": 0.015
+  }
+}

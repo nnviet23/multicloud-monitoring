@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector-spoke
+  namespace: monitoring
+spec:
+  template:
+    spec:
+      containers:
+        - name: otel-collector
+          args:
+            - --config=/etc/otelcol/config.yaml
+            - --config=/etc/otelcol/mysql.yaml
+          env:
+            - name: CLUSTER_NAME
+              value: "azure-k3d"
+            - name: CLOUD_PROVIDER
+              value: "azure"
+            - name: CLOUD_REGION
+              value: "southasia"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "k8s.cluster.name=azure-k3d,cloud.provider=azure,cloud.region=southasia,deployment.environment.name=production"
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: teastore-mysql-secret
+                  key: root-password
+                  optional: false
+          volumeMounts:
+            - name: mysql-config
+              mountPath: /etc/otelcol/mysql.yaml
+              subPath: mysql.yaml
+              readOnly: true
+      volumes:
+        - name: certs
+          secret:
+            secretName: azure-spoke-collector-tls
+        - name: mysql-config
+          configMap:
+            name: otel-collector-azure-mysql-config

@@ -1,0 +1,391 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Master Multi-Cloud Architecture & Workflow Map",
+    "subtitle": "5-Tier Production Blueprint: Control Plane, AWS Spoke, Azure Spoke, Central Hub & Closed-Loop AIOps",
+    "animation": "trace",
+    "visual_preset": "signal-flow",
+    "quality_profile": "showcase",
+    "output": "docs/diagrams/archify/workflow-map.html"
+  },
+  "lanes": [
+    {
+      "id": "control_plane",
+      "label": "1. Provisioning, Gatekeepers & GitOps Control Plane"
+    },
+    {
+      "id": "aws_spoke",
+      "label": "2. AWS Spoke (aws-k3d - Compute Tier)"
+    },
+    {
+      "id": "azure_spoke",
+      "label": "3. Azure Spoke (azure-k3d - Data Tier)"
+    },
+    {
+      "id": "hub_cluster",
+      "label": "4. Central Hub (hub-k3d - Telemetry & Storage)"
+    },
+    {
+      "id": "slo_governance",
+      "label": "5. SLO Governance & Closed-Loop Incident Response"
+    }
+  ],
+  "phases": [
+    {
+      "id": "phase_init",
+      "label": "1. Orchestration & Load",
+      "fromCol": 0,
+      "toCol": 0
+    },
+    {
+      "id": "phase_workload",
+      "label": "2. Workload & Ingress",
+      "fromCol": 1,
+      "toCol": 1
+    },
+    {
+      "id": "phase_cross_cloud",
+      "label": "3. Services & Persistence",
+      "fromCol": 2,
+      "toCol": 2,
+      "variant": "emphasis"
+    },
+    {
+      "id": "phase_telemetry",
+      "label": "4. Edge Ingestion",
+      "fromCol": 3,
+      "toCol": 3
+    },
+    {
+      "id": "phase_gateway",
+      "label": "5. Gateway & Processing",
+      "fromCol": 4,
+      "toCol": 4,
+      "variant": "security"
+    },
+    {
+      "id": "phase_backends",
+      "label": "6. Backends & Closed-Loop",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "groups": [
+    {
+      "id": "grp_control",
+      "label": "GitOps Control Plane (ArgoCD & Secrets)",
+      "lane": "control_plane",
+      "fromCol": 2,
+      "toCol": 4,
+      "variant": "security"
+    },
+    {
+      "id": "grp_aws",
+      "label": "AWS Compute Workloads (TeaStore & OTel Edge)",
+      "lane": "aws_spoke",
+      "fromCol": 1,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "grp_azure",
+      "label": "Azure Persistence Workloads (MySQL & OTel Edge)",
+      "lane": "azure_spoke",
+      "fromCol": 2,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "grp_hub",
+      "label": "Hub Telemetry Gateway & Storage Engine",
+      "lane": "hub_cluster",
+      "fromCol": 4,
+      "toCol": 5,
+      "variant": "emphasis"
+    },
+    {
+      "id": "grp_slo",
+      "label": "Automated SRE & Remediation Loop",
+      "lane": "slo_governance",
+      "fromCol": 4,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "node_locust",
+    "node_teastore_webui",
+    "node_teastore_compute",
+    "node_aws_otel_collector",
+    "node_hub_gateway",
+    "node_observability_backends"
+  ],
+  "nodes": [
+    {
+      "id": "node_makefile",
+      "lane": "control_plane",
+      "col": 0,
+      "type": "frontend",
+      "label": "Makefile Engine",
+      "sublabel": "setup, lint, test",
+      "tag": "Entrypoint",
+      "width": 125
+    },
+    {
+      "id": "node_ansible",
+      "lane": "control_plane",
+      "col": 1,
+      "type": "backend",
+      "label": "Ansible Bootstrap",
+      "sublabel": "01..06 + tc netem",
+      "width": 125
+    },
+    {
+      "id": "node_gatekeepers",
+      "lane": "control_plane",
+      "col": 2,
+      "type": "security",
+      "label": "Shift-Left Gates",
+      "sublabel": "Kyverno & Diagrams",
+      "tag": "Verification",
+      "width": 125
+    },
+    {
+      "id": "node_argocd",
+      "lane": "control_plane",
+      "col": 3,
+      "type": "cloud",
+      "label": "Argo CD AppSets",
+      "sublabel": "hub, aws, azure",
+      "tag": "GitOps Core",
+      "width": 125
+    },
+    {
+      "id": "node_sealed_secrets",
+      "lane": "control_plane",
+      "col": 4,
+      "type": "security",
+      "label": "Sealed Secrets",
+      "sublabel": "Master Key Crypt",
+      "width": 125
+    },
+    {
+      "id": "node_locust",
+      "lane": "aws_spoke",
+      "col": 0,
+      "type": "external",
+      "label": "Locust Generator",
+      "sublabel": "HTTP Workload Gen",
+      "tag": "Workload",
+      "width": 125
+    },
+    {
+      "id": "node_teastore_webui",
+      "lane": "aws_spoke",
+      "col": 1,
+      "type": "frontend",
+      "label": "teastore-webui",
+      "sublabel": "Service / Rollout",
+      "width": 125
+    },
+    {
+      "id": "node_teastore_compute",
+      "lane": "aws_spoke",
+      "col": 2,
+      "type": "backend",
+      "label": "Compute Services",
+      "sublabel": "auth, img, rec, reg",
+      "width": 125
+    },
+    {
+      "id": "node_aws_otel_collector",
+      "lane": "aws_spoke",
+      "col": 3,
+      "type": "security",
+      "label": "AWS OTel Edge",
+      "sublabel": "Edge Filter + gzip",
+      "tag": "Edge Agent",
+      "width": 125
+    },
+    {
+      "id": "node_teastore_persistence",
+      "lane": "azure_spoke",
+      "col": 2,
+      "type": "backend",
+      "label": "Persistence Pods",
+      "sublabel": "Data Access Layer",
+      "width": 125
+    },
+    {
+      "id": "node_mysql_db",
+      "lane": "azure_spoke",
+      "col": 3,
+      "type": "database",
+      "label": "teastore-db",
+      "sublabel": "MySQL StatefulSet",
+      "tag": "Database",
+      "width": 125
+    },
+    {
+      "id": "node_azure_otel_collector",
+      "lane": "azure_spoke",
+      "col": 4,
+      "type": "security",
+      "label": "Azure OTel Edge",
+      "sublabel": "mysql receiver",
+      "tag": "Edge Agent",
+      "width": 125
+    },
+    {
+      "id": "node_hub_gateway",
+      "lane": "hub_cluster",
+      "col": 4,
+      "type": "cloud",
+      "label": "Hub OTel Gateway",
+      "sublabel": "OTTL & tail_sample",
+      "tag": "Central Hub",
+      "width": 125
+    },
+    {
+      "id": "node_observability_backends",
+      "lane": "hub_cluster",
+      "col": 5,
+      "type": "database",
+      "label": "Thanos/Loki/Tempo",
+      "sublabel": "Metrics, Logs, Traces",
+      "tag": "Storage & UI",
+      "width": 125
+    },
+    {
+      "id": "node_pyrra_slo",
+      "lane": "slo_governance",
+      "col": 4,
+      "type": "backend",
+      "label": "Pyrra & Robusta",
+      "sublabel": "SLO Burn & Context",
+      "tag": "SRE SLO",
+      "width": 125
+    },
+    {
+      "id": "node_closed_loop_gitops",
+      "lane": "slo_governance",
+      "col": 5,
+      "type": "cloud",
+      "label": "Closed-Loop GitOps",
+      "sublabel": "Self-Heal Reconcile",
+      "tag": "Auto-Heal",
+      "width": 125
+    }
+  ],
+  "edges": [
+    {
+      "from": "node_makefile",
+      "to": "node_ansible",
+      "label": "make setup"
+    },
+    {
+      "from": "node_ansible",
+      "to": "node_gatekeepers",
+      "label": "make verify"
+    },
+    {
+      "from": "node_gatekeepers",
+      "to": "node_argocd",
+      "label": "validated"
+    },
+    {
+      "from": "node_argocd",
+      "to": "node_sealed_secrets",
+      "label": "bootstrap"
+    },
+    {
+      "from": "node_locust",
+      "to": "node_teastore_webui",
+      "label": "HTTP load"
+    },
+    {
+      "from": "node_teastore_webui",
+      "to": "node_teastore_compute",
+      "label": "RPC auth/img"
+    },
+    {
+      "from": "node_teastore_compute",
+      "to": "node_teastore_persistence",
+      "label": "cross-WAN",
+      "variant": "emphasis"
+    },
+    {
+      "from": "node_teastore_persistence",
+      "to": "node_mysql_db",
+      "label": "JDBC :3306"
+    },
+    {
+      "from": "node_teastore_compute",
+      "to": "node_aws_otel_collector",
+      "label": "OTLP :4317"
+    },
+    {
+      "from": "node_mysql_db",
+      "to": "node_azure_otel_collector",
+      "label": "scrape :3306"
+    },
+    {
+      "from": "node_aws_otel_collector",
+      "to": "node_hub_gateway",
+      "label": "mTLS 1.3 push",
+      "variant": "security"
+    },
+    {
+      "from": "node_azure_otel_collector",
+      "to": "node_hub_gateway",
+      "label": "mTLS 1.3 push",
+      "variant": "security"
+    },
+    {
+      "from": "node_hub_gateway",
+      "to": "node_observability_backends",
+      "label": "batch ingest"
+    },
+    {
+      "from": "node_hub_gateway",
+      "to": "node_pyrra_slo",
+      "label": "metrics stream"
+    },
+    {
+      "from": "node_pyrra_slo",
+      "to": "node_closed_loop_gitops",
+      "label": "alert incident"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Control Plane & Gatekeeper Standards (SPEC-0005, SPEC-0008)",
+      "items": [
+        "Makefile provides strict gatekeepers (validate-otel, diagrams, lint) before deployment",
+        "Ansible automates 3 k3d clusters, WAN impairment (tc netem), and mTLS secret distribution",
+        "Argo CD ApplicationSets manage automated reconciliation (selfHeal: true, prune: true)"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Cross-Cloud Network & Ingestion (ADR-0013, SPEC-0007)",
+      "items": [
+        "Spoke Edge Collectors drop noise at source before WAN transport (ADR-0013)",
+        "Spoke-to-Hub transport protected by Native mTLS 1.3 over hub-gateway.hub.multicloud.local:4317",
+        "Hub Gateway evaluates servicegraph connector before tail-based sampling (ADR-0014)"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Storage & Closed-Loop AIOps (ADR-0016, SPEC-0010)",
+      "items": [
+        "MinIO stores immutable blocks from Thanos, Loki, Tempo; raw telemetry direct-write removed (ADR-0016)",
+        "Grafana dynamically provisions dashboards via kiwigrid/k8s-sidecar watching ConfigMaps",
+        "Pyrra tracks SLO Error Budgets; Robusta enriches alerts and drives closed-loop remediation"
+      ]
+    }
+  ]
+}

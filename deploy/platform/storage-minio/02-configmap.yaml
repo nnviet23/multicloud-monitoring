@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: minio-config
+  namespace: storage
+data:
+  MINIO_BROWSER: "on"
+  MINIO_PROMETHEUS_AUTH_TYPE: "public"
+

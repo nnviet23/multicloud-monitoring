@@ -1,0 +1,120 @@
+groups:
+- name: mysql-rules
+  rules:
+  - alert: MysqlDown
+    expr: mysql_up == 0
+    for: 1m
+    labels:
+      severity: critical
+      category: database
+    annotations:
+      summary: MySQL down (instance {{ $labels.instance }})
+      description: "MySQL instance is down on {{ $labels.instance }}.\n  VALUE = {{\
+        \ $value }}\n  LABELS = {{ $labels }}"
+  - alert: MysqlTooManyConnections
+    expr: max_over_time(mysql_global_status_threads_connected[1m]) / mysql_global_variables_max_connections
+      * 100 > 80
+    for: 2m
+    labels:
+      severity: warning
+      category: database
+    annotations:
+      summary: MySQL too many connections (instance {{ $labels.instance }})
+      description: "MySQL connections are above 80% capacity on {{ $labels.instance\
+        \ }}.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: MysqlSlowQueries
+    expr: increase(mysql_global_status_slow_queries[1m]) > 0
+    for: 2m
+    labels:
+      severity: warning
+      category: database
+    annotations:
+      summary: MySQL slow queries detected (instance {{ $labels.instance }})
+      description: "MySQL has new slow queries on {{ $labels.instance }}.\n  VALUE\
+        \ = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: MysqlRestarted
+    expr: mysql_global_status_uptime < 60
+    for: 0m
+    labels:
+      severity: info
+      category: database
+    annotations:
+      summary: MySQL restarted (instance {{ $labels.instance }})
+      description: "MySQL has just been restarted on {{ $labels.instance }}.\n  VALUE\
+        \ = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: MysqlHighThreadsRunning
+    expr: max_over_time(mysql_global_status_threads_running[1m]) > 50
+    for: 2m
+    labels:
+      severity: warning
+      category: database
+    annotations:
+      summary: MySQL high threads running (instance {{ $labels.instance }})
+      description: "More than 50 threads are running concurrently on {{ $labels.instance\
+        \ }}.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: MysqlSlaveIoThreadNotRunning
+    expr: (mysql_slave_status_slave_io_running == 0) and (mysql_slave_status_master_server_id
+      > 0)
+    for: 0m
+    labels:
+      severity: critical
+      category: database
+    annotations:
+      summary: MySQL Slave IO thread not running (instance {{ $labels.instance }})
+      description: "MySQL Slave IO thread has stopped on {{ $labels.instance }}.\n\
+        \  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: MysqlSlaveSqlThreadNotRunning
+    expr: (mysql_slave_status_slave_sql_running == 0) and (mysql_slave_status_master_server_id
+      > 0)
+    for: 0m
+    labels:
+      severity: critical
+      category: database
+    annotations:
+      summary: MySQL Slave SQL thread not running (instance {{ $labels.instance }})
+      description: "MySQL Slave SQL thread has stopped on {{ $labels.instance }}.\n\
+        \  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: MysqlSlaveReplicationLag
+    expr: ((mysql_slave_status_seconds_behind_master - mysql_slave_status_sql_delay)
+      > 30) and (mysql_slave_status_master_server_id > 0)
+    for: 1m
+    labels:
+      severity: warning
+      category: database
+    annotations:
+      summary: MySQL replication lag high (instance {{ $labels.instance }})
+      description: "MySQL replication lag is > 30s on {{ $labels.instance }}.\n  VALUE\
+        \ = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: MysqlTooManyOpenFiles
+    expr: 100 * mysql_global_status_innodb_num_open_files / mysql_global_variables_open_files_limit
+      > 80
+    for: 2m
+    labels:
+      severity: warning
+      category: database
+    annotations:
+      summary: MySQL too many open files (instance {{ $labels.instance }})
+      description: "InnoDB open files exceeds 80% limit on {{ $labels.instance }}.\n\
+        \  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: MysqlHighPreparedStatementsUtilization(>80%)
+    expr: mysql_global_status_prepared_stmt_count / mysql_global_variables_max_prepared_stmt_count
+      * 100 > 80
+    for: 2m
+    labels:
+      severity: warning
+      category: database
+    annotations:
+      summary: MySQL high prepared statements utilization (instance {{ $labels.instance
+        }})
+      description: "Prepared statement count is above 80% limit on {{ $labels.instance\
+        \ }}.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  - alert: MysqlInnodbLogWaits
+    expr: rate(mysql_global_status_innodb_log_waits[15m]) > 10
+    for: 2m
+    labels:
+      severity: warning
+      category: database
+    annotations:
+      summary: MySQL InnoDB log waits high (instance {{ $labels.instance }})
+      description: "InnoDB log writes are stalling on {{ $labels.instance }}.\n  VALUE\
+        \ = {{ $value }}\n  LABELS = {{ $labels }}"

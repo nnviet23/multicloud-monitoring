@@ -1,0 +1,30 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: hub-otel-gateway-server-cert
+  namespace: monitoring
+spec:
+  secretName: hub-otel-gateway-tls
+  duration: 2160h
+  renewBefore: 720h
+  commonName: hub-gateway.hub.multicloud.local
+  dnsNames:
+    - otel-collector-hub
+    - otel-collector-hub.monitoring.svc.cluster.local
+    - hub-gateway.hub.multicloud.local
+    - hub.local
+    - "*.hub.local"
+    - localhost
+  ipAddresses:
+    - 127.0.0.1
+    - 172.28.0.2
+    - 172.28.0.3
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+    - client auth
+  issuerRef:
+    name: multicloud-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io

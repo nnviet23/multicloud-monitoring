@@ -1,0 +1,74 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-core-traffic
+  namespace: teastore
+  annotations:
+    policies.kyverno.io/title: "Allow Core DNS, Microservices, and OTLP Traffic"
+    policies.kyverno.io/category: "Network Security (SEC-03)"
+    policies.kyverno.io/description: >-
+      Allow essential ingress and egress traffic for TeaStore microservices,
+      including CoreDNS (port 53), HTTP service mesh (port 8080), MySQL (port 3306),
+      and OTLP gRPC telemetry egress (port 4317).
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # 1. Allow internal microservice HTTP traffic (8080) and external ingress/loadgen
+    - ports:
+        - protocol: TCP
+          port: 8080
+    # 2. Allow intra-namespace MySQL database traffic (3306) and Spoke OTel Collector monitoring
+    - from:
+        - podSelector: {}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app: otel-collector-spoke
+      ports:
+        - protocol: TCP
+          port: 3306
+  egress:
+    # 1. CoreDNS / kube-dns resolution (UDP & TCP port 53)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # 2. Intra-microservice HTTP communication (WebUI -> Auth, Image, Recommender, Registry, Persistence)
+    - to:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8080
+    # 3. Database egress to MySQL (port 3306)
+    - to:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 3306
+    # 4. OpenTelemetry Collector OTLP gRPC telemetry export (port 4317)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app: otel-collector-spoke
+      ports:
+        - protocol: TCP
+          port: 4317
+    # 5. Cross-cluster Spoke-to-Spoke WAN communication (Registry 31112, Persistence 31111)
+    - ports:
+        - protocol: TCP
+          port: 31111
+        - protocol: TCP
+          port: 31112

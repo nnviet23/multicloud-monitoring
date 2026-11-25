@@ -1,0 +1,88 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Multi-Cloud Observability & Closed-Loop AIOps Platform Dependency Automation (ADR-0012)",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    "docker:pinDigests",
+    ":semanticCommits"
+  ],
+  "timezone": "Asia/Ho_Chi_Minh",
+  "schedule": [
+    "before 9am on monday"
+  ],
+  "labels": [
+    "dependencies",
+    "gitops"
+  ],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "kustomize": {
+    "fileMatch": [
+      "(^|/)kustomization\\.ya?ml$",
+      "(^|/)release-images\\.ya?ml$"
+    ]
+  },
+  "packageRules": [
+    {
+      "description": "Observability Platform Core: One PR each to allow isolated rollback (ADR-0001, ADR-0012)",
+      "matchPackageNames": [
+        "quay.io/thanos/thanos",
+        "grafana/loki",
+        "grafana/tempo",
+        "grafana/grafana",
+        "minio/minio",
+        "prom/prometheus",
+        "prom/alertmanager",
+        "otel/opentelemetry-collector-contrib",
+        "bitnami/sealed-secrets-controller",
+        "quay.io/argoproj/argocd"
+      ],
+      "commitMessageTopic": "platform {{depName}}",
+      "labels": ["dependencies", "platform-core"]
+    },
+    {
+      "description": "Benchmark Application Workloads (TeaStore): Group microservices into one release PR",
+      "matchPackageNames": [
+        "descartesresearch/teastore-auth",
+        "descartesresearch/teastore-db",
+        "descartesresearch/teastore-image",
+        "descartesresearch/teastore-persistence",
+        "descartesresearch/teastore-recommender",
+        "descartesresearch/teastore-registry",
+        "descartesresearch/teastore-webui"
+      ],
+      "groupName": "teastore benchmark workloads",
+      "labels": ["dependencies", "workloads"]
+    },
+    {
+      "description": "CI & Tooling Actions: Batch minor and patch bumps to avoid notification spam",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pinDigest"
+      ],
+      "groupName": "ci tooling",
+      "labels": ["dependencies", "ci"]
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Container images pinned in infra/README.md and Makefile",
+      "fileMatch": [
+        "^Makefile$",
+        "^infra/README\\.md$"
+      ],
+      "matchStrings": [
+        "image:\\s*[\"']?(?<depName>[^\\s:\"']+):(?<currentValue>[^\\s@\"']+)(?:@(?<currentDigest>sha256:[a-f0-9]+))?[\"']?",
+        "(?<depName>[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+):(?<currentValue>[vV]?[0-9][a-zA-Z0-9_.-]*)"
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: spoke-workloads-stack
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - cluster: aws-k3d
+            url: https://k3d-aws-k3d-serverlb:6443
+            path: deploy/clusters/aws
+          - cluster: azure-k3d
+            url: https://k3d-azure-k3d-serverlb:6443
+            path: deploy/clusters/azure
+  template:
+    metadata:
+      name: '{{cluster}}-workloads'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/nnviet23/multicloud-monitoring.git
+        targetRevision: main
+        path: '{{path}}'
+      destination:
+        server: '{{url}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
