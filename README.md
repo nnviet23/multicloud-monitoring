@@ -188,7 +188,7 @@ multicloud-monitoring/
 │   │   ├── cheatsheets/        # Operational & tooling cheatsheets
 │   │   ├── concepts/           # Platform engineering concepts (01-14)
 │   │   └── decisions/          # Canonical ADRs (ADR-0001..ADR-0013)
-│   ├── planning/               # Task & milestone tracking
+│   ├── planning/               # Task & milestone tracking (docs/planning/progress.md)
 │   └── runbooks/               # Incident response runbooks
 ├── infra/                      # Python Platform CLI (infra/cli.py) & version matrix
 └── tests/                      # Automated verification & chaos experiments
