@@ -63,7 +63,7 @@ All container images and tools are strictly pinned (no `:latest` tags); full det
 
 ---
 
-## Quickstart
+## Quick Start
 
 Provisioning and lifecycle are orchestrated via `Makefile` and the **Python Platform CLI** (`python -m infra.cli`):
 
@@ -77,12 +77,61 @@ make infra
 # 3. Deploy Hub & Spoke observability stacks and TeaStore benchmark
 make deploy
 
-# 4. Run static validation, OTel architecture rules, and 142 automated tests
-make test
+# 4. Verify cluster nodes, workload pods, and simulated WAN connectivity
+make verify
 
-# 5. Tear down clusters cleanly
+# 5. Open port-forwards for Grafana (:3000), Thanos (:9090), Pyrra (:9099), MinIO (:9001)
+make ui
+
+# Tear down clusters cleanly when finished
 make teardown
 ```
+
+### Common Commands
+
+- **Daily Operate & Debug:** `make status`, `make verify`, `make ui`, `make reset-wan`, `make test-wan`
+- **GitOps & Policies:** `make deploy-gitops`, `make register-spokes`, `make deploy-policies`
+- **Offline Validation & Tests:** `make test`, `make lint`, `make test-scripts`, `make validate-otel`, `make fmt`
+- **Live Cluster Smoke Tests:** `make e2e` (`verify` + `test-wan` + `test-ai`)
+- **Cleanup:** `make clean`, `make teardown`, `make clean-images`, `make purge-all`
+
+### All Makefile Commands
+
+| Target | Category | Description |
+|---|---|---|
+| `env-setup` | Setup & Infra | Ensure `.env` file exists from `.env.example` |
+| `pull-images` | Setup & Infra | Pre-pull all version-pinned container images on host |
+| `preload-images` | Setup & Infra | Import pre-pulled images into all 3 k3d clusters |
+| `pki-generate` | Setup & Infra | Generate Root CA and mTLS 1.3 certificates for Hub & Spokes |
+| `setup` | Setup & Infra | Run complete prerequisites setup (`env-setup` + `pull-images`) |
+| `infra` | Setup & Infra | Provision all 3 k3d clusters, WAN, PKI, and preload images |
+| `deploy-hub` | Deploy & GitOps | Deploy complete Hub Observability Stack via Kustomize Overlay |
+| `deploy-spokes` | Deploy & GitOps | Deploy TeaStore Workloads and Edge OTel Collectors on Spokes |
+| `register-spokes` | Deploy & GitOps | Register Spoke clusters in Hub Argo CD |
+| `deploy-argocd` | Deploy & GitOps | Deploy Argo CD engine, ApplicationSets, and register spokes |
+| `deploy-local` | Deploy & GitOps | Deploy complete system locally via `kubectl`/`kustomize` |
+| `deploy-gitops` | Deploy & GitOps | Deploy complete system via Argo CD GitOps ApplicationSets |
+| `deploy` | Deploy & GitOps | Alias to `deploy-local` (default direct deployment) |
+| `deploy-policies` | Deploy & GitOps | Deploy Kyverno `ClusterPolicies` across all 3 clusters |
+| `status` | Verify & Operate | Show live cluster, pod, and WAN status via Platform CLI |
+| `verify` | Verify & Operate | Run comprehensive health verification across all clusters |
+| `reset-wan` | Verify & Operate | Reapply WAN emulation parameters (`tc/netem`) |
+| `test-wan` | Verify & Operate | Test simulated WAN latency and packet loss between Spokes |
+| `ui` | Verify & Operate | Port-forward Grafana, Thanos Query, Pyrra SLO, and MinIO UIs |
+| `test-scripts` | Test & Lint | Run all platform verification and hardening test scripts |
+| `test-ai` | Test & Lint | Run AI Anomaly Detection Engine V3 live evaluation tests |
+| `validate-dashboards` | Test & Lint | Validate JSON syntax of all Grafana Dashboards |
+| `validate-kustomize` | Test & Lint | Dry-run Kustomize build across Hub, Spokes, Argo CD, and SLOs |
+| `validate-policies` | Test & Lint | Validate Kyverno `ClusterPolicies` syntax via Kustomize |
+| `validate-otel` | Test & Lint | Validate OTel Collector architectural rules and export OTelBin YAMLs |
+| `fmt` | Test & Lint | Format Python code with `ruff` if installed |
+| `lint` | Test & Lint | Run complete static code & manifest linting |
+| `test` | Test & Lint | Run all offline automated tests (Scripts, Dashboards, Manifests, Policies, OTel) |
+| `e2e` | Test & Lint | Run live cluster smoke tests (`verify`, `test-wan`, `test-ai`) |
+| `clean` | Cleanup | Remove local Python caches and temporary build artifacts |
+| `clean-images` | Cleanup | Remove all project container images and prune dangling images |
+| `teardown` | Cleanup | Destroy all 3 clusters and clean up resources |
+| `purge-all` | Cleanup | Full deep clean (`teardown` + `clean-images`) |
 
 ### Service Endpoints
 
@@ -121,18 +170,21 @@ Controlled fault-injection experiments validate observability coverage, SLO burn
 
 ---
 
-## Repository Layout & Documentation
+## Project Structure
 
-- `deploy/platform/` — Core Hub & Spoke observability, PKI (`cert-manager`), and GitOps manifests (SRP-organized; metrics use Prometheus + Thanos Sidecar/Query/Store/Compact without Thanos Ruler)
-- `deploy/policies/` — Active `NetworkPolicies` (`teastore`, `monitoring`, `storage`) + static Kyverno `ClusterPolicies` (runtime Kyverno controller deferred to Phase 5 Real-Cloud)
-- `deploy/argocd/` — Multi-cluster Argo CD `ApplicationSet`s for Hub & Spokes (paired with `python -m infra.cli register-spokes`)
+- `deploy/platform/` — Core Hub & Spoke observability, PKI (`cert-manager`), and Argo CD manifests
+- `deploy/bootstrap/` — Root Argo CD `ApplicationSet`s for multi-cluster GitOps bootstrap
 - `deploy/clusters/` — Environment overlays for `hub`, `aws`, and `azure`
+- `deploy/slos/` — Pyrra SLO-as-code definitions
 - `deploy/workloads/` — Benchmark catalog (`teastore/`, `_template/`)
-- `infra/` — `Python Platform CLI` (`infra/cli.py`), Argo CD spoke registration, pinned version matrix (`infra/README.md`)
-- `ai-engine/` — Deep Learning anomaly detection & Tempo Trace RCA ([`ai-engine/README.md`](ai-engine/README.md))
-- `tests/` — Automated verification (`tests/scripts/`, 142 tests) and chaos experiments (`tests/chaos/`)
+- `deploy/policies/` — Active `NetworkPolicies` (`teastore`, `monitoring`, `storage`) + static Kyverno `ClusterPolicies`
+- `docs/architecture/concepts/` — Architecture concepts & system design notes
+- `docs/architecture/cheatsheets/` — Operational & tooling cheatsheets
 - `docs/architecture/decisions/` — 12 Canonical Architecture Decision Records ([`docs/architecture/decisions/README.md`](docs/architecture/decisions/README.md))
-- `docs/runbooks/` — Modular SRE incident runbooks ([`docs/runbooks/README.md`](docs/runbooks/README.md))
+- `infra/` — `Python Platform CLI` (`infra/cli.py`), Argo CD spoke registration, pinned version matrix (`infra/README.md`)
+- `aiops/` — Deep Learning anomaly detection & Tempo Trace RCA
+- `tests/` — Automated verification (`tests/scripts/`) and chaos experiments (`tests/chaos/`)
+- `.github/workflows/` — CI/CD validation and automation workflows
 - `docs/planning/progress.md` — Local implementation progress & milestone log
 
 ---
