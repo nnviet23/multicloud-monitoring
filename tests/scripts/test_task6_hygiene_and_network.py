@@ -24,11 +24,11 @@ ROBUSTA_KUSTOMIZATION = REPO_ROOT / "deploy" / "platform" / "smart-alerting-robu
 INFRA_CLI_PATH = REPO_ROOT / "infra" / "cli.py"
 
 TEASTORE_DEPLOYMENT_PATHS = [
-    REPO_ROOT / "workloads" / "teastore" / "aws-spoke" / "02-auth-deployment.yaml",
-    REPO_ROOT / "workloads" / "teastore" / "aws-spoke" / "03-image-deployment.yaml",
-    REPO_ROOT / "workloads" / "teastore" / "aws-spoke" / "04-recommender-deployment.yaml",
-    REPO_ROOT / "workloads" / "teastore" / "aws-spoke" / "05-webui-deployment.yaml",
-    REPO_ROOT / "workloads" / "teastore" / "azure-spoke" / "02-persistence-deployment.yaml",
+    REPO_ROOT / "deploy" / "workloads" / "teastore" / "aws-spoke" / "02-auth-deployment.yaml",
+    REPO_ROOT / "deploy" / "workloads" / "teastore" / "aws-spoke" / "03-image-deployment.yaml",
+    REPO_ROOT / "deploy" / "workloads" / "teastore" / "aws-spoke" / "04-recommender-deployment.yaml",
+    REPO_ROOT / "deploy" / "workloads" / "teastore" / "aws-spoke" / "05-webui-deployment.yaml",
+    REPO_ROOT / "deploy" / "workloads" / "teastore" / "azure-spoke" / "02-persistence-deployment.yaml",
 ]
 
 

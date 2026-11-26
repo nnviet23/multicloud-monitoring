@@ -14,6 +14,7 @@ resources:
   - ../../platform/otel-collector/gateway
   - ../../platform/sealed-secrets
   - ../../policies
+  - ../../slos
 
 # ==============================================================================
 # SEC-05: Secret Management & Sealed Secrets Migration Notice

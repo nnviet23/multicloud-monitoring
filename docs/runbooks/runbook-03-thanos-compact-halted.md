@@ -72,4 +72,4 @@ kubectl --context k3d-hub-k3d get secret thanos-s3-creds -n monitoring -o yaml
 ## After the incident
 1. Kiểm tra lại cờ `thanos_compact_halted == 0`.
 2. Xác minh các khoảng nén 5m và 1h downsampled blocks đã được sinh thành công trong MinIO bucket.
-3. Đảm bảo quy tắc lưu trữ 30d raw / 90d 5m / 365d 1h được thi hành đúng theo [ADR-0007](../adr/ADR-0007-tiered-storage-thanos-loki-tempo.md).
+3. Đảm bảo quy tắc lưu trữ 30d raw / 90d 5m / 365d 1h được thi hành đúng theo [ADR-0007](../architecture/decisions/ADR-0008-why-thanos-loki-tempo.md).

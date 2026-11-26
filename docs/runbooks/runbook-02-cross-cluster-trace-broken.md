@@ -51,7 +51,7 @@ Các vết phân tán (Distributed Traces) xuyên cụm giữa `aws-k3d` và `az
 3. **Kiểm tra cấu hình Javaagent auto-instrumentation:** Xác nhận cờ `-javaagent:/opt/opentelemetry-javaagent.jar` vẫn đang được nạp trong Pods của TeaStore.
 
 ### What NOT to do (known footguns)
-- **KHÔNG** sửa cấu hình exporter tại Spoke sang chế độ `insecure: true` để tránh bypass mTLS qua WAN, vi phạm nguyên tắc Zero-Trust ([ADR-0003](../adr/ADR-0003-zero-trust-pki-mtls.md)).
+- **KHÔNG** sửa cấu hình exporter tại Spoke sang chế độ `insecure: true` để tránh bypass mTLS qua WAN, vi phạm nguyên tắc Zero-Trust ([ADR-0003](../architecture/decisions/ADR-0003-why-mtls-zero-trust-pki.md)).
 - **KHÔNG** gửi vết trực tiếp từ Spoke vào Grafana Tempo mà không qua Hub OTel Gateway, vì sẽ làm mất bước chuẩn hóa Semantic Conventions (OTTL).
 
 ---

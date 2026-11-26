@@ -19,9 +19,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 HUB_KUSTOMIZATION_PATH = REPO_ROOT / "deploy" / "clusters" / "hub" / "kustomization.yaml"
 HUB_ENV_PATH = REPO_ROOT / "deploy" / "clusters" / "hub" / ".env"
-ARGOCD_KUSTOMIZATION_PATH = REPO_ROOT / "deploy" / "argocd" / "kustomization.yaml"
-ARGOCD_APPSET_HUB_PATH = REPO_ROOT / "deploy" / "argocd" / "applicationset-hub.yaml"
-ARGOCD_APPSET_SPOKES_PATH = REPO_ROOT / "deploy" / "argocd" / "applicationset-spokes.yaml"
+ARGOCD_KUSTOMIZATION_PATH = REPO_ROOT / "deploy" / "platform" / "argocd" / "kustomization.yaml"
+ARGOCD_APPSET_HUB_PATH = REPO_ROOT / "deploy" / "bootstrap" / "applicationset-hub.yaml"
+ARGOCD_APPSET_SPOKES_PATH = REPO_ROOT / "deploy" / "bootstrap" / "applicationset-spokes.yaml"
 REGISTER_SPOKES_SCRIPT_PATH = REPO_ROOT / "infra" / "scripts" / "register_argocd_spokes.py"
 CLI_PATH = REPO_ROOT / "infra" / "cli.py"
 

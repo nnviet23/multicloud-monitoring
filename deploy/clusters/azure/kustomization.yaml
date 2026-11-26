@@ -5,7 +5,7 @@ resources:
   # Policies
   - ../../policies
   # Benchmark Workloads
-  - ../../../workloads/teastore/azure-spoke
+  - ../../workloads/teastore/azure-spoke
   # Platform
   - ../../platform/otel-collector/edge
   - ../../platform/sealed-secrets

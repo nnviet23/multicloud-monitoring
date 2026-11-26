@@ -82,17 +82,17 @@ def test_runbooks_overview_redirection_and_cli_command():
 
 
 def test_architecture_md_alignments():
-    arch_path = REPO_ROOT / "docs" / "architecture.md"
+    arch_path = REPO_ROOT / "docs" / "architecture" / "README.md"
     assert arch_path.is_file(), f"Missing {arch_path}"
     content = arch_path.read_text(encoding="utf-8")
 
-    # 1. Title contains 12 Canonical ADRs
-    assert "12 Quyết định Kiến trúc" in content, "architecture.md title should refer to 12 Quyết định Kiến trúc"
+    # 1. Links to unified decisions index
+    assert "decisions/README.md" in content, "docs/architecture/README.md should link to decisions/README.md"
 
-    # 2. No broken ADR references (ADR-0013 .. ADR-0021)
-    for i in range(13, 22):
+    # 2. No broken legacy ADR references (ADR-0014 .. ADR-0021)
+    for i in range(14, 22):
         bad_ref = f"ADR-00{i}" if i < 100 else f"ADR-{i}"
-        assert bad_ref not in content, f"architecture.md contains legacy reference {bad_ref}"
+        assert bad_ref not in content, f"architecture README contains legacy reference {bad_ref}"
 
     # 3. Pinned images alignment with infra/README.md
     assert "0.114.0" in content, "OTel Collector must be 0.114.0"

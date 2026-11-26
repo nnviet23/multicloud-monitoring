@@ -127,11 +127,11 @@ Controlled fault-injection experiments validate observability coverage, SLO burn
 - `deploy/policies/` — Active `NetworkPolicies` (`teastore`, `monitoring`, `storage`) + static Kyverno `ClusterPolicies` (runtime Kyverno controller deferred to Phase 5 Real-Cloud)
 - `deploy/argocd/` — Multi-cluster Argo CD `ApplicationSet`s for Hub & Spokes (paired with `python -m infra.cli register-spokes`)
 - `deploy/clusters/` — Environment overlays for `hub`, `aws`, and `azure`
-- `workloads/` — Benchmark catalog (`teastore/`, `_template/`)
+- `deploy/workloads/` — Benchmark catalog (`teastore/`, `_template/`)
 - `infra/` — `Python Platform CLI` (`infra/cli.py`), Argo CD spoke registration, pinned version matrix (`infra/README.md`)
 - `ai-engine/` — Deep Learning anomaly detection & Tempo Trace RCA ([`ai-engine/README.md`](ai-engine/README.md))
 - `tests/` — Automated verification (`tests/scripts/`, 142 tests) and chaos experiments (`tests/chaos/`)
-- `docs/adr/` — 12 Canonical Architecture Decision Records ([`docs/adr/README.md`](docs/adr/README.md))
+- `docs/architecture/decisions/` — 12 Canonical Architecture Decision Records ([`docs/architecture/decisions/README.md`](docs/architecture/decisions/README.md))
 - `docs/runbooks/` — Modular SRE incident runbooks ([`docs/runbooks/README.md`](docs/runbooks/README.md))
 - `docs/planning/progress.md` — Local implementation progress & milestone log
 

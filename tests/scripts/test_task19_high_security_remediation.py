@@ -60,7 +60,7 @@ def test_otel_edge_kubeletstats_tls_verification():
 
 def test_argocd_vendored_core_install_manifest():
     """Argo CD kustomization must reference local vendored 01-core-install.yaml."""
-    argocd_dir = REPO_ROOT / "deploy" / "argocd"
+    argocd_dir = REPO_ROOT / "deploy" / "platform" / "argocd"
     core_install = argocd_dir / "01-core-install.yaml"
     assert core_install.is_file() and core_install.stat().st_size > 0
 
