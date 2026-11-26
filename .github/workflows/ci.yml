@@ -1,0 +1,60 @@
+name: CI — Platform & Manifest Validation
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python-tests-and-otel:
+    name: Python Tests & OTel Rules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pyyaml
+
+      - name: Run pytest suite
+        run: pytest tests/scripts/ -q
+
+      - name: Validate OpenTelemetry collector rules
+        run: python tests/scripts/validate_otel_rules.py
+
+  kustomize-validation:
+    name: Kustomize Build Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: "v1.31.0"
+
+      - name: Validate all Kustomize targets
+        run: |
+          for target in \
+            deploy/clusters/hub \
+            deploy/clusters/aws \
+            deploy/clusters/azure \
+            deploy/policies \
+            deploy/platform/argocd \
+            deploy/bootstrap \
+            deploy/slos; do
+            echo "Validating $target..."
+            kubectl kustomize "$target" > /dev/null
+          done
