@@ -120,7 +120,6 @@ def test_kustomize_build_policies():
         ["kubectl", "kustomize", str(POLICIES_DIR)],
         capture_output=True,
         text=True,
-        shell=True,
     )
     assert res.returncode == 0, f"kubectl kustomize deploy/policies failed: {res.stderr}"
     assert "teastore-mysql-privilege-escalation-exception" in res.stdout
@@ -132,7 +131,6 @@ def test_kustomize_build_robusta():
         ["kubectl", "kustomize", str(ROBUSTA_DIR)],
         capture_output=True,
         text=True,
-        shell=True,
     )
     assert res.returncode == 0, f"kubectl kustomize deploy/platform/smart-alerting-robusta failed: {res.stderr}"
     assert "robusta-runner-cluster-role" in res.stdout

@@ -23,8 +23,10 @@ help: ## Display this help message
 	@echo "======================================================================"
 	@echo " Multi-Cloud Monitoring Platform (TeaStore Hub-Spoke Observability)"
 	@echo "======================================================================"
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo "======================================================================"
+
+##@ Setup & Infra
 
 .PHONY: env-setup
 env-setup: ## Ensure .env file exists from template
@@ -42,9 +44,6 @@ pull-images: ## Pre-pull all version-pinned container images on host
 preload-images: ## Import pre-pulled images into all 3 k3d clusters
 	$(PYTHON) -m infra.cli preload-images
 
-.PHONY: import-images
-import-images: preload-images ## Alias to preload-images
-
 .PHONY: pki-generate
 pki-generate: ## Generate Root CA and mTLS 1.3 certificates for Hub & Spokes
 	@echo "--> Generating PKI mTLS Certificates..."
@@ -57,14 +56,11 @@ setup: env-setup pull-images ## Run complete prerequisites setup (env + pull ima
 .PHONY: infra
 infra: ## Provision all 3 k3d clusters and configure infrastructure
 	@echo "--> Provisioning infrastructure via Python Platform CLI..."
-	python -m infra.cli up && python -m infra.cli sync-hosts && python -m infra.cli wan && python -m infra.cli certs
+	$(PYTHON) -m infra.cli up && $(PYTHON) -m infra.cli sync-hosts && $(PYTHON) -m infra.cli wan && $(PYTHON) -m infra.cli certs
 	@echo "Importing container images into freshly provisioned clusters..."
 	@$(MAKE) preload-images
 
-.PHONY: sync-secrets
-sync-secrets:
-	@echo "==> Re-applying Hub secrets from kustomization..."
-	kubectl --context $(HUB_CTX) apply -k deploy/clusters/hub
+##@ Deploy & GitOps
 
 .PHONY: deploy-hub
 deploy-hub: env-setup ## Deploy complete Hub Observability Stack via Kustomize Overlay
@@ -78,10 +74,16 @@ deploy-spokes: ## Deploy TeaStore Workloads and Edge OTel Collectors on Spokes
 	@echo "--> Deploying Data Spoke on $(AZURE_CTX)..."
 	kubectl --context $(AZURE_CTX) apply -k deploy/clusters/azure
 
+.PHONY: register-spokes
+register-spokes: ## Register Spoke clusters in Hub Argo CD
+	@echo "--> Registering Spoke clusters in Hub Argo CD..."
+	$(PYTHON) -m infra.cli register-spokes
+
 .PHONY: deploy-argocd
 deploy-argocd: ## Deploy Argo CD multi-cluster ApplicationSets on Hub
 	@echo "--> Deploying Argo CD Engine and Bootstrap ApplicationSets on $(HUB_CTX)..."
 	kubectl --context $(HUB_CTX) apply -k deploy/platform/argocd && kubectl --context $(HUB_CTX) apply -k deploy/bootstrap
+	@$(MAKE) register-spokes
 
 .PHONY: deploy-local
 deploy-local: env-setup deploy-hub deploy-spokes ## Deploy complete system locally via kubectl/kustomize without Argo CD (direct reconcile)
@@ -102,6 +104,12 @@ deploy-gitops: env-setup deploy-argocd ## Deploy complete system via Argo CD Git
 
 .PHONY: deploy
 deploy: deploy-local ## Alias to deploy-local (default direct deployment)
+
+##@ Verify & Operate
+
+.PHONY: status
+status: ## Show live cluster, pod, and WAN status via Platform CLI
+	$(PYTHON) -m infra.cli status
 
 .PHONY: verify
 verify: ## Run comprehensive health verification across all clusters
@@ -124,6 +132,14 @@ verify: ## Run comprehensive health verification across all clusters
 	@echo "=== [3/3] Verifying Simulated WAN Network (tc netem) ==="
 	@docker exec k3d-aws-k3d-server-0 ping -c 3 k3d-azure-k3d-server-0 || true
 
+##@ Cleanup
+
+.PHONY: clean
+clean: ## Remove local Python caches and temporary build artifacts
+	@echo "--> Cleaning local caches and temporary files..."
+	@find . -type d \( -name "__pycache__" -o -name ".pytest_cache" -o -name ".ruff_cache" \) -exec rm -rf {} + 2>/dev/null || true
+	@rm -rf .coverage htmlcov dist build *.egg-info
+
 .PHONY: clean-images
 clean-images: ## Remove all project container images and prune dangling images
 	@echo "--> Cleaning up project container images..."
@@ -143,6 +159,8 @@ reset-wan: ## Reapply WAN emulation parameters
 	@echo "--> Resetting WAN netem configuration..."
 	$(PYTHON) -m infra.cli wan
 
+##@ Test & Lint
+
 .PHONY: test-scripts
 test-scripts: ## Run all platform verification and hardening test scripts
 	@echo "--> Running platform scripts test suite..."
@@ -156,8 +174,7 @@ test-ai: ## Run AI Anomaly Detection Engine V3 live evaluation tests
 .PHONY: validate-dashboards
 validate-dashboards: ## Validate JSON syntax of all Grafana Dashboards
 	@echo "--> Validating all Grafana Dashboards JSON syntax..."
-	@python3 -c 'import glob, json; [json.load(open(f)) for f in glob.glob("deploy/platform/visualization-grafana/dashboards/*.json")]; print("All Grafana Dashboards are 100% valid JSON!")' 2>/dev/null || \
-	 python -c 'import glob, json; [json.load(open(f)) for f in glob.glob("deploy/platform/visualization-grafana/dashboards/*.json")]; print("All Grafana Dashboards are 100% valid JSON!")'
+	@$(PYTHON) -c 'import glob, json; [json.load(open(f)) for f in glob.glob("deploy/platform/visualization-grafana/dashboards/*.json")]; print("All Grafana Dashboards are 100% valid JSON!")'
 
 .PHONY: validate-kustomize
 validate-kustomize: ## Dry-run Kustomize build across Hub and Spokes
@@ -184,6 +201,14 @@ deploy-policies: ## Deploy Kyverno ClusterPolicies across all clusters
 	kubectl --context $(AZURE_CTX) apply -k deploy/policies || true
 	@echo "Kyverno admission policies deployed successfully."
 
+.PHONY: fmt
+fmt: ## Format Python code with ruff if installed
+	@if $(PYTHON) -m ruff --version >/dev/null 2>&1; then \
+		$(PYTHON) -m ruff format infra/ aiops/ tests/; \
+	else \
+		echo "ruff not installed; skipping Python formatting."; \
+	fi
+
 .PHONY: lint
 lint: validate-dashboards validate-kustomize validate-policies ## Run complete static code & manifest linting
 	@echo "All static linters and manifest validations PASSED!"
@@ -207,35 +232,18 @@ ui: ## Port-forward essential web UIs (Grafana :3000, Thanos :9090, Pyrra :9099,
 	kubectl --context $(HUB_CTX) -n storage port-forward svc/minio-ui 9001:9001 >/dev/null & \
 	wait
 
-.PHONY: diagrams
-diagrams: ## Generate K8s architecture diagrams for all 3 clusters via KubeDiagrams
-	@echo "--> Rendering Kubernetes architecture diagrams via KubeDiagrams..."
-	@mkdir -p docs/diagrams/generated
-	@KUBE_DIAG=$$( [ -x "$$HOME/.local/bin/kube-diagrams" ] && echo "$$HOME/.local/bin/kube-diagrams" || command -v kube-diagrams 2>/dev/null ); \
-	if [ -n "$$KUBE_DIAG" ] && [ -x "$$KUBE_DIAG" ]; then \
-		kubectl kustomize deploy/clusters/hub   | $$KUBE_DIAG -o docs/diagrams/generated/hub-k8s.png -; \
-		kubectl kustomize deploy/clusters/aws   | $$KUBE_DIAG -o docs/diagrams/generated/aws-k8s.png -; \
-		kubectl kustomize deploy/clusters/azure | $$KUBE_DIAG -o docs/diagrams/generated/azure-k8s.png -; \
-	elif command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-		kubectl kustomize deploy/clusters/hub   | docker run --rm -i -v "$$(pwd)/docs/diagrams/generated:/out" philippemerle/kubediagrams -o /out/hub-k8s.png -; \
-		kubectl kustomize deploy/clusters/aws   | docker run --rm -i -v "$$(pwd)/docs/diagrams/generated:/out" philippemerle/kubediagrams -o /out/aws-k8s.png -; \
-		kubectl kustomize deploy/clusters/azure | docker run --rm -i -v "$$(pwd)/docs/diagrams/generated:/out" philippemerle/kubediagrams -o /out/azure-k8s.png -; \
-	else \
-		echo "[INFO] Exporting unified K8s YAML manifests for diagram validation..."; \
-		kubectl kustomize deploy/clusters/hub   > docs/diagrams/generated/hub-k8s.yaml; \
-		kubectl kustomize deploy/clusters/aws   > docs/diagrams/generated/aws-k8s.yaml; \
-		kubectl kustomize deploy/clusters/azure > docs/diagrams/generated/azure-k8s.yaml; \
-	fi
-	@echo "Kubernetes diagrams process completed in docs/diagrams/generated/"
-
 .PHONY: validate-otel
 validate-otel: ## Validate OTel Collector architectural rules and export OTelBin YAMLs
 	@echo "--> Validating OpenTelemetry Collector pipelines & architecture..."
-	@python3 tests/scripts/validate_otel_rules.py 2>/dev/null || python tests/scripts/validate_otel_rules.py
+	@$(PYTHON) tests/scripts/validate_otel_rules.py
 
 .PHONY: test
-test: test-scripts test-ai validate-dashboards validate-kustomize validate-policies validate-otel ## Run all automated system tests (Scripts, AI, Dashboards, Manifests, Policies, OTel)
-	@echo "All automated system verification tests PASSED!"
+test: test-scripts validate-dashboards validate-kustomize validate-policies validate-otel ## Run all offline automated tests (Scripts, Dashboards, Manifests, Policies, OTel)
+	@echo "All offline automated system verification tests PASSED!"
+
+.PHONY: e2e
+e2e: verify test-wan test-ai ## Run live cluster smoke tests (verify, WAN RTT, AI Anomaly Engine)
+	@echo "All live cluster E2E smoke tests PASSED!"
 
 
 
