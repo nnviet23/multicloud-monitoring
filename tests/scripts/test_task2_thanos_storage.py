@@ -173,7 +173,6 @@ def test_kustomize_build_metrics_thanos():
         ["kubectl", "kustomize", str(METRICS_THANOS_DIR)],
         capture_output=True,
         text=True,
-        shell=True,
     )
     assert res.returncode == 0, f"kubectl kustomize failed: {res.stderr}"
     assert "thanos-store" in res.stdout
@@ -186,7 +185,6 @@ def test_kustomize_build_hub_cluster():
         ["kubectl", "kustomize", str(HUB_CLUSTER_DIR)],
         capture_output=True,
         text=True,
-        shell=True,
     )
     assert res.returncode == 0, f"kubectl kustomize hub failed: {res.stderr}"
     assert "thanos-store" in res.stdout
