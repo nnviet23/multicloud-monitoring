@@ -135,13 +135,13 @@ make teardown
 
 ### Service Endpoints
 
-| Service | URL | Credentials | Purpose |
-|---|---|---|---|
-| **TeaStore WebUI** | `http://localhost:8080/tools.descartes.teastore.webui/` | Anonymous | Benchmark e-commerce storefront |
-| **Grafana** | `http://localhost:3000` | `admin` / see `.env` (`CHANGE_ME_GRAFANA_ADMIN_PASSWORD`) | 10 standardized SRE & AIOps dashboards |
-| **MinIO Console** | `http://localhost:9001` | `admin` / see `.env` (`CHANGE_ME_MINIO_PASSWORD`) | S3 buckets (`thanos-metrics`, `loki-data`, `tempo-traces`, `raw-telemetry`) |
-| **Thanos Query** | `http://localhost:9090` | None | Cross-cluster PromQL query UI |
-| **Pyrra SLO UI** | `http://localhost:9099` | None | Availability (99.5%) & Latency (95%) SLO error budgets |
+| Service | URL | Credentials |
+|---|---|---|
+| **TeaStore WebUI** | `http://localhost:8080/tools.descartes.teastore.webui/` | Anonymous |
+| **Grafana** | `http://localhost:3000` | `admin` / see `.env` (`CHANGE_ME_GRAFANA_ADMIN_PASSWORD`) |
+| **MinIO Console** | `http://localhost:9001` | `admin` / see `.env` (`CHANGE_ME_MINIO_PASSWORD`) |
+| **Thanos Query** | `http://localhost:9090` | None |
+| **Pyrra SLO UI** | `http://localhost:9099` | None |
 
 ---
 
@@ -172,20 +172,27 @@ Controlled fault-injection experiments validate observability coverage, SLO burn
 
 ## Project Structure
 
-- `deploy/platform/` — Core Hub & Spoke observability, PKI (`cert-manager`), and Argo CD manifests
-- `deploy/bootstrap/` — Root Argo CD `ApplicationSet`s for multi-cluster GitOps bootstrap
-- `deploy/clusters/` — Environment overlays for `hub`, `aws`, and `azure`
-- `deploy/slos/` — Pyrra SLO-as-code definitions
-- `deploy/workloads/` — Benchmark catalog (`teastore/`, `_template/`)
-- `deploy/policies/` — Active `NetworkPolicies` (`teastore`, `monitoring`, `storage`) + static Kyverno `ClusterPolicies`
-- `docs/architecture/concepts/` — Architecture concepts & system design notes
-- `docs/architecture/cheatsheets/` — Operational & tooling cheatsheets
-- `docs/architecture/decisions/` — 12 Canonical Architecture Decision Records ([`docs/architecture/decisions/README.md`](docs/architecture/decisions/README.md))
-- `infra/` — `Python Platform CLI` (`infra/cli.py`), Argo CD spoke registration, pinned version matrix (`infra/README.md`)
-- `aiops/` — Deep Learning anomaly detection & Tempo Trace RCA
-- `tests/` — Automated verification (`tests/scripts/`) and chaos experiments (`tests/chaos/`)
-- `.github/workflows/` — CI/CD validation and automation workflows
-- `docs/planning/progress.md` — Local implementation progress & milestone log
+```text
+multicloud-monitoring/
+├── .github/workflows/          # CI validation & OpenSSF Scorecard
+├── aiops/                      # Deep Learning anomaly detection & Tempo Trace RCA
+├── deploy/
+│   ├── bootstrap/              # Root Argo CD App & ApplicationSets
+│   ├── clusters/               # Cluster overlays (hub, aws, azure)
+│   ├── platform/               # Core observability, PKI, and Argo CD manifests
+│   ├── policies/               # NetworkPolicies & Kyverno ClusterPolicies
+│   ├── slos/                   # Pyrra SLO-as-code definitions
+│   └── workloads/              # TeaStore benchmark & loadgen
+├── docs/
+│   ├── architecture/
+│   │   ├── cheatsheets/        # Operational & tooling cheatsheets
+│   │   ├── concepts/           # Platform engineering concepts (01-14)
+│   │   └── decisions/          # Canonical ADRs (ADR-0001..ADR-0013)
+│   ├── planning/               # Task & milestone tracking
+│   └── runbooks/               # Incident response runbooks
+├── infra/                      # Python Platform CLI (infra/cli.py) & version matrix
+└── tests/                      # Automated verification & chaos experiments
+```
 
 ---
 
