@@ -68,6 +68,12 @@
 - [ ] Measure observability metrics: Coverage, Accuracy, End-to-End Latency, Encryption Overhead, and Bandwidth Savings.
 - [ ] Publish scientific benchmark analysis, trade-off matrix, and final graduation thesis report.
 
+### Phase 4.5 — LLM AIOps Copilot (Proposed, see `docs/decisions/ADR-002-llm-aiops-copilot.md`)
+- [ ] M1: Runbooks per fault class, hybrid retriever, 40-question golden set, retrieval metrics.
+- [ ] M2: Evidence pack + SFT dataset builder from `experiments/raw` (split by campaign), baselines (template, zero-shot, few-shot, RAG).
+- [ ] M3: QLoRA adapters (off-host GPU) and ablation on held-out campaigns.
+- [ ] M4: Alert integration with validator + fallback, OTel GenAI metrics, evaluation report.
+
 ### Phase 5 — Real cloud design (after local validation)
 - [ ] Select providers and regions based on explicit criteria.
 - [ ] Estimate compute, network egress/ingress, storage, control-plane, IAM, and managed-service costs.

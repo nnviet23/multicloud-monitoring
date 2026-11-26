@@ -162,6 +162,7 @@ Thumbs.db
 
 # Scratch / Local notes & MCP memory graph
 test.md
+docs/notes/
 docs/architecture/memory-graph.json
 **/memory-graph.json
 
