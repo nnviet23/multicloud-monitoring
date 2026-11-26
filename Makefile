@@ -80,8 +80,8 @@ deploy-spokes: ## Deploy TeaStore Workloads and Edge OTel Collectors on Spokes
 
 .PHONY: deploy-argocd
 deploy-argocd: ## Deploy Argo CD multi-cluster ApplicationSets on Hub
-	@echo "--> Deploying Argo CD ApplicationSets on $(HUB_CTX)..."
-	kubectl --context $(HUB_CTX) apply -k deploy/argocd
+	@echo "--> Deploying Argo CD Engine and Bootstrap ApplicationSets on $(HUB_CTX)..."
+	kubectl --context $(HUB_CTX) apply -k deploy/platform/argocd && kubectl --context $(HUB_CTX) apply -k deploy/bootstrap
 
 .PHONY: deploy-local
 deploy-local: env-setup deploy-hub deploy-spokes ## Deploy complete system locally via kubectl/kustomize without Argo CD (direct reconcile)
@@ -165,7 +165,9 @@ validate-kustomize: ## Dry-run Kustomize build across Hub and Spokes
 	@kubectl kustomize deploy/clusters/hub > /dev/null
 	@kubectl kustomize deploy/clusters/aws > /dev/null
 	@kubectl kustomize deploy/clusters/azure > /dev/null
-	@kubectl kustomize deploy/argocd > /dev/null
+	@kubectl kustomize deploy/platform/argocd > /dev/null
+	@kubectl kustomize deploy/bootstrap > /dev/null
+	@kubectl kustomize deploy/slos > /dev/null
 	@echo "All Kustomize manifests build successfully!"
 
 .PHONY: validate-policies

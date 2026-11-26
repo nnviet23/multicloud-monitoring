@@ -117,7 +117,7 @@ def test_hub_workloads_and_teastore_security_context():
             dropped = [cap.upper() for cap in sc.get("capabilities", {}).get("drop", [])]
             assert "ALL" in dropped, f"{path.name}:{c['name']} missing capabilities.drop: [ALL]"
 
-    webui = yaml.safe_load((REPO_ROOT / "workloads" / "teastore" / "aws-spoke" / "05-webui-deployment.yaml").read_text(encoding="utf-8"))
+    webui = yaml.safe_load((REPO_ROOT / "deploy" / "workloads" / "teastore" / "aws-spoke" / "05-webui-deployment.yaml").read_text(encoding="utf-8"))
     webui_c = webui["spec"]["template"]["spec"]["containers"][0]
     webui_sc = webui_c.get("securityContext", {})
     assert webui_sc.get("allowPrivilegeEscalation") is False

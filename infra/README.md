@@ -49,7 +49,7 @@
 2. **Quy Trình Nâng Cấp Phiên Bản (Upgrade Workflow):**
    - Khi cần nâng cấp bất kỳ thành phần nào (ví dụ OTel Collector từ `0.96.0` lên `0.98.0`), bắt buộc phải:
      1. Cập nhật bảng kê trong tệp này (`infra/README.md`).
-     2. Ghi rõ lý do nâng cấp và tác động tương thích vào hồ sơ quyết định kiến trúc (`docs/adr/`).
+     2. Ghi rõ lý do nâng cấp và tác động tương thích vào hồ sơ quyết định kiến trúc (`docs/architecture/decisions/`).
      3. Kiểm tra tính tương thích của API và Schema OTel Semantic Conventions trước khi triển khai thực tế.
 3. **Mã Nguồn Mở & Khả Năng Tái Lập (Reproducibility):**
    - Mọi thực nghiệm benchmark đều lưu kèm mã hash digest của từng Docker image để đảm bảo kết quả đo đạc khoa học có thể tái hiện chính xác 100% trong tương lai.

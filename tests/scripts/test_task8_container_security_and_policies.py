@@ -17,7 +17,7 @@ OTEL_GATEWAY_PATH = REPO_ROOT / "deploy" / "platform" / "otel-collector" / "gate
 OTEL_EDGE_PATH = REPO_ROOT / "deploy" / "platform" / "otel-collector" / "edge" / "03-deployment.yaml"
 ROBUSTA_PATH = REPO_ROOT / "deploy" / "platform" / "smart-alerting-robusta" / "03-runner-deployment.yaml"
 MINIO_PATH = REPO_ROOT / "deploy" / "platform" / "storage-minio" / "04-statefulset.yaml"
-MYSQL_PATH = REPO_ROOT / "workloads" / "teastore" / "azure-spoke" / "01-mysql-statefulset.yaml"
+MYSQL_PATH = REPO_ROOT / "deploy" / "workloads" / "teastore" / "azure-spoke" / "01-mysql-statefulset.yaml"
 
 AWS_KUSTOMIZATION_PATH = REPO_ROOT / "deploy" / "clusters" / "aws" / "kustomization.yaml"
 AZURE_KUSTOMIZATION_PATH = REPO_ROOT / "deploy" / "clusters" / "azure" / "kustomization.yaml"

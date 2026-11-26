@@ -133,7 +133,7 @@ class TestTask14TelemetryAndSloFixes(unittest.TestCase):
         for verb in ("get", "list", "watch", "create", "update", "patch", "delete"):
             self.assertIn(verb, cm_rules[0].get("verbs", []))
 
-        slo_path = REPO_ROOT / "deploy" / "platform" / "slo-pyrra" / "04-slos-teastore.yaml"
+        slo_path = REPO_ROOT / "deploy" / "slos" / "teastore-slos.yaml"
         with open(slo_path, "r", encoding="utf-8") as f:
             slos = [doc for doc in yaml.safe_load_all(f) if doc]
 

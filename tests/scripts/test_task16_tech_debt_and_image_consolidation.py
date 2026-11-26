@@ -61,7 +61,7 @@ def test_makefile_preload_images_uses_infra_cli():
 
 
 def test_argocd_kustomization_pinned_to_v2_12_3():
-    kustomization = (REPO_ROOT / "deploy" / "argocd" / "kustomization.yaml").read_text(encoding="utf-8")
+    kustomization = (REPO_ROOT / "deploy" / "platform" / "argocd" / "kustomization.yaml").read_text(encoding="utf-8")
     assert "01-core-install.yaml" in kustomization
     assert "v2.10.9" not in kustomization
 
@@ -71,7 +71,7 @@ def test_infra_readme_cleaned():
     assert "Ansible Core" not in infra_readme
     assert "2.15.8" not in infra_readme
     assert "docs/decisions/" not in infra_readme
-    assert "docs/adr/" in infra_readme
+    assert "docs/architecture/decisions/" in infra_readme
     assert "experiments/" not in infra_readme
     assert "mysql:8.0.36" not in infra_readme
     assert "descartesresearch/teastore-db:1.4.1" in infra_readme

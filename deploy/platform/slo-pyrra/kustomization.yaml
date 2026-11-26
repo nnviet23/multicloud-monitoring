@@ -6,5 +6,4 @@ resources:
   - 01-rbac.yaml
   - 02-deployment.yaml
   - 03-service.yaml
-  - 04-slos-teastore.yaml
 
