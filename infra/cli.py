@@ -88,7 +88,7 @@ PINNED_IMAGES = {
     ],
     "hub-k3d": [
         "otel/opentelemetry-collector-contrib:0.114.0",
-        "cgr.dev/chainguard/minio:latest",
+        "cgr.dev/chainguard/minio@sha256:37919418497f2f8ac6ef5c18760fcd01d1c8f2d17d36723fae0cb2fae67d8093",
         "prom/prometheus:v2.50.0",
         "prom/alertmanager:v0.27.0",
         "quay.io/thanos/thanos:v0.36.1",

@@ -8,7 +8,7 @@
 ![k3s](https://img.shields.io/badge/k3s-v1.31.2-blue)
 ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-v0.114.0-blueviolet)
 ![Grafana](https://img.shields.io/badge/Grafana-11.5.0-orange)
-![GitOps](https://img.shields.io/badge/Argo%20CD-v2.12.3-success)
+![GitOps](https://img.shields.io/badge/Argo%20CD-v3.6.2-success)
 
 </div>
 
@@ -55,7 +55,7 @@ All container images and tools are strictly pinned (no `:latest` tags); full det
 |---|---|---|---|
 | **Clusters** | `k3s` / `k3d` | `v1.31.2+k3s1` / `v5.6.0` | Local 3-cluster Hub-Spoke simulation (`hub-k3d`, `aws-k3d`, `azure-k3d`) |
 | **Automation** | Python Platform CLI (`infra.cli`) / Kustomize | `3.12+` / `v5.3.0` | Declarative lifecycle, WAN emulation, and in-memory cert sync |
-| **GitOps & PKI** | Argo CD / `cert-manager` / SealedSecrets | `v2.12.3` / `v1.16.2` / `v0.24.5` | Multi-cluster GitOps delivery and zero-host-key mTLS 1.3 PKI |
+| **GitOps & PKI** | Argo CD / `cert-manager` / SealedSecrets | `v3.6.2` / `v1.16.2` / `v0.24.5` | Multi-cluster GitOps delivery and zero-host-key mTLS 1.3 PKI |
 | **Telemetry** | OTel Collector Contrib / Java Agent | `0.114.0` / `2.10.0` | Edge tail-sampling, OTTL SemConv v1.45.0 normalization, Service Graph |
 | **Backends** | Prometheus / Thanos / Loki / Tempo / MinIO | `v2.50.0` / `v0.36.1` / `2.9.4` / `2.4.0` | Tiered metrics, logs, traces, and immutable raw S3 storage |
 | **Visualization & SLO** | Grafana / Pyrra / Alertmanager / Robusta | `11.5.0` / `v0.7.3` / `v0.27.0` / `0.53.0` | Upstream dashboards, Multi-Burn-Rate SLOs, and Telegram alerting |
@@ -175,7 +175,7 @@ Controlled fault-injection experiments validate observability coverage, SLO burn
 ```text
 multicloud-monitoring/
 ├── .github/workflows/          # CI validation & OpenSSF Scorecard
-├── aiops/                      # Deep Learning anomaly detection & Tempo Trace RCA
+├── ai-engine/                      # Deep Learning anomaly detection & Tempo Trace RCA
 ├── deploy/
 │   ├── bootstrap/              # Root Argo CD App & ApplicationSets
 │   ├── clusters/               # Cluster overlays (hub, aws, azure)
