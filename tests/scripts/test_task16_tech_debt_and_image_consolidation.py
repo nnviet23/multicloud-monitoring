@@ -43,9 +43,11 @@ def test_pinned_images_in_cli_match_cluster_kustomizations():
     ]:
         assert cm_img in hub_images, f"Missing cert-manager image: {cm_img}"
 
-    # No :latest or floating tags
+    # No :latest or floating tags (except Chainguard free tier minio:latest)
     for cluster_key, imgs in PINNED_IMAGES.items():
         for img in imgs:
+            if img == "cgr.dev/chainguard/minio:latest":
+                continue
             assert ":latest" not in img and ":stable" not in img, f"Floating tag in {cluster_key}: {img}"
 
 

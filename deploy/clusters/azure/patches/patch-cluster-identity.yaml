@@ -10,7 +10,7 @@ spec:
         - name: otel-collector
           args:
             - --config=/etc/otelcol/config.yaml
-            - --config=/etc/otelcol/mysql.yaml
+            - --config=/etc/otelcol-mysql/mysql.yaml
           env:
             - name: CLUSTER_NAME
               value: "azure-k3d"
@@ -28,8 +28,7 @@ spec:
                   optional: false
           volumeMounts:
             - name: mysql-config
-              mountPath: /etc/otelcol/mysql.yaml
-              subPath: mysql.yaml
+              mountPath: /etc/otelcol-mysql
               readOnly: true
       volumes:
         - name: certs

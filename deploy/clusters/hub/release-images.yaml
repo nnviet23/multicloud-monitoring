@@ -3,8 +3,8 @@
 # Tệp này do CI/CD Bot hoặc PR Promote cập nhật digest (@sha256).
 images:
   - name: minio/minio
-    newName: minio/minio
-    newTag: "RELEASE.2025-10-15T17-29-55Z"
+    newName: cgr.dev/chainguard/minio
+    newTag: "latest"
   - name: quay.io/thanos/thanos
     newName: quay.io/thanos/thanos
     newTag: "v0.36.1"

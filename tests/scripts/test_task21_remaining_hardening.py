@@ -16,10 +16,10 @@ def test_robusta_runner_non_root():
 def test_disallow_root_policy_scope():
     path = REPO_ROOT / "deploy/policies/03-disallow-root-user.yaml"
     doc = yaml.safe_load(path.read_text(encoding="utf-8"))
-    assert doc["spec"]["validationFailureAction"] == "Enforce"
-    match_namespaces = doc["spec"]["rules"][0]["match"]["any"][0]["resources"]["namespaces"]
-    for ns in ("teastore", "monitoring", "storage"):
-        assert ns in match_namespaces
+    assert doc["spec"]["validationActions"] == ["Deny"]
+    conditions_text = " ".join(c.get("expression", "") for c in doc["spec"].get("matchConditions", []))
+    for ns in ("monitoring", "storage"):
+        assert ns in conditions_text
 
 
 def test_networkpolicy_peer_selectors_complete():

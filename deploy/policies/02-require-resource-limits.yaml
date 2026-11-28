@@ -1,5 +1,5 @@
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
 metadata:
   name: require-resource-limits
   annotations:
@@ -10,27 +10,23 @@ metadata:
       Bắt buộc mọi container trong các namespace trọng yếu phải cấu hình đầy đủ
       requests (CPU & RAM) và limits (RAM) nhằm bảo vệ ngân sách 8-10 GB RAM của máy trạm.
 spec:
-  validationFailureAction: Enforce
-  background: true
-  rules:
-    - name: validate-resources
-      match:
-        any:
-          - resources:
-              kinds:
-                - Pod
-              namespaces:
-                - teastore
-                - monitoring
-                - storage
-      validate:
-        message: "Mọi container phải khai báo resources.requests (cpu, memory) và resources.limits (memory) để tránh OOMKilled Node."
-        pattern:
-          spec:
-            containers:
-              - resources:
-                  requests:
-                    cpu: "?*"
-                    memory: "?*"
-                  limits:
-                    memory: "?*"
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+  matchConditions:
+    - name: "target-namespaces"
+      expression: "object.metadata.namespace in ['teastore', 'monitoring', 'storage']"
+  validations:
+    - expression: >-
+        object.spec.containers.all(c,
+          has(c.resources) &&
+          has(c.resources.requests) &&
+          has(c.resources.requests.cpu) &&
+          has(c.resources.requests.memory) &&
+          has(c.resources.limits) &&
+          has(c.resources.limits.memory)
+        )
+      message: "Mọi container phải khai báo resources.requests (cpu, memory) và resources.limits (memory) để tránh OOMKilled Node."

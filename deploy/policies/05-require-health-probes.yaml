@@ -1,5 +1,5 @@
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
 metadata:
   name: require-health-probes
   annotations:
@@ -10,21 +10,19 @@ metadata:
       Bắt buộc các microservices phải cấu hình readinessProbe và livenessProbe
       để đảm bảo lưu lượng chỉ gửi tới Pod khỏe mạnh.
 spec:
-  validationFailureAction: Enforce
-  background: true
-  rules:
-    - name: check-probes
-      match:
-        any:
-          - resources:
-              kinds:
-                - Pod
-              namespaces:
-                - teastore
-      validate:
-        message: "Mọi Pod trong namespace teastore bắt buộc phải có readinessProbe và livenessProbe."
-        pattern:
-          spec:
-            containers:
-              - readinessProbe: {}
-                livenessProbe: {}
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+  matchConditions:
+    - name: "target-namespaces"
+      expression: "object.metadata.namespace == 'teastore'"
+  validations:
+    - expression: >-
+        object.spec.containers.all(c,
+          has(c.readinessProbe) &&
+          has(c.livenessProbe)
+        )
+      message: "Mọi Pod trong namespace teastore bắt buộc phải có readinessProbe và livenessProbe."

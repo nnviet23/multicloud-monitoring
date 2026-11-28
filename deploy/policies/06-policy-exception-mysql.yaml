@@ -1,19 +1,12 @@
-apiVersion: kyverno.io/v2beta1
+apiVersion: policies.kyverno.io/v1
 kind: PolicyException
 metadata:
   name: teastore-mysql-privilege-escalation-exception
   namespace: teastore
 spec:
-  exceptions:
-    - policyName: disallow-privilege-escalation
-      ruleNames:
-        - check-privilege-escalation
-  match:
-    any:
-      - resources:
-          kinds:
-            - Pod
-          names:
-            - teastore-db*
-          namespaces:
-            - teastore
+  policyRefs:
+    - name: disallow-privilege-escalation
+      kind: ValidatingPolicy
+  matchConditions:
+    - name: "teastore-db-pod"
+      expression: "object.metadata.namespace == 'teastore' && object.metadata.name.startsWith('teastore-db')"

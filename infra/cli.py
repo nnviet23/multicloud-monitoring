@@ -46,6 +46,7 @@ CLUSTER_CONFIGS = {
     "aws-k3d": {
         "ports": [
             "8080:8080@loadbalancer",
+            "30080:30080@server:0",
             "8089:8089@loadbalancer",
             "31112:31112@loadbalancer",
         ]
@@ -67,6 +68,11 @@ PINNED_IMAGES = {
         "ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java:2.10.0",
         "otel/opentelemetry-collector-contrib:0.114.0",
         "bitnami/sealed-secrets-controller:v0.24.5",
+        "ghcr.io/kyverno/kyverno:v1.20.0",
+        "ghcr.io/kyverno/kyvernopre:v1.20.0",
+        "ghcr.io/kyverno/background-controller:v1.20.0",
+        "ghcr.io/kyverno/cleanup-controller:v1.20.0",
+        "ghcr.io/kyverno/reports-controller:v1.20.0",
     ],
     "azure-k3d": [
         "descartesresearch/teastore-persistence:1.4.1",
@@ -74,10 +80,15 @@ PINNED_IMAGES = {
         "ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java:2.10.0",
         "otel/opentelemetry-collector-contrib:0.114.0",
         "bitnami/sealed-secrets-controller:v0.24.5",
+        "ghcr.io/kyverno/kyverno:v1.20.0",
+        "ghcr.io/kyverno/kyvernopre:v1.20.0",
+        "ghcr.io/kyverno/background-controller:v1.20.0",
+        "ghcr.io/kyverno/cleanup-controller:v1.20.0",
+        "ghcr.io/kyverno/reports-controller:v1.20.0",
     ],
     "hub-k3d": [
         "otel/opentelemetry-collector-contrib:0.114.0",
-        "minio/minio:RELEASE.2025-10-15T17-29-55Z",
+        "cgr.dev/chainguard/minio:latest",
         "prom/prometheus:v2.50.0",
         "prom/alertmanager:v0.27.0",
         "quay.io/thanos/thanos:v0.36.1",
@@ -91,6 +102,15 @@ PINNED_IMAGES = {
         "quay.io/jetstack/cert-manager-controller:v1.16.2",
         "quay.io/jetstack/cert-manager-webhook:v1.16.2",
         "quay.io/jetstack/cert-manager-cainjector:v1.16.2",
+        "quay.io/argoproj/argocd:v3.6.2",
+        "quay.io/argoproj/workflow-controller:v4.1.6",
+        "quay.io/argoproj/argocli:v4.1.6",
+        "redis:7.2.7-alpine",
+        "ghcr.io/kyverno/kyverno:v1.20.0",
+        "ghcr.io/kyverno/kyvernopre:v1.20.0",
+        "ghcr.io/kyverno/background-controller:v1.20.0",
+        "ghcr.io/kyverno/cleanup-controller:v1.20.0",
+        "ghcr.io/kyverno/reports-controller:v1.20.0",
     ],
 }
 

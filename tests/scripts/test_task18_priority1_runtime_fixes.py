@@ -58,7 +58,7 @@ def test_prometheus_has_pyrra_rules_sidecar():
     assert sidecar["securityContext"]["allowPrivilegeEscalation"] is False
     assert sidecar["securityContext"]["capabilities"]["drop"] == ["ALL"]
     assert sidecar["resources"]["requests"] == {"cpu": "20m", "memory": "32Mi"}
-    assert sidecar["resources"]["limits"] == {"memory": "64Mi"}
+    assert sidecar["resources"]["limits"] == {"memory": "256Mi"}
 
     env = {e["name"]: e["value"] for e in sidecar["env"]}
     assert env["LABEL"] == "pyrra.dev/rule"

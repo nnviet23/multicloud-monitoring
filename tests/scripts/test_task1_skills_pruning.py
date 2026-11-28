@@ -12,6 +12,8 @@ EXPECTED_SKILLS = {
     "observability-platform",
     "aiops-anomaly-engine",
     "benchmark-and-chaos",
+    "grafana",
+    "platform-engineering",
 }
 
 @pytest.mark.skipif(not os.path.isdir(".agents/skills"), reason=".agents/ is gitignored")

@@ -20,8 +20,6 @@ spec:
         tier: compute
     spec:
       securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
       initContainers:
         - name: opentelemetry-auto-instrumentation
           image: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java:2.10.0
@@ -51,8 +49,6 @@ spec:
             - containerPort: 8080
               name: http
           securityContext:
-            runAsNonRoot: true
-            runAsUser: 1000
             allowPrivilegeEscalation: false
             privileged: false
             capabilities:
@@ -64,9 +60,9 @@ spec:
             - name: SERVICE_PORT
               value: "31111"
             - name: REGISTRY_HOST
-              value: "k3d-aws-k3d-serverlb"
+              value: "k3d-aws-k3d-server-0"
             - name: REGISTRY_PORT
-              value: "31112"
+              value: "30080"
             - name: USE_POD_IP
               value: "false"
             - name: DB_HOST

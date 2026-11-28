@@ -16,6 +16,8 @@ spec:
       labels:
         app: thanos-compact
     spec:
+      securityContext:
+        runAsNonRoot: true
       containers:
         - name: thanos-compact
           image: quay.io/thanos/thanos:v0.36.1

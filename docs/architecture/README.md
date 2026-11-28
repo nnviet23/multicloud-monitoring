@@ -43,7 +43,7 @@ The platform follows a **Hub-Spoke** model across three local `k3d` Kubernetes c
 | **Thanos Suite** | `hub-k3d` (Central) | `quay.io/thanos/thanos:v0.36.1` (Receive, Query, Store, Compact, Ruler) | Hot TSDB ingestion, global query federation, and alerting ([ADR-0008](decisions/ADR-0008-why-thanos-loki-tempo.md)) |
 | **Grafana Loki** | `hub-k3d` (Central) | `grafana/loki:2.9.4` | Distributed log aggregation and indexing ([ADR-0008](decisions/ADR-0008-why-thanos-loki-tempo.md)) |
 | **Grafana Tempo** | `hub-k3d` (Central) | `grafana/tempo:2.4.0` | High-volume distributed trace storage ([ADR-0008](decisions/ADR-0008-why-thanos-loki-tempo.md)) |
-| **MinIO S3** | `hub-k3d` (Central) | `minio/minio:RELEASE.2025-10-15T17-29-55Z` | Cold object storage tier for Metrics, Logs, and Traces ([ADR-0009](decisions/ADR-0009-why-minio-object-storage.md)) |
+| **MinIO S3** | `hub-k3d` (Central) | `cgr.dev/chainguard/minio:latest` | Cold object storage tier for Metrics, Logs, and Traces ([ADR-0009](decisions/ADR-0009-why-minio-object-storage.md)) |
 | **Grafana + Sidecar** | `hub-k3d` (Central) | `grafana/grafana:11.5.0` | SRE dashboards (USE/RED, Dual Y-Axis) ([ADR-0008](decisions/ADR-0008-why-thanos-loki-tempo.md)) |
 | **Pyrra (SLO-as-Code)** | `hub-k3d` (Central) | `ghcr.io/pyrra-dev/pyrra:v0.7.3` | Multi-window multi-burn-rate PromQL SLO alerting ([ADR-0006](decisions/ADR-0006-why-pyrra-and-robusta.md)) |
 | **Robusta Runner** | `hub-k3d` (Central) | `robustadev/robusta-runner:0.53.0` | 4W alert enrichment and automated remediation ([ADR-0006](decisions/ADR-0006-why-pyrra-and-robusta.md)) |

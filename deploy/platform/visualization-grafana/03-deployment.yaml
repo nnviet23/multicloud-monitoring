@@ -38,6 +38,11 @@ spec:
               name: http
           securityContext:
             allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
           resources:
             requests:
               cpu: 50m
@@ -56,6 +61,8 @@ spec:
               mountPath: /var/lib/grafana/dashboards/static
             - name: dashboards-integrations
               mountPath: /var/lib/grafana/dashboards/integrations
+            - name: grafana-storage
+              mountPath: /var/lib/grafana
           startupProbe:
             httpGet:
               path: /api/health
@@ -105,6 +112,11 @@ spec:
               value: "POST"
           securityContext:
             allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
           resources:
             requests:
               cpu: 50m
@@ -115,6 +127,8 @@ spec:
           volumeMounts:
             - name: dashboards-integrations
               mountPath: /var/lib/grafana/dashboards/integrations
+            - name: grafana-storage
+              mountPath: /var/lib/grafana
 
       volumes:
         - name: datasources
@@ -128,3 +142,6 @@ spec:
             name: grafana-dashboards
         - name: dashboards-integrations
           emptyDir: {}
+        - name: grafana-storage
+          persistentVolumeClaim:
+            claimName: grafana-data

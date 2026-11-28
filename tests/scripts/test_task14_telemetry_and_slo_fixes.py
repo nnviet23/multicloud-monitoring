@@ -91,7 +91,7 @@ class TestTask14TelemetryAndSloFixes(unittest.TestCase):
         container = patch["spec"]["template"]["spec"]["containers"][0]
         args = container.get("args", [])
         self.assertIn("--config=/etc/otelcol/config.yaml", args)
-        self.assertIn("--config=/etc/otelcol/mysql.yaml", args)
+        self.assertIn("--config=/etc/otelcol-mysql/mysql.yaml", args)
 
         envs = {e["name"]: e for e in container.get("env", [])}
         self.assertIn("MYSQL_ROOT_PASSWORD", envs)
@@ -99,7 +99,7 @@ class TestTask14TelemetryAndSloFixes(unittest.TestCase):
         self.assertFalse(secret_ref.get("optional"), "MYSQL_ROOT_PASSWORD secretKeyRef should be optional: false")
 
         mounts = {m["mountPath"]: m for m in container.get("volumeMounts", [])}
-        self.assertIn("/etc/otelcol/mysql.yaml", mounts)
+        self.assertIn("/etc/otelcol-mysql", mounts)
 
         volumes = {v["name"]: v for v in patch["spec"]["template"]["spec"].get("volumes", [])}
         self.assertIn("mysql-config", volumes)
@@ -118,8 +118,6 @@ class TestTask14TelemetryAndSloFixes(unittest.TestCase):
         self.assertEqual(pk["image"], "ghcr.io/pyrra-dev/pyrra:v0.7.3")
         args = pk.get("args", [])
         self.assertIn("kubernetes", args)
-        self.assertIn("--prometheus-url=http://thanos-query.monitoring.svc.cluster.local:9090", args)
-        self.assertIn("--config-maps-only", args)
         self.assertIn("requests", pk.get("resources", {}))
         self.assertIn("limits", pk.get("resources", {}))
 

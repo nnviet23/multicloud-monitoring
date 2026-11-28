@@ -24,15 +24,15 @@
 | **Alert Routing** | Alertmanager | `v0.27.0` | `prom/alertmanager:v0.27.0` | Tiếp nhận alert từ Prometheus, khử trùng lặp và định tuyến webhook sang Robusta |
 | **Logs Backend** | Grafana Loki | `v2.9.4` | `grafana/loki:2.9.4` | Chunk-based Log TSDB không index full-text |
 | **Traces Backend** | Grafana Tempo | `v2.4.0` | `grafana/tempo:2.4.0` | Parquet block Trace TSDB & TraceQL |
-| **Object Storage** | MinIO Server | `RELEASE.2025-10-15T17-29-55Z` | `minio/minio:RELEASE.2025-10-15T17-29-55Z` | S3-compatible storage (bản mới nhất được hỗ trợ) |
-| **Object Storage CLI** | MinIO Client (`mc`) | `RELEASE.2025-10-15T17-29-55Z` | `minio/mc:RELEASE.2025-10-15T17-29-55Z` | Khởi tạo 3 buckets tự động qua Job |
+| **Object Storage** | MinIO Server | `latest` | `cgr.dev/chainguard/minio:latest` | S3-compatible storage (bản mới nhất được hỗ trợ) |
+| **Object Storage CLI** | MinIO Client (`mc`) | `latest` | `minio/mc:latest` | Khởi tạo 3 buckets tự động qua Job |
 | **Visualization** | Grafana | `11.5.0` | `grafana/grafana:11.5.0` | UI hiển thị dashboards tập trung |
 | **SLO Management** | Pyrra | `v0.7.3` | `ghcr.io/pyrra-dev/pyrra:v0.7.3` | Quản lý SLO Multi-Burn-Rate |
 | **Alert Automation** | Robusta Runner | `0.53.0` | `robustadev/robusta-runner:0.53.0` | Khảo sát ngữ cảnh pod lỗi tự động |
 | **Alert Forwarder** | Robusta Forwarder | `0.53.0` | `robustadev/robusta-forwarder:0.53.0` | Lắng nghe sự kiện K8s API Server |
 | **GitOps Control Plane** | Argo CD | `v2.12.3` | `quay.io/argoproj/argocd:v2.12.3` | Bộ điều khiển GitOps đa cụm tập trung tại Hub |
 | **Secrets Management** | Bitnami Sealed Secrets | `v0.24.5` | `bitnami/sealed-secrets-controller:v0.24.5` | Giải mã khóa nhạy cảm bất đối xứng trên cụm |
-| **Policy Engine** | Kyverno | `v1.12.5` | `ghcr.io/kyverno/kyverno:v1.12.5` | Kiểm soát tuân thủ Admission Controller |
+| **Policy Engine** | Kyverno | `v1.20.0` | `ghcr.io/kyverno/kyverno:v1.20.0` | Kiểm soát tuân thủ Admission Controller |
 | **Benchmark App** | TeaStore WebUI/Services | `1.4.1` | `descartesresearch/teastore-webui:1.4.1` | Pinned tag chính thức (loại bỏ :latest từ sample) |
 | **Database** | TeaStore DB (MySQL) | `1.4.1` | `descartesresearch/teastore-db:1.4.1` | Cơ sở dữ liệu quan hệ cho Persistence |
 | **Load Testing** | Locust | `2.24.0` | `locustio/locust:2.24.0` | Bộ sinh tải phân tán kịch bản Python |
@@ -71,3 +71,40 @@ Quy trình sẽ tự động thực hiện tuần tự các tác vụ:
 4. **Dọn dẹp Docker Volumes:** Thực thi `docker volume prune -f` để giải phóng dung lượng đĩa của MinIO và MySQL.
 5. **Dọn dẹp tài nguyên PKI nội bộ:** Tự động thu hồi và dọn dẹp các chứng chỉ mTLS nội bộ trên cụm Kubernetes.
 
+
+
+---
+
+## Cài đặt môi trường ảo Python (`.venv`) trên Ubuntu/Linux
+
+Để cài đặt các thư viện trong `requirements.txt` cho dự án `multicloud-monitoring` một cách an toàn và sạch sẽ, thực hiện theo các bước sau:
+
+1. **Cài đặt gói tạo môi trường ảo của Python (nếu chưa có):**
+
+   ```bash
+   sudo apt update && sudo apt install -y python3-venv
+   ```
+
+   *Xác minh:* Lệnh chạy xong không báo lỗi đỏ và trả về dấu nhắc lệnh.
+
+2. **Tạo một môi trường ảo ngay trong thư mục dự án:**
+
+   ```bash
+   python3 -m venv .venv
+   ```
+
+   *Xác minh:* Gõ `ls -a`, bạn sẽ thấy xuất hiện thư mục mới tên là `.venv`.
+
+3. **Kích hoạt môi trường ảo:**
+
+   ```bash
+   source .venv/bin/activate
+   ```
+
+   *Xác minh:* Đầu dòng lệnh sẽ xuất hiện tiền tố `(.venv)`, ví dụ: `(.venv) tainbow@DESKTOP-RP6G6OI:~/multicloud-monitoring$`.
+
+4. **Cài đặt thư viện từ `requirements.txt`:**
+
+   ```bash
+   pip install -r requirements.txt
+   ```

@@ -12,7 +12,7 @@ data:
         folder: 'Multi-Cloud Observability'
         type: file
         disableDeletion: false
-        editable: true
+        editable: false
         options:
           path: /var/lib/grafana/dashboards/static
       - name: 'MultiCloud Dynamic Dashboards'
@@ -20,6 +20,6 @@ data:
         folder: 'Multi-Cloud Observability'
         type: file
         disableDeletion: false
-        editable: true
+        editable: false
         options:
           path: /var/lib/grafana/dashboards/integrations

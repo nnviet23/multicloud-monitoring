@@ -10,7 +10,7 @@ spec:
   ports:
     - port: 8080
       targetPort: 8080
-      nodePort: 31112
+      nodePort: 30080
       name: http
   selector:
     app: teastore-registry

@@ -20,8 +20,6 @@ spec:
         tier: compute
     spec:
       securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
       containers:
         - name: teastore-registry
           image: descartesresearch/teastore-registry:1.4.1
@@ -30,8 +28,6 @@ spec:
             - containerPort: 8080
               name: http
           securityContext:
-            runAsNonRoot: true
-            runAsUser: 1000
             allowPrivilegeEscalation: false
             privileged: false
             capabilities:

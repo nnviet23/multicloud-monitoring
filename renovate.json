@@ -31,7 +31,7 @@
         "grafana/loki",
         "grafana/tempo",
         "grafana/grafana",
-        "minio/minio",
+        "cgr.dev/chainguard/minio",
         "prom/prometheus",
         "prom/alertmanager",
         "otel/opentelemetry-collector-contrib",

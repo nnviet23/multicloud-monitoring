@@ -19,8 +19,6 @@ spec:
         tier: data
     spec:
       securityContext:
-        runAsNonRoot: true
-        runAsUser: 999
         fsGroup: 999
       containers:
         - name: teastore-db
@@ -30,8 +28,8 @@ spec:
             - containerPort: 3306
               name: mysql
           securityContext:
-            runAsNonRoot: true
-            allowPrivilegeEscalation: false
+            allowPrivilegeEscalation: true
+            runAsUser: 999
             capabilities:
               drop:
                 - ALL

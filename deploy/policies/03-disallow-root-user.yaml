@@ -1,5 +1,5 @@
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
 metadata:
   name: disallow-root-user
   annotations:
@@ -9,25 +9,31 @@ metadata:
     policies.kyverno.io/description: >-
       Ngăn chặn container chạy dưới quyền root (UID 0), giảm thiểu rủi ro leo thang đặc quyền.
 spec:
-  validationFailureAction: Enforce
-  background: true
-  rules:
-    - name: check-non-root
-      match:
-        any:
-          - resources:
-              kinds:
-                - Pod
-              namespaces:
-                - teastore
-                - monitoring
-                - storage
-      validate:
-        message: "Container trong namespace teastore không được chạy dưới quyền root (runAsNonRoot phải là true hoặc runAsUser > 0)."
-        pattern:
-          spec:
-            securityContext:
-              runAsNonRoot: true
-            containers:
-              - securityContext:
-                  runAsNonRoot: true
+  validationActions:
+    - Deny
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+  matchConditions:
+    - name: "target-namespaces"
+      expression: "object.metadata.namespace in ['monitoring', 'storage']"
+  validations:
+    - expression: >-
+        (
+          has(object.spec.securityContext) &&
+          (
+            (has(object.spec.securityContext.runAsNonRoot) && object.spec.securityContext.runAsNonRoot == true) ||
+            (has(object.spec.securityContext.runAsUser) && object.spec.securityContext.runAsUser > 0)
+          )
+        ) ||
+        object.spec.containers.all(c,
+          has(c.securityContext) &&
+          (
+            (has(c.securityContext.runAsNonRoot) && c.securityContext.runAsNonRoot == true) ||
+            (has(c.securityContext.runAsUser) && c.securityContext.runAsUser > 0)
+          )
+        )
+      message: "Container trong namespace teastore không được chạy dưới quyền root (runAsNonRoot phải là true hoặc runAsUser > 0)."

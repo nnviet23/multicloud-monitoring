@@ -18,7 +18,7 @@ spec:
     spec:
       initContainers:
         - name: init-buckets
-          image: minio/minio:RELEASE.2025-10-15T17-29-55Z
+          image: cgr.dev/chainguard/minio:latest
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -33,9 +33,11 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
+      securityContext:
+        runAsNonRoot: true
       containers:
         - name: minio
-          image: minio/minio:RELEASE.2025-10-15T17-29-55Z
+          image: cgr.dev/chainguard/minio:latest
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false

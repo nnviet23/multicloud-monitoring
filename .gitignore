@@ -52,6 +52,9 @@ tests/benchmarks/results/
 # Diagrams (keep only archify/)
 docs/diagrams/*
 !docs/diagrams/archify/
+docs/diagrams/archify/*.browser-check.json
+docs/diagrams/archify/*.delivery.json
+docs/diagrams/archify/*.finalize*.json
 
 # Local Tooling, Agents, Obsidian, Superpowers & References
 .idea/

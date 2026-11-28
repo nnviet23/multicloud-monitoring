@@ -72,6 +72,18 @@ def test_robusta_rbac_no_wildcards_and_least_privilege():
     assert set(batch_rule.get("verbs", [])) == {"get", "list", "watch"}
 
 
+def test_kyverno_validating_policies():
+    """Verify Kyverno policies use policies.kyverno.io/v1 ValidatingPolicy."""
+    policy_files = sorted(POLICIES_DIR.glob("0[1-5]-*.yaml"))
+    assert len(policy_files) == 5, f"Expected 5 policy files, found {len(policy_files)}"
+    for policy_file in policy_files:
+        docs = load_yaml_documents(policy_file)
+        assert len(docs) >= 1, f"{policy_file.name} is empty"
+        doc = docs[0]
+        assert doc.get("apiVersion") == "policies.kyverno.io/v1", f"{policy_file.name}: expected apiVersion policies.kyverno.io/v1"
+        assert doc.get("kind") == "ValidatingPolicy", f"{policy_file.name}: expected kind ValidatingPolicy"
+
+
 def test_kyverno_policy_exception_mysql():
     """Verify Kyverno PolicyException file exists and is configured properly for MySQL."""
     assert KYVERNO_EXCEPTION_PATH.exists(), f"PolicyException file not found: {KYVERNO_EXCEPTION_PATH}"
@@ -80,28 +92,18 @@ def test_kyverno_policy_exception_mysql():
     assert len(docs) >= 1, "PolicyException file is empty"
     doc = docs[0]
 
-    assert doc.get("apiVersion") == "kyverno.io/v2beta1"
+    assert doc.get("apiVersion") == "policies.kyverno.io/v1"
     assert doc.get("kind") == "PolicyException"
     assert doc.get("metadata", {}).get("name") == "teastore-mysql-privilege-escalation-exception"
     assert doc.get("metadata", {}).get("namespace") == "teastore"
 
     spec = doc.get("spec", {})
-    exceptions = spec.get("exceptions", [])
+    policy_refs = spec.get("policyRefs", [])
     assert any(
-        e.get("policyName") == "disallow-privilege-escalation"
-        and "check-privilege-escalation" in e.get("ruleNames", [])
-        for e in exceptions
-    ), "Exception for disallow-privilege-escalation / check-privilege-escalation not found"
-
-    match = spec.get("match", {})
-    any_matches = match.get("any", [])
-    pod_match = False
-    for m in any_matches:
-        res = m.get("resources", {})
-        if "Pod" in res.get("kinds", []) and "teastore-db*" in res.get("names", []) and "teastore" in res.get("namespaces", []):
-            pod_match = True
-            break
-    assert pod_match, "Match condition for Pod teastore-db* in namespace teastore not found"
+        ref.get("name") == "disallow-privilege-escalation"
+        and ref.get("kind") == "ValidatingPolicy"
+        for ref in policy_refs
+    ), "policyRefs for ValidatingPolicy disallow-privilege-escalation not found"
 
 
 def test_kyverno_kustomization_includes_exception():

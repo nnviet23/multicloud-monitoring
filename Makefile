@@ -5,6 +5,7 @@
 # ==============================================================================
 
 SHELL := /bin/bash
+.SHELLFLAGS := -eu -o pipefail -c
 .DEFAULT_GOAL := help
 
 # Automatically load and export variables from .env if present
@@ -16,7 +17,7 @@ endif
 HUB_CTX    := k3d-hub-k3d
 AWS_CTX    := k3d-aws-k3d
 AZURE_CTX  := k3d-azure-k3d
-PYTHON     ?= python
+PYTHON     ?= $(shell if [ -x .venv/bin/python ]; then echo .venv/bin/python; elif command -v python3 >/dev/null 2>&1; then echo python3; else echo python; fi)
 
 .PHONY: help
 help: ## Display this help message
@@ -64,15 +65,31 @@ infra: ## Provision all 3 k3d clusters and configure infrastructure
 
 .PHONY: deploy-hub
 deploy-hub: env-setup ## Deploy complete Hub Observability Stack via Kustomize Overlay
+	@echo "--> Ensuring Kyverno v1.20.0 CRDs & Controller on $(HUB_CTX)..."
+	kubectl --context $(HUB_CTX) apply --server-side --force-conflicts -f deploy/bootstrap/kyverno/install.yaml
+	kubectl --context $(HUB_CTX) wait --for=condition=Established crd --all --timeout=60s
 	@echo "--> Deploying Hub Observability Stack on $(HUB_CTX)..."
-	kubectl --context $(HUB_CTX) apply -k deploy/clusters/hub
+	kubectl --context $(HUB_CTX) create namespace teastore --dry-run=client -o yaml | kubectl --context $(HUB_CTX) apply -f -
+	kubectl --context $(HUB_CTX) apply --server-side --force-conflicts -k deploy/clusters/hub || true
+	kubectl --context $(HUB_CTX) wait --for=condition=Established crd --all --timeout=60s
+	kubectl --context $(HUB_CTX) rollout status deployment/cert-manager-webhook -n cert-manager --timeout=120s
+	kubectl --context $(HUB_CTX) apply --server-side --force-conflicts -k deploy/clusters/hub
+	@$(MAKE) pki-generate
 
 .PHONY: deploy-spokes
 deploy-spokes: ## Deploy TeaStore Workloads and Edge OTel Collectors on Spokes
+	@echo "--> Ensuring Kyverno v1.20.0 CRDs & namespaces on Spokes..."
+	@for ctx in $(AWS_CTX) $(AZURE_CTX); do \
+		kubectl --context $$ctx apply --server-side --force-conflicts -f deploy/bootstrap/kyverno/install.yaml; \
+		kubectl --context $$ctx wait --for=condition=Established crd --all --timeout=60s; \
+		for ns in monitoring storage teastore; do \
+			kubectl --context $$ctx create namespace $$ns --dry-run=client -o yaml | kubectl --context $$ctx apply -f -; \
+		done; \
+	done
 	@echo "--> Deploying Compute Spoke on $(AWS_CTX)..."
-	kubectl --context $(AWS_CTX) apply -k deploy/clusters/aws
+	kubectl --context $(AWS_CTX) apply --server-side --force-conflicts -k deploy/clusters/aws
 	@echo "--> Deploying Data Spoke on $(AZURE_CTX)..."
-	kubectl --context $(AZURE_CTX) apply -k deploy/clusters/azure
+	kubectl --context $(AZURE_CTX) apply --server-side --force-conflicts -k deploy/clusters/azure
 
 .PHONY: register-spokes
 register-spokes: ## Register Spoke clusters in Hub Argo CD
@@ -94,6 +111,7 @@ deploy-local: env-setup deploy-hub deploy-spokes ## Deploy complete system local
 	@echo "  - MinIO Console:    http://localhost:9001 (admin / (configured in .env))"
 	@echo "  - Thanos Query UI:  http://localhost:9090"
 	@echo "  - Pyrra SLO UI:     http://localhost:9099"
+	@$(MAKE) ui
 	@echo "======================================================================"
 
 .PHONY: deploy-gitops
@@ -196,9 +214,9 @@ validate-policies: ## Validate Kyverno ClusterPolicies syntax via Kustomize
 .PHONY: deploy-policies
 deploy-policies: ## Deploy Kyverno ClusterPolicies across all clusters
 	@echo "--> Deploying Kyverno policies to all 3 clusters..."
-	kubectl --context $(HUB_CTX) apply -k deploy/policies || true
-	kubectl --context $(AWS_CTX) apply -k deploy/policies || true
-	kubectl --context $(AZURE_CTX) apply -k deploy/policies || true
+	kubectl --context $(HUB_CTX) apply --server-side --force-conflicts -k deploy/policies
+	kubectl --context $(AWS_CTX) apply --server-side --force-conflicts -k deploy/policies
+	kubectl --context $(AZURE_CTX) apply --server-side --force-conflicts -k deploy/policies
 	@echo "Kyverno admission policies deployed successfully."
 
 .PHONY: fmt
@@ -219,18 +237,19 @@ test-wan: ## Test simulated WAN latency and packet loss between AWS and Azure
 	@docker exec k3d-aws-k3d-server-0 ping -c 5 k3d-azure-k3d-server-0 || true
 
 .PHONY: ui
-ui: ## Port-forward essential web UIs (Grafana :3000, Thanos :9090, Pyrra :9099, MinIO :9001)
+ui: ## Port-forward essential web UIs (Grafana :3000, Thanos :9090, Pyrra :9099, MinIO :9001, TeaStore :8088)
 	@echo "Opening web port-forwards..."
 	@echo "  - Grafana:    http://localhost:3000 (admin / (configured in .env))"
 	@echo "  - Thanos UI:  http://localhost:9090"
 	@echo "  - Pyrra SLO:  http://localhost:9099"
 	@echo "  - MinIO:      http://localhost:9001 (admin / (configured in .env))"
+	@echo "  - TeaStore:   http://localhost:8088/tools.descartes.teastore.webui/"
 	@trap 'kill 0' EXIT; \
-	kubectl --context $(HUB_CTX) -n monitoring port-forward svc/grafana 3000:80 >/dev/null & \
-	kubectl --context $(HUB_CTX) -n monitoring port-forward svc/thanos-query 9090:9090 >/dev/null & \
-	kubectl --context $(HUB_CTX) -n monitoring port-forward svc/pyrra 9099:9099 >/dev/null & \
-	kubectl --context $(HUB_CTX) -n storage port-forward svc/minio-ui 9001:9001 >/dev/null & \
-	wait
+	(ss -tuln 2>/dev/null | grep -q ":3000 " || kubectl --context $(HUB_CTX) -n monitoring port-forward svc/grafana 3000:3000 >/dev/null) & \
+	(ss -tuln 2>/dev/null | grep -q ":9090 " || kubectl --context $(HUB_CTX) -n monitoring port-forward svc/thanos-query 9090:9090 >/dev/null) & \
+	(ss -tuln 2>/dev/null | grep -q ":9099 " || kubectl --context $(HUB_CTX) -n monitoring port-forward svc/pyrra 9099:9099 >/dev/null) & \
+	(ss -tuln 2>/dev/null | grep -q ":9001 " || kubectl --context $(HUB_CTX) -n storage port-forward svc/minio-console 9001:9001 >/dev/null) & \
+	(ss -tuln 2>/dev/null | grep -q ":8088 " || kubectl --context $(AWS_CTX) -n teastore port-forward svc/teastore-webui 8088:8080 >/dev/null) & \
 
 .PHONY: validate-otel
 validate-otel: ## Validate OTel Collector architectural rules and export OTelBin YAMLs

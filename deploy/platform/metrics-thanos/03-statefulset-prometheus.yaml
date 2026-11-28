@@ -40,7 +40,7 @@ spec:
           resources:
             requests:
               cpu: 50m
-              memory: 128Mi
+              memory: 256Mi
             limits:
               memory: 512Mi
           volumeMounts:
@@ -102,7 +102,7 @@ spec:
           resources:
             requests:
               cpu: 20m
-              memory: 64Mi
+              memory: 256Mi
             limits:
               memory: 256Mi
           volumeMounts:
@@ -133,7 +133,7 @@ spec:
               cpu: 20m
               memory: 32Mi
             limits:
-              memory: 64Mi
+              memory: 256Mi
           volumeMounts:
             - name: pyrra-rules
               mountPath: /etc/prometheus/rules/pyrra

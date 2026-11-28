@@ -5,6 +5,7 @@ resources:
   - 00-rbac.yaml
   - 01-config-datasources.yaml
   - 02-config-providers.yaml
+  - 02b-pvc.yaml
   - 03-deployment.yaml
   - 04-service.yaml
 

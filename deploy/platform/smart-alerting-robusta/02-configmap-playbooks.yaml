@@ -39,3 +39,13 @@ data:
           - on_pod_oom_killed: {}
         actions:
           - pod_events_enricher: {}
+      - triggers:
+          - on_pod_oom_killed: {}
+          - on_pod_crash_loop:
+              restart_reason: "CrashLoopBackOff"
+        actions:
+          - custom_github_dispatch:
+              repo: "{{ env.GITHUB_REPO }}"
+              github_pat: "{{ env.GITHUB_PAT }}"
+              event_type: "k8s-incident"
+              cooldown_seconds: 3600

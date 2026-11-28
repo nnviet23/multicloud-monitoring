@@ -16,6 +16,8 @@ spec:
         app: otel-collector-hub
     spec:
       serviceAccountName: otel-collector-hub
+      securityContext:
+        runAsNonRoot: true
       containers:
         - name: otel-collector
           image: otel/opentelemetry-collector-contrib:0.114.0

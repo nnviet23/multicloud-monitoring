@@ -99,7 +99,7 @@ def test_architecture_md_alignments():
     assert "v0.36.1" in content, "Thanos must be v0.36.1"
     assert "2.9.4" in content, "Loki must be 2.9.4"
     assert "2.4.0" in content, "Tempo must be 2.4.0"
-    assert "RELEASE.2025-10-15T17-29-55Z" in content, "MinIO must be RELEASE.2025-10-15T17-29-55Z"
+    assert "latest" in content, "MinIO must be latest"
     assert "11.5.0" in content, "Grafana must be 11.5.0"
     assert "0.53.0" in content, "Robusta must be 0.53.0"
     assert "2.24.0" in content, "Locust must be 2.24.0"

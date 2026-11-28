@@ -73,8 +73,8 @@ secretGenerator:
 # Release Pointers - Managed via release-images.yaml (ADR-0001 & ADR-0002)
 images:
   - name: minio/minio
-    newName: minio/minio
-    newTag: "RELEASE.2025-10-15T17-29-55Z"
+    newName: cgr.dev/chainguard/minio
+    newTag: "latest"
   - name: quay.io/thanos/thanos
     newName: quay.io/thanos/thanos
     newTag: "v0.36.1"

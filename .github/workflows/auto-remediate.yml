@@ -1,0 +1,79 @@
+name: Auto-Remediate Kubernetes Incident
+
+on:
+  repository_dispatch:
+    types: [k8s-incident]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  remediate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Apply Guardrailed Remediation (OOMKilled -> bump RAM up to 2Gi)
+        id: remediate
+        env:
+          PAYLOAD_JSON: ${{ toJson(github.event.client_payload) }}
+        run: |
+          python3 - <<'EOF'
+          import json, os, pathlib, re, sys
+
+          payload = json.loads(os.environ.get("PAYLOAD_JSON", "{}"))
+          reason = payload.get("reason", "")
+          deployment = payload.get("deployment", "")
+          namespace = payload.get("namespace", "")
+
+          print(f"Incident: deployment={deployment}, namespace={namespace}, reason={reason}")
+          if reason != "OOMKilled" or not deployment:
+              print("No automated remediation rule matched; manual review required.")
+              sys.exit(0)
+
+          MAX_MEM_MI = 2048  # Guardrail: cap at 2Gi
+          changed = False
+          for p in pathlib.Path("deploy").rglob("*.yaml"):
+              txt = p.read_text(encoding="utf-8")
+              if f"name: {deployment}" not in txt:
+                  continue
+              def bump(m):
+                  val = int(m.group(1))
+                  new_val = min(val + 256, MAX_MEM_MI)
+                  if new_val > val:
+                      nonlocal changed
+                      changed = True
+                  return f"memory: {new_val}Mi"
+              new_txt = re.sub(r"memory:\s*(\d+)Mi", bump, txt)
+              if new_txt != txt:
+                  p.write_text(new_txt, encoding="utf-8")
+                  print(f"Updated {p}")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"changed={'true' if changed else 'false'}\n")
+          EOF
+
+      - name: Create Pull Request
+        if: steps.remediate.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "fix(auto-remediate): bump memory limit for ${{ github.event.client_payload.deployment }}"
+          title: "chore(auto-remediate): handle ${{ github.event.client_payload.reason }} on ${{ github.event.client_payload.deployment }}"
+          body: |
+            Automated remediation triggered by Robusta `k8s-incident` dispatch.
+            - **Cluster:** `${{ github.event.client_payload.cluster }}`
+            - **Namespace:** `${{ github.event.client_payload.namespace }}`
+            - **Deployment:** `${{ github.event.client_payload.deployment }}`
+            - **Reason:** `${{ github.event.client_payload.reason }}`
+            - **Guardrail:** Memory capped at `2048Mi` (`2Gi`).
+          branch: "auto-remediate/${{ github.event.client_payload.deployment }}"

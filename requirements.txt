@@ -15,7 +15,7 @@ prometheus-client==0.20.0
 locust==2.24.0
 
 # AI Anomaly Detection & RCA Engine V3 (ai-engine/)
-torch==2.2.2
-scikit-learn==1.4.2
-numpy==1.26.4
-pandas==2.2.2
+torch==2.15.0
+scikit-learn==1.8.0
+numpy==2.4.1
+pandas==2.3.3

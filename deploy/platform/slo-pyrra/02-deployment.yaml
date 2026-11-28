@@ -16,6 +16,8 @@ spec:
         app: pyrra
     spec:
       serviceAccountName: pyrra
+      securityContext:
+        runAsNonRoot: true
       containers:
         - name: pyrra-api
           image: ghcr.io/pyrra-dev/pyrra:v0.7.3
@@ -27,7 +29,6 @@ spec:
                 - ALL
           args:
             - api
-            - --prometheus-url=http://thanos-query.monitoring.svc.cluster.local:9090
             - --api-url=http://localhost:9099
           ports:
             - containerPort: 9099
@@ -60,8 +61,6 @@ spec:
                 - ALL
           args:
             - kubernetes
-            - --prometheus-url=http://thanos-query.monitoring.svc.cluster.local:9090
-            - --config-maps-only
           resources:
             requests:
               cpu: 20m
