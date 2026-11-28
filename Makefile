@@ -68,6 +68,9 @@ deploy-hub: env-setup ## Deploy complete Hub Observability Stack via Kustomize O
 	@echo "--> Ensuring Kyverno v1.20.0 CRDs & Controller on $(HUB_CTX)..."
 	kubectl --context $(HUB_CTX) apply --server-side --force-conflicts -f deploy/bootstrap/kyverno/install.yaml
 	kubectl --context $(HUB_CTX) wait --for=condition=Established crd --all --timeout=60s
+	@echo "--> Ensuring Argo CD v3.6.2 on $(HUB_CTX)..."
+	kubectl --context $(HUB_CTX) create namespace argocd --dry-run=client -o yaml | kubectl --context $(HUB_CTX) apply -f -
+	kubectl --context $(HUB_CTX) apply --server-side --force-conflicts -n argocd -f deploy/bootstrap/argocd/install.yaml
 	@echo "--> Deploying Hub Observability Stack on $(HUB_CTX)..."
 	kubectl --context $(HUB_CTX) create namespace teastore --dry-run=client -o yaml | kubectl --context $(HUB_CTX) apply -f -
 	kubectl --context $(HUB_CTX) apply --server-side --force-conflicts -k deploy/clusters/hub || true
@@ -244,11 +247,13 @@ ui: ## Port-forward essential web UIs (Grafana :3000, Thanos :9090, Pyrra :9099,
 	@echo "  - Pyrra SLO:  http://localhost:9099"
 	@echo "  - MinIO:      http://localhost:9001 (admin / (configured in .env))"
 	@echo "  - TeaStore:   http://localhost:8088/tools.descartes.teastore.webui/"
+	@echo "  - Argo CD:    https://localhost:8443 (admin)"
 	@trap 'kill 0' EXIT; \
 	(ss -tuln 2>/dev/null | grep -q ":3000 " || kubectl --context $(HUB_CTX) -n monitoring port-forward svc/grafana 3000:3000 >/dev/null) & \
 	(ss -tuln 2>/dev/null | grep -q ":9090 " || kubectl --context $(HUB_CTX) -n monitoring port-forward svc/thanos-query 9090:9090 >/dev/null) & \
 	(ss -tuln 2>/dev/null | grep -q ":9099 " || kubectl --context $(HUB_CTX) -n monitoring port-forward svc/pyrra 9099:9099 >/dev/null) & \
 	(ss -tuln 2>/dev/null | grep -q ":9001 " || kubectl --context $(HUB_CTX) -n storage port-forward svc/minio-console 9001:9001 >/dev/null) & \
+	(ss -tuln 2>/dev/null | grep -q ":8443 " || kubectl --context $(HUB_CTX) port-forward -n argocd svc/argocd-server 8443:443 >/dev/null 2>&1) &
 	(ss -tuln 2>/dev/null | grep -q ":8088 " || kubectl --context $(AWS_CTX) -n teastore port-forward svc/teastore-webui 8088:8080 >/dev/null) & \
 
 .PHONY: validate-otel
