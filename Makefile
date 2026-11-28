@@ -114,8 +114,7 @@ deploy-local: env-setup deploy-hub deploy-spokes ## Deploy complete system local
 	@echo "  - MinIO Console:    http://localhost:9001 (admin / (configured in .env))"
 	@echo "  - Thanos Query UI:  http://localhost:9090"
 	@echo "  - Pyrra SLO UI:     http://localhost:9099"
-	@$(MAKE) ui
-	@echo "======================================================================"
+		@echo "======================================================================"
 
 .PHONY: deploy-gitops
 deploy-gitops: env-setup deploy-argocd ## Deploy complete system via Argo CD GitOps ApplicationSets (automated self-healing)
@@ -225,7 +224,7 @@ deploy-policies: ## Deploy Kyverno ClusterPolicies across all clusters
 .PHONY: fmt
 fmt: ## Format Python code with ruff if installed
 	@if $(PYTHON) -m ruff --version >/dev/null 2>&1; then \
-		$(PYTHON) -m ruff format infra/ aiops/ tests/; \
+		$(PYTHON) -m ruff format infra/ ai-engine/ tests/; \
 	else \
 		echo "ruff not installed; skipping Python formatting."; \
 	fi
@@ -246,15 +245,15 @@ ui: ## Port-forward essential web UIs (Grafana :3000, Thanos :9090, Pyrra :9099,
 	@echo "  - Thanos UI:  http://localhost:9090"
 	@echo "  - Pyrra SLO:  http://localhost:9099"
 	@echo "  - MinIO:      http://localhost:9001 (admin / (configured in .env))"
-	@echo "  - TeaStore:   http://localhost:8088/tools.descartes.teastore.webui/"
+	@echo "  - TeaStore:   http://localhost:8080/tools.descartes.teastore.webui/"
 	@echo "  - Argo CD:    https://localhost:8443 (admin)"
 	@trap 'kill 0' EXIT; \
 	(ss -tuln 2>/dev/null | grep -q ":3000 " || kubectl --context $(HUB_CTX) -n monitoring port-forward svc/grafana 3000:3000 >/dev/null) & \
 	(ss -tuln 2>/dev/null | grep -q ":9090 " || kubectl --context $(HUB_CTX) -n monitoring port-forward svc/thanos-query 9090:9090 >/dev/null) & \
 	(ss -tuln 2>/dev/null | grep -q ":9099 " || kubectl --context $(HUB_CTX) -n monitoring port-forward svc/pyrra 9099:9099 >/dev/null) & \
 	(ss -tuln 2>/dev/null | grep -q ":9001 " || kubectl --context $(HUB_CTX) -n storage port-forward svc/minio-console 9001:9001 >/dev/null) & \
-	(ss -tuln 2>/dev/null | grep -q ":8443 " || kubectl --context $(HUB_CTX) port-forward -n argocd svc/argocd-server 8443:443 >/dev/null 2>&1) &
-	(ss -tuln 2>/dev/null | grep -q ":8088 " || kubectl --context $(AWS_CTX) -n teastore port-forward svc/teastore-webui 8088:8080 >/dev/null) & \
+	(ss -tuln 2>/dev/null | grep -q ":8443 " || kubectl --context $(HUB_CTX) port-forward -n argocd svc/argocd-server 8443:443 >/dev/null 2>&1) & \
+	(ss -tuln 2>/dev/null | grep -q ":8088 " || kubectl --context $(AWS_CTX) -n teastore port-forward svc/teastore-webui 8080:8080 >/dev/null) & \
 
 .PHONY: validate-otel
 validate-otel: ## Validate OTel Collector architectural rules and export OTelBin YAMLs
