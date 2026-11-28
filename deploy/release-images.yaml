@@ -42,7 +42,7 @@ images:
     newTag: "v0.24.5"
   - name: quay.io/argoproj/argocd
     newName: quay.io/argoproj/argocd
-    newTag: "v2.12.3"
+    newTag: "v3.6.2"
   # Workloads (TeaStore)
   - name: descartesresearch/teastore-auth
     newName: descartesresearch/teastore-auth

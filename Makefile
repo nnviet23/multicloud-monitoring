@@ -239,21 +239,20 @@ test-wan: ## Test simulated WAN latency and packet loss between AWS and Azure
 	@docker exec k3d-aws-k3d-server-0 ping -c 5 k3d-azure-k3d-server-0 || true
 
 .PHONY: ui
-ui: ## Port-forward essential web UIs (Grafana :3000, Thanos :9090, Pyrra :9099, MinIO :9001, TeaStore :8088)
-	@echo "Opening web port-forwards..."
-	@echo "  - Grafana:    http://localhost:3000 (admin / (configured in .env))"
+ui: ## Open port-forwards for Thanos (:9090), Pyrra (:9099), and Argo CD (:8443)
+	@echo "Direct k3d LoadBalancer UIs (no port-forward needed):"
+	@echo "  - TeaStore:   http://localhost:8080/tools.descartes.teastore.webui/"
+	@echo "  - Grafana:    http://localhost:3000 (admin / configured in .env)"
+	@echo "  - MinIO:      http://localhost:9001 (admin / configured in .env)"
+	@echo "Opening port-forwards for ClusterIP UIs..."
 	@echo "  - Thanos UI:  http://localhost:9090"
 	@echo "  - Pyrra SLO:  http://localhost:9099"
-	@echo "  - MinIO:      http://localhost:9001 (admin / (configured in .env))"
-	@echo "  - TeaStore:   http://localhost:8080/tools.descartes.teastore.webui/"
 	@echo "  - Argo CD:    https://localhost:8443 (admin)"
 	@trap 'kill 0' EXIT; \
-	(ss -tuln 2>/dev/null | grep -q ":3000 " || kubectl --context $(HUB_CTX) -n monitoring port-forward svc/grafana 3000:3000 >/dev/null) & \
-	(ss -tuln 2>/dev/null | grep -q ":9090 " || kubectl --context $(HUB_CTX) -n monitoring port-forward svc/thanos-query 9090:9090 >/dev/null) & \
-	(ss -tuln 2>/dev/null | grep -q ":9099 " || kubectl --context $(HUB_CTX) -n monitoring port-forward svc/pyrra 9099:9099 >/dev/null) & \
-	(ss -tuln 2>/dev/null | grep -q ":9001 " || kubectl --context $(HUB_CTX) -n storage port-forward svc/minio-console 9001:9001 >/dev/null) & \
-	(ss -tuln 2>/dev/null | grep -q ":8443 " || kubectl --context $(HUB_CTX) port-forward -n argocd svc/argocd-server 8443:443 >/dev/null 2>&1) & \
-	(ss -tuln 2>/dev/null | grep -q ":8088 " || kubectl --context $(AWS_CTX) -n teastore port-forward svc/teastore-webui 8080:8080 >/dev/null) & \
+	(ss -tuln 2>/dev/null | grep -q ":9090 " || kubectl --context $(HUB_CTX) -n monitoring port-forward svc/thanos-query 9090:9090 >/dev/null 2>&1) & \
+	(ss -tuln 2>/dev/null | grep -q ":9099 " || kubectl --context $(HUB_CTX) -n monitoring port-forward svc/pyrra 9099:9099 >/dev/null 2>&1) & \
+	(ss -tuln 2>/dev/null | grep -q ":8443 " || kubectl --context $(HUB_CTX) -n argocd port-forward svc/argocd-server 8443:443 >/dev/null 2>&1) &
+	wait
 
 .PHONY: validate-otel
 validate-otel: ## Validate OTel Collector architectural rules and export OTelBin YAMLs

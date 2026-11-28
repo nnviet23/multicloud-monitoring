@@ -221,5 +221,5 @@ Third-party reference repositories are excluded from Git via `.gitignore` and ca
 
 - **Policy Engine:** Kyverno `v1.20.0` (`policies.kyverno.io/v1` `ValidatingPolicy` với CEL), manifest `install.yaml` được lưu cục bộ tại `deploy/bootstrap/kyverno/install.yaml`.
 - **GitOps Bootstrap:** Argo CD `v3.6.2` (`deploy/bootstrap/argocd/install.yaml`) và Argo Workflows `v4.1.6` được pre-pull sẵn trong `infra/cli.py`.
-- **Quick Deploy & UI:** `make deploy` tự động mở sẵn các cổng giao diện chạy nền (`Grafana :3000`, `Thanos :9090`, `Pyrra :9099`, `MinIO :9001`, `TeaStore WebUI :8088`).
+- **Quick Deploy & UI:** `TeaStore WebUI :8080`, `Grafana :3000`, `MinIO :9001` truy cập trực tiếp qua k3d LoadBalancer; `make ui` mở port-forward cho `Thanos :9090`, `Pyrra :9099`, `Argo CD :8443`.
 - **Closed-Loop Auto-Remediation:** Tích hợp Robusta (`on_pod_oom_killed` / `on_pod_crash_loop`) → GitHub Actions (`.github/workflows/auto-remediate.yml`) với guardrail trần RAM `2Gi` và cooldown 1 giờ.
